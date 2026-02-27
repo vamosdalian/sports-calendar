@@ -104,7 +104,8 @@ ol {
   gap: 8px;
 }
 
-.league-btn {
+.league-link {
+  display: inline-block;
   border: 1px solid #bfd1ef;
   border-radius: 999px;
   background: #f6f9ff;
@@ -112,20 +113,14 @@ ol {
   padding: 6px 12px;
   font-size: 13px;
   cursor: pointer;
+  text-decoration: none;
 }
 
-.league-btn.active {
+.league-link.active {
   border-color: #6c93d8;
   background: #e3eeff;
   color: #0e3e80;
   font-weight: 600;
-}
-
-.mini {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  word-break: break-all;
 }
 
 .table-wrap {
@@ -157,8 +152,10 @@ td {
 
 .sub-links {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
 }
 
 .sub-links .primary {
@@ -168,33 +165,12 @@ td {
 
 .sub-links .secondary {
   display: inline-block;
-  font-size: 12px;
+  font-size: 13px;
   color: #4f76a9;
 }
 
 .sub-links .secondary::before {
   content: "";
-}
-
-.copy-btn {
-  width: fit-content;
-  border: 1px solid #bfd1ef;
-  border-radius: 999px;
-  background: #eef4ff;
-  color: #25538a;
-  padding: 2px 10px;
-  font-size: 12px;
-  line-height: 1.8;
-  cursor: pointer;
-}
-
-.copy-btn:hover {
-  background: #deebff;
-}
-
-.copy-btn:disabled {
-  cursor: default;
-  opacity: 0.75;
 }
 
 a {
@@ -209,6 +185,21 @@ a:hover {
 @media (max-width: 640px) {
   .container {
     padding-top: 24px;
+  }
+
+  th,
+  td {
+    padding: 9px 6px;
+    font-size: 13px;
+  }
+
+  .sub-links {
+    gap: 8px;
+  }
+
+  .sub-links .primary,
+  .sub-links .secondary {
+    font-size: 12px;
   }
 
   .hero h1 {

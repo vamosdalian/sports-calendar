@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ICS 订阅 | sports-calendar</title>
+    <title>联赛 ICS 订阅 | sports-calendar</title>
     <meta
       name="description"
       content="sports-calendar 提供多联赛 ICS 订阅链接，每支球队提供比赛日历与比赛+抢票提醒日历。"
@@ -19,8 +19,12 @@
           仓库：<a href="https://github.com/vamosdalian/sports-calendar">vamosdalian/sports-calendar</a>
         </p>
         <p class="lead">
-          基础地址：
+          首页：
           <a href="https://vamosdalian.github.io/sports-calendar/">https://vamosdalian.github.io/sports-calendar/</a>
+        </p>
+        <p class="lead hidden" id="deep-link-wrap">
+          当前联赛直达链接：
+          <a id="league-deeplink" href=""></a>
         </p>
       </header>
 
@@ -31,28 +35,21 @@
 
       <section class="panel notice">
         <h2>订阅说明</h2>
-        <p>
-          推荐使用“订阅 URL”而不是“导入 .ics 文件”。导入是一次性拷贝，不会自动更新。
-        </p>
+        <p>推荐使用“订阅 URL”而不是“导入 .ics 文件”。导入是一次性拷贝，不会自动更新。</p>
         <ol>
-          <li>优先点击「webcal 订阅」。</li>
-          <li>若无反应，点击「https 打开」并用「复制链接」手动订阅。</li>
-          <li>iPhone/iPad 建议在 Safari 打开并点击 webcal；Android 建议复制 https 链接到支持订阅 URL 的日历 App。</li>
+          <li>优先点击「订阅」（webcal 协议）。</li>
+          <li>若无反应，点击「下载」（https 链接），并在日历 App 中通过 URL 订阅。</li>
+          <li>iPhone/iPad 建议在 Safari 打开并点击「订阅」；Android 建议使用「下载」链接进行手动订阅。</li>
           <li>微信内打开时，请点右上角「...」后选择「在浏览器打开」。</li>
         </ol>
       </section>
 
       <section class="panel">
-        <h2>联赛选择</h2>
+        <h2>选择联赛</h2>
         <div id="league-switch" class="league-switch"></div>
-        <p class="mini">
-          当前联赛直达链接：
-          <a id="league-deeplink" href=""></a>
-          <button id="copy-deeplink" type="button" class="copy-btn">复制</button>
-        </p>
       </section>
 
-      <section class="panel">
+      <section class="panel hidden" id="table-panel">
         <h2 id="table-title">球队订阅链接</h2>
         <div class="table-wrap">
           <table>
@@ -76,11 +73,11 @@
         var LEAGUES_DATA_URL = "data/leagues.json";
 
         var FALLBACK_DATA = {
-          defaultLeague: "csl",
           leagues: [
             {
               id: "csl",
-              name: "中超联赛",
+              name: "中国足球协会超级联赛",
+              displayName: "中超联赛",
               filePrefix: "csl",
               teams: [
                 { code: "beijing-guoan", name: "北京国安" },
@@ -106,7 +103,7 @@
 
         var state = {
           config: FALLBACK_DATA,
-          activeLeagueId: "csl"
+          activeLeagueId: ""
         };
 
         function isWeChat() {
@@ -122,7 +119,8 @@
             .map(function (league) {
               var id = String(league.id || "").trim().toLowerCase();
               var name = String(league.name || id || "").trim();
-              var filePrefix = String(league.filePrefix || id).trim();
+              var displayName = String(league.displayName || name).trim();
+              var filePrefix = String(league.filePrefix || league.file_prefix || id).trim();
               var teams = Array.isArray(league.teams)
                 ? league.teams
                     .map(function (team) {
@@ -136,7 +134,13 @@
                     })
                 : [];
 
-              return { id: id, name: name, filePrefix: filePrefix, teams: teams };
+              return {
+                id: id,
+                name: name,
+                displayName: displayName,
+                filePrefix: filePrefix,
+                teams: teams
+              };
             })
             .filter(function (league) {
               return league.id && league.filePrefix;
@@ -146,19 +150,7 @@
             return FALLBACK_DATA;
           }
 
-          var defaultLeague = String(raw.defaultLeague || "").trim().toLowerCase();
-          var ids = leagues.map(function (item) {
-            return item.id;
-          });
-
-          if (ids.indexOf(defaultLeague) === -1) {
-            defaultLeague = leagues[0].id;
-          }
-
-          return {
-            defaultLeague: defaultLeague,
-            leagues: leagues
-          };
+          return { leagues: leagues };
         }
 
         async function loadConfig() {
@@ -185,15 +177,7 @@
             return leagueFromQuery;
           }
 
-          var hash = (window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
-          if (hash) {
-            var hashLeague = hash.indexOf("league=") === 0 ? hash.slice(7) : hash;
-            if (ids.indexOf(hashLeague) !== -1) {
-              return hashLeague;
-            }
-          }
-
-          return config.defaultLeague;
+          return "";
         }
 
         function findLeague(leagueId) {
@@ -210,9 +194,8 @@
 
           return (
             '<div class="sub-links">' +
-            '<a class="primary" href="' + webcalUrl + '">webcal 订阅</a>' +
-            '<a class="secondary" href="' + httpsUrl + '" target="_blank" rel="noopener noreferrer">https 打开</a>' +
-            '<button type="button" class="copy-btn" data-copy="' + httpsUrl + '">复制链接</button>' +
+            '<a class="primary" href="' + webcalUrl + '">订阅</a>' +
+            '<a class="secondary" href="' + httpsUrl + '" target="_blank" rel="noopener noreferrer">下载</a>' +
             "</div>"
           );
         }
@@ -226,22 +209,32 @@
           root.innerHTML = state.config.leagues
             .map(function (league) {
               var activeClass = league.id === activeLeagueId ? " active" : "";
+              var href = "?league=" + encodeURIComponent(league.id);
               return (
-                '<button type="button" class="league-btn' +
+                '<a class="league-link' +
                 activeClass +
-                '" data-league="' +
-                league.id +
+                '" href="' +
+                href +
                 '">' +
-                league.name +
-                "</button>"
+                league.displayName +
+                "</a>"
               );
             })
             .join("");
         }
 
-        function setLeagueDeeplink(leagueId) {
+        function showDeepLink(leagueId) {
+          var wrap = document.getElementById("deep-link-wrap");
           var deepLink = document.getElementById("league-deeplink");
-          if (!deepLink) {
+
+          if (!wrap || !deepLink) {
+            return;
+          }
+
+          if (!leagueId) {
+            wrap.classList.add("hidden");
+            deepLink.href = "";
+            deepLink.textContent = "";
             return;
           }
 
@@ -252,34 +245,57 @@
           var next = url.origin + url.pathname + url.search;
           deepLink.href = next;
           deepLink.textContent = next;
+          wrap.classList.remove("hidden");
+        }
 
-          var copyBtn = document.getElementById("copy-deeplink");
-          if (copyBtn) {
-            copyBtn.setAttribute("data-copy", next);
+        function renderNoLeagueSelected() {
+          state.activeLeagueId = "";
+          document.title = "联赛 ICS 订阅 | sports-calendar";
+
+          var pageTitle = document.getElementById("page-title");
+          if (pageTitle) {
+            pageTitle.textContent = "联赛 ICS 订阅";
+          }
+
+          showDeepLink("");
+          var tablePanel = document.getElementById("table-panel");
+          if (tablePanel) {
+            tablePanel.classList.add("hidden");
+          }
+
+          var tbody = document.getElementById("team-table-body");
+          if (tbody) {
+            tbody.innerHTML = "";
           }
         }
 
-        function renderLeague(leagueId, options) {
+        function renderLeague(leagueId) {
           var league = findLeague(leagueId);
           if (!league) {
+            renderNoLeagueSelected();
+            renderLeagueSwitch("");
             return;
           }
 
           state.activeLeagueId = league.id;
+          document.title = league.displayName + " ICS 订阅 | sports-calendar";
 
           var pageTitle = document.getElementById("page-title");
           if (pageTitle) {
-            pageTitle.textContent = league.name + " ICS 订阅";
+            pageTitle.textContent = league.displayName + " ICS 订阅";
           }
-          document.title = league.name + " ICS 订阅 | sports-calendar";
 
           var tableTitle = document.getElementById("table-title");
           if (tableTitle) {
-            tableTitle.textContent = league.name + " 球队订阅链接";
+            tableTitle.textContent = league.displayName + " 球队订阅链接";
           }
 
+          showDeepLink(league.id);
           renderLeagueSwitch(league.id);
-          setLeagueDeeplink(league.id);
+          var tablePanel = document.getElementById("table-panel");
+          if (tablePanel) {
+            tablePanel.classList.remove("hidden");
+          }
 
           var tbody = document.getElementById("team-table-body");
           if (!tbody) {
@@ -288,80 +304,20 @@
 
           if (!Array.isArray(league.teams) || league.teams.length === 0) {
             tbody.innerHTML = '<tr><td colspan="3">当前联赛暂无球队配置</td></tr>';
-          } else {
-            tbody.innerHTML = league.teams
-              .map(function (team) {
-                return (
-                  "<tr>" +
-                  "<td>" + team.name + "</td>" +
-                  "<td>" + buildCell(league.filePrefix, team.code, false) + "</td>" +
-                  "<td>" + buildCell(league.filePrefix, team.code, true) + "</td>" +
-                  "</tr>"
-                );
-              })
-              .join("");
-          }
-
-          if (!options || !options.keepUrl) {
-            var url = new URL(window.location.href);
-            url.searchParams.set("league", league.id);
-            url.hash = "";
-            window.history.replaceState({}, "", url.pathname + url.search);
-          }
-        }
-
-        async function copyText(text) {
-          if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(text);
             return;
           }
 
-          var textArea = document.createElement("textarea");
-          textArea.value = text;
-          textArea.setAttribute("readonly", "");
-          textArea.style.position = "absolute";
-          textArea.style.left = "-9999px";
-          document.body.appendChild(textArea);
-          textArea.select();
-          document.execCommand("copy");
-          document.body.removeChild(textArea);
-        }
-
-        function bindEvents() {
-          document.addEventListener("click", function (event) {
-            var leagueBtn = event.target.closest(".league-btn");
-            if (leagueBtn) {
-              var leagueId = leagueBtn.getAttribute("data-league");
-              if (leagueId && leagueId !== state.activeLeagueId) {
-                renderLeague(leagueId);
-              }
-              return;
-            }
-
-            var copyBtn = event.target.closest(".copy-btn");
-            if (!copyBtn) {
-              return;
-            }
-
-            var target = copyBtn.getAttribute("data-copy");
-            if (!target) {
-              return;
-            }
-
-            copyText(target)
-              .then(function () {
-                var origin = copyBtn.textContent;
-                copyBtn.textContent = "已复制";
-                copyBtn.disabled = true;
-                setTimeout(function () {
-                  copyBtn.textContent = origin;
-                  copyBtn.disabled = false;
-                }, 1400);
-              })
-              .catch(function () {
-                copyBtn.textContent = "复制失败";
-              });
-          });
+          tbody.innerHTML = league.teams
+            .map(function (team) {
+              return (
+                "<tr>" +
+                "<td>" + team.name + "</td>" +
+                "<td>" + buildCell(league.filePrefix, team.code, false) + "</td>" +
+                "<td>" + buildCell(league.filePrefix, team.code, true) + "</td>" +
+                "</tr>"
+              );
+            })
+            .join("");
         }
 
         function showWeChatTip() {
@@ -377,10 +333,14 @@
         loadConfig().then(function (config) {
           state.config = config;
           var leagueId = currentLeagueFromUrl(config);
-          renderLeague(leagueId, { keepUrl: true });
+          if (leagueId) {
+            renderLeague(leagueId);
+          } else {
+            renderNoLeagueSelected();
+            renderLeagueSwitch("");
+          }
         });
 
-        bindEvents();
         showWeChatTip();
       })();
     </script>

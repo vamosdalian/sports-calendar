@@ -1,10 +1,26 @@
 {
-  "defaultLeague": "csl",
   "leagues": [
     {
       "id": "csl",
-      "name": "中超联赛",
+      "name": "中国足球协会超级联赛",
+      "displayName": "中超联赛",
+      "season": "2026",
+      "timezone": "Asia/Shanghai",
       "filePrefix": "csl",
+      "source_file": "csl_fixtures.csv",
+      "prodid": "-//sports-calendar//CSL//CN",
+      "default_match_duration_minutes": 120,
+      "ticket_duration_minutes": 15,
+      "calendar_name_template": "{team} - 中超比赛日历",
+      "calendar_with_ticket_name_template": "{team} - 中超比赛+抢票日历",
+      "calendar_description": "由 sports-calendar 自动生成的中超赛程订阅",
+      "match_summary_template": "【中超】{home_team} vs {away_team}",
+      "match_description_template": "赛事: {home_team} vs {away_team}\\n轮次: 第{round_no}轮\\n状态: {status}\\n比赛编号: {match_id}",
+      "match_category": "比赛",
+      "ticket_summary_template": "【抢票提醒】{home_team} vs {away_team}",
+      "ticket_description_template": "抢票时间: {ticket_open_iso}\\n比赛: {home_team} vs {away_team}\\n售票链接: {ticket_url}",
+      "ticket_category": "抢票",
+      "ticket_location": "线上售票",
       "teams": [
         { "code": "beijing-guoan", "name": "北京国安" },
         { "code": "shanghai-shenhua", "name": "上海申花" },
