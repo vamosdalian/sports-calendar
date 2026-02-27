@@ -1,0 +1,42 @@
+league_id: csl
+league_name: 中国足球协会超级联赛
+season: 2026
+timezone: Asia/Shanghai
+default_match_duration_minutes: 120
+calendar_name_template: "{team} - 中超比赛日历"
+calendar_with_ticket_name_template: "{team} - 中超比赛+抢票日历"
+calendar_description: "由 sports-calendar 自动生成的中超赛程订阅"
+source_file: csl_fixtures.csv
+teams:
+  - code: beijing-guoan
+    name: 北京国安
+  - code: shanghai-shenhua
+    name: 上海申花
+  - code: shanghai-port
+    name: 上海海港
+  - code: shandong-taishan
+    name: 山东泰山
+  - code: chengdu-rongcheng
+    name: 成都蓉城
+  - code: tianjin-jinmen-tiger
+    name: 天津津门虎
+  - code: zhejiang
+    name: 浙江队
+  - code: henan
+    name: 河南队
+  - code: wuhan-three-towns
+    name: 武汉三镇
+  - code: changchun-yatai
+    name: 长春亚泰
+  - code: qingdao-hainiu
+    name: 青岛海牛
+  - code: qingdao-west-coast
+    name: 青岛西海岸
+  - code: meizhou-hakka
+    name: 梅州客家
+  - code: shenzhen-peng-city
+    name: 深圳新鹏城
+  - code: yunnan-yukun
+    name: 云南玉昆
+  - code: dalian-yingbo
+    name: 大连英博
