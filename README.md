@@ -16,12 +16,16 @@
 
 ```text
 sports-calendar/
+├── assets/
+│   └── site.css             # GitHub Pages 首页样式
 ├── calendar/                # 生成后的 ICS 文件（每队两份）
 ├── data/
 │   ├── csl_meta.yaml        # 联赛元信息（球队、时区、模板等）
 │   └── csl_fixtures.csv     # 赛程与抢票时间数据
 ├── script/
 │   └── generate_csl_ics.py  # 从 data 生成 ICS 的脚本
+├── .nojekyll
+├── index.html               # GitHub Pages 首页（订阅入口）
 ├── requirements.txt
 └── README.md
 ```
@@ -95,3 +99,20 @@ python script/generate_csl_ics.py --meta data/csl_meta.yaml --output-dir calenda
 1. 更新 `data/csl_fixtures.csv` 赛程/抢票信息。
 2. 执行 `python script/generate_csl_ics.py`。
 3. 提交 `calendar/` 下更新后的 `ics` 文件。
+
+## GitHub Pages（vamosdalian/sports-calendar）
+
+本仓库已提供 Pages 首页文件：`index.html` + `assets/site.css`。
+
+### 开启步骤
+
+1. 将代码推送到 GitHub 仓库 `vamosdalian/sports-calendar`。
+2. 进入仓库 `Settings` -> `Pages`。
+3. `Build and deployment` 选择 `Deploy from a branch`。
+4. `Branch` 选择 `main`（或你的默认分支），`Folder` 选择 `/ (root)`。
+5. 保存后等待发布完成。
+
+### 访问地址
+
+- 首页：`https://vamosdalian.github.io/sports-calendar/`
+- ICS 文件示例：`https://vamosdalian.github.io/sports-calendar/calendar/csl_beijing-guoan.ics`
