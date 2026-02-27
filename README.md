@@ -59,13 +59,13 @@ sports-calendar/
 1. 安装依赖：
 
 ```bash
-python3 -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 2. 生成/更新 `ics`：
 
 ```bash
-python3 script/generate_csl_ics.py
+python script/generate_csl_ics.py
 ```
 
 默认读取：
@@ -76,7 +76,7 @@ python3 script/generate_csl_ics.py
 可选参数：
 
 ```bash
-python3 script/generate_csl_ics.py --meta data/csl_meta.yaml --output-dir calendar
+python script/generate_csl_ics.py --meta data/csl_meta.yaml --output-dir calendar
 ```
 
 ## 输出文件命名
@@ -93,5 +93,5 @@ python3 script/generate_csl_ics.py --meta data/csl_meta.yaml --output-dir calend
 
 推荐流程：
 1. 更新 `data/csl_fixtures.csv` 赛程/抢票信息。
-2. 执行 `python3 script/generate_csl_ics.py`。
+2. 执行 `python script/generate_csl_ics.py`。
 3. 提交 `calendar/` 下更新后的 `ics` 文件。
