@@ -1,0 +1,28 @@
+{
+  "defaultLeague": "csl",
+  "leagues": [
+    {
+      "id": "csl",
+      "name": "中超联赛",
+      "filePrefix": "csl",
+      "teams": [
+        { "code": "beijing-guoan", "name": "北京国安" },
+        { "code": "shanghai-shenhua", "name": "上海申花" },
+        { "code": "shanghai-port", "name": "上海海港" },
+        { "code": "shandong-taishan", "name": "山东泰山" },
+        { "code": "chengdu-rongcheng", "name": "成都蓉城" },
+        { "code": "tianjin-jinmen-tiger", "name": "天津津门虎" },
+        { "code": "zhejiang", "name": "浙江队" },
+        { "code": "henan", "name": "河南队" },
+        { "code": "wuhan-three-towns", "name": "武汉三镇" },
+        { "code": "changchun-yatai", "name": "长春亚泰" },
+        { "code": "qingdao-hainiu", "name": "青岛海牛" },
+        { "code": "qingdao-west-coast", "name": "青岛西海岸" },
+        { "code": "meizhou-hakka", "name": "梅州客家" },
+        { "code": "shenzhen-peng-city", "name": "深圳新鹏城" },
+        { "code": "yunnan-yukun", "name": "云南玉昆" },
+        { "code": "dalian-yingbo", "name": "大连英博" }
+      ]
+    }
+  ]
+}

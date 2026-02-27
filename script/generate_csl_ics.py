@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate CSL team calendars from CSV fixtures and YAML metadata."""
+"""Generate league team calendars from CSV fixtures and YAML metadata."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ class Fixture:
 def parse_args() -> argparse.Namespace:
     project_root = Path(__file__).resolve().parents[1]
 
-    parser = argparse.ArgumentParser(description="Generate CSL ICS files")
+    parser = argparse.ArgumentParser(description="Generate league ICS files")
     parser.add_argument(
         "--meta",
         type=Path,
@@ -155,13 +155,25 @@ def ensure_fixture_teams_exist(fixtures: list[Fixture], teams: list[Team]) -> No
         raise ValueError(f"fixture has teams not found in meta teams: {unknown}")
 
 
+def render_template(template: str, context: dict[str, Any], field_name: str) -> str:
+    try:
+        return template.format(**context)
+    except KeyError as exc:
+        raise ValueError(
+            f"meta {field_name} has unknown placeholder: {exc.args[0]}"
+        ) from exc
+
+
 def build_calendar_base(
     meta: dict[str, Any],
     team_name: str,
     include_ticket: bool,
 ) -> Calendar:
+    league_id = str(meta["league_id"]).strip().upper()
+    prodid = str(meta.get("prodid", f"-//sports-calendar//{league_id}//CN"))
+
     cal = Calendar()
-    cal.add("prodid", "-//sports-calendar//CSL//CN")
+    cal.add("prodid", prodid)
     cal.add("version", "2.0")
     cal.add("calscale", "GREGORIAN")
     cal.add("x-wr-timezone", meta["timezone"])
@@ -179,57 +191,109 @@ def build_calendar_base(
 def add_match_event(
     cal: Calendar,
     fixture: Fixture,
+    meta: dict[str, Any],
     league_id: str,
     season: str,
     duration_minutes: int,
 ) -> None:
+    summary_template = str(
+        meta.get("match_summary_template", "【{league_name}】{home_team} vs {away_team}")
+    )
+    description_template = str(
+        meta.get(
+            "match_description_template",
+            (
+                "赛事: {home_team} vs {away_team}\\n"
+                "轮次: 第{round_no}轮\\n"
+                "状态: {status}\\n"
+                "比赛编号: {match_id}"
+            ),
+        )
+    )
+
+    context = {
+        "league_id": league_id,
+        "league_name": str(meta["league_name"]),
+        "season": season,
+        "match_id": fixture.match_id,
+        "round_no": fixture.round_no,
+        "home_team": fixture.home_team,
+        "away_team": fixture.away_team,
+        "stadium": fixture.stadium,
+        "city": fixture.city,
+        "status": fixture.status,
+        "kickoff_iso": fixture.kickoff.isoformat(),
+    }
+
     event = Event()
     event.add("uid", f"{league_id}-{season}-{fixture.match_id}@sports-calendar")
     event.add("dtstamp", datetime.now(UTC))
     event.add("dtstart", fixture.kickoff)
     event.add("dtend", fixture.kickoff + timedelta(minutes=duration_minutes))
-    event.add("summary", f"【中超】{fixture.home_team} vs {fixture.away_team}")
+    event.add("summary", render_template(summary_template, context, "match_summary_template"))
     event.add("location", f"{fixture.stadium}（{fixture.city}）")
     event.add(
         "description",
-        (
-            f"赛事: {fixture.home_team} vs {fixture.away_team}\\n"
-            f"轮次: 第{fixture.round_no}轮\\n"
-            f"状态: {fixture.status}\\n"
-            f"比赛编号: {fixture.match_id}"
-        ),
+        render_template(description_template, context, "match_description_template"),
     )
-    event.add("categories", "比赛")
+    event.add("categories", str(meta.get("match_category", "比赛")))
     cal.add_component(event)
 
 
 def add_ticket_event(
     cal: Calendar,
     fixture: Fixture,
+    meta: dict[str, Any],
     league_id: str,
     season: str,
 ) -> None:
     if fixture.ticket_open is None:
         return
 
+    ticket_text = fixture.ticket_url if fixture.ticket_url else "暂无"
+    summary_template = str(
+        meta.get("ticket_summary_template", "【抢票提醒】{home_team} vs {away_team}")
+    )
+    description_template = str(
+        meta.get(
+            "ticket_description_template",
+            (
+                "抢票时间: {ticket_open_iso}\\n"
+                "比赛: {home_team} vs {away_team}\\n"
+                "售票链接: {ticket_url}"
+            ),
+        )
+    )
+    ticket_duration = int(meta.get("ticket_duration_minutes", 15))
+
+    context = {
+        "league_id": league_id,
+        "league_name": str(meta["league_name"]),
+        "season": season,
+        "match_id": fixture.match_id,
+        "round_no": fixture.round_no,
+        "home_team": fixture.home_team,
+        "away_team": fixture.away_team,
+        "stadium": fixture.stadium,
+        "city": fixture.city,
+        "status": fixture.status,
+        "kickoff_iso": fixture.kickoff.isoformat(),
+        "ticket_open_iso": fixture.ticket_open.isoformat(),
+        "ticket_url": ticket_text,
+    }
+
     event = Event()
     event.add("uid", f"{league_id}-{season}-{fixture.match_id}-ticket@sports-calendar")
     event.add("dtstamp", datetime.now(UTC))
     event.add("dtstart", fixture.ticket_open)
-    event.add("dtend", fixture.ticket_open + timedelta(minutes=15))
-    event.add("summary", f"【抢票提醒】{fixture.home_team} vs {fixture.away_team}")
-    event.add("location", "线上售票")
-
-    ticket_text = fixture.ticket_url if fixture.ticket_url else "暂无"
+    event.add("dtend", fixture.ticket_open + timedelta(minutes=ticket_duration))
+    event.add("summary", render_template(summary_template, context, "ticket_summary_template"))
+    event.add("location", str(meta.get("ticket_location", "线上售票")))
     event.add(
         "description",
-        (
-            f"抢票时间: {fixture.ticket_open.isoformat()}\\n"
-            f"比赛: {fixture.home_team} vs {fixture.away_team}\\n"
-            f"售票链接: {ticket_text}"
-        ),
+        render_template(description_template, context, "ticket_description_template"),
     )
-    event.add("categories", "抢票")
+    event.add("categories", str(meta.get("ticket_category", "抢票")))
     cal.add_component(event)
 
 
@@ -276,12 +340,12 @@ def main() -> None:
 
         match_only_cal = build_calendar_base(meta, team.name, include_ticket=False)
         for fixture in team_fixtures:
-            add_match_event(match_only_cal, fixture, league_id, season, duration_minutes)
+            add_match_event(match_only_cal, fixture, meta, league_id, season, duration_minutes)
 
         with_ticket_cal = build_calendar_base(meta, team.name, include_ticket=True)
         for fixture in team_fixtures:
-            add_match_event(with_ticket_cal, fixture, league_id, season, duration_minutes)
-            add_ticket_event(with_ticket_cal, fixture, league_id, season)
+            add_match_event(with_ticket_cal, fixture, meta, league_id, season, duration_minutes)
+            add_ticket_event(with_ticket_cal, fixture, meta, league_id, season)
 
         match_only_path = output_dir / f"{league_id}_{team.code}.ics"
         with_ticket_path = output_dir / f"{league_id}_{team.code}_with_ticket.ics"

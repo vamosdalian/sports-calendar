@@ -65,6 +65,20 @@ body {
   font-size: 20px;
 }
 
+.hidden {
+  display: none;
+}
+
+.wx-tip {
+  border-color: #ffd27d;
+  background: #fff9ec;
+}
+
+.wx-tip p {
+  margin: 0;
+  color: #745206;
+}
+
 .notice p {
   margin: 0;
   padding: 10px 12px;
@@ -74,10 +88,44 @@ body {
   border-radius: 8px;
 }
 
+.notice ol {
+  margin-top: 10px;
+}
+
 ol {
   margin: 0;
   padding-left: 18px;
   color: var(--muted);
+}
+
+.league-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.league-btn {
+  border: 1px solid #bfd1ef;
+  border-radius: 999px;
+  background: #f6f9ff;
+  color: #274878;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.league-btn.active {
+  border-color: #6c93d8;
+  background: #e3eeff;
+  color: #0e3e80;
+  font-weight: 600;
+}
+
+.mini {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  word-break: break-all;
 }
 
 .table-wrap {
@@ -125,7 +173,28 @@ td {
 }
 
 .sub-links .secondary::before {
-  content: "备用: ";
+  content: "";
+}
+
+.copy-btn {
+  width: fit-content;
+  border: 1px solid #bfd1ef;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #25538a;
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 1.8;
+  cursor: pointer;
+}
+
+.copy-btn:hover {
+  background: #deebff;
+}
+
+.copy-btn:disabled {
+  cursor: default;
+  opacity: 0.75;
 }
 
 a {

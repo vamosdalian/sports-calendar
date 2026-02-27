@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>中超 ICS 订阅 | sports-calendar</title>
+    <title>ICS 订阅 | sports-calendar</title>
     <meta
       name="description"
-      content="sports-calendar 提供中超联赛 ICS 订阅链接，每支球队提供比赛日历与比赛+抢票提醒日历。"
+      content="sports-calendar 提供多联赛 ICS 订阅链接，每支球队提供比赛日历与比赛+抢票提醒日历。"
     />
     <link rel="stylesheet" href="assets/site.css" />
   </head>
@@ -14,7 +14,7 @@
     <main class="container">
       <header class="hero">
         <p class="tag">sports-calendar</p>
-        <h1>中超联赛 ICS 订阅</h1>
+        <h1 id="page-title">联赛 ICS 订阅</h1>
         <p class="lead">
           仓库：<a href="https://github.com/vamosdalian/sports-calendar">vamosdalian/sports-calendar</a>
         </p>
@@ -24,25 +24,36 @@
         </p>
       </header>
 
-      <section class="panel notice">
-        <h2>重要说明</h2>
-        <p>
-          请优先点击 <code>webcal://</code> 链接进行“订阅”，不要下载 <code>.ics</code> 文件后手动导入。
-          手动导入是一次性拷贝，不会自动跟随赛程变更。
-        </p>
+      <section class="panel wx-tip hidden" id="wx-tip">
+        <h2>微信内打开提示</h2>
+        <p>检测到你正在微信内打开。请点右上角「...」后选择「在浏览器打开」，再点击 <code>webcal://</code> 订阅更稳定。</p>
       </section>
 
-      <section class="panel">
-        <h2>使用方式</h2>
+      <section class="panel notice">
+        <h2>订阅说明</h2>
+        <p>
+          推荐使用“订阅 URL”而不是“导入 .ics 文件”。导入是一次性拷贝，不会自动更新。
+        </p>
         <ol>
-          <li>点击下方每个单元格里的「webcal 订阅」。</li>
-          <li>系统会打开日历 App，并创建一个可自动刷新的“订阅日历”。</li>
-          <li>若设备不支持 webcal，再使用同单元格里的「https 备用」。</li>
+          <li>优先点击「webcal 订阅」。</li>
+          <li>若无反应，点击「https 打开」并用「复制链接」手动订阅。</li>
+          <li>iPhone/iPad 建议在 Safari 打开并点击 webcal；Android 建议复制 https 链接到支持订阅 URL 的日历 App。</li>
+          <li>微信内打开时，请点右上角「...」后选择「在浏览器打开」。</li>
         </ol>
       </section>
 
       <section class="panel">
-        <h2>球队订阅链接</h2>
+        <h2>联赛选择</h2>
+        <div id="league-switch" class="league-switch"></div>
+        <p class="mini">
+          当前联赛直达链接：
+          <a id="league-deeplink" href=""></a>
+          <button id="copy-deeplink" type="button" class="copy-btn">复制</button>
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2 id="table-title">球队订阅链接</h2>
         <div class="table-wrap">
           <table>
             <thead>
@@ -52,101 +63,326 @@
                 <th>比赛+抢票日历</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td>北京国安</td>
-                <td>
-                  <div class="sub-links">
-                    <a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_beijing-guoan.ics">webcal 订阅</a>
-                    <a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_beijing-guoan.ics">https 备用</a>
-                  </div>
-                </td>
-                <td>
-                  <div class="sub-links">
-                    <a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_beijing-guoan_with_ticket.ics">webcal 订阅</a>
-                    <a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_beijing-guoan_with_ticket.ics">https 备用</a>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td>上海申花</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_shanghai-shenhua.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_shanghai-shenhua.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_shanghai-shenhua_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_shanghai-shenhua_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>上海海港</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_shanghai-port.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_shanghai-port.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_shanghai-port_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_shanghai-port_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>山东泰山</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_shandong-taishan.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_shandong-taishan.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_shandong-taishan_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_shandong-taishan_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>成都蓉城</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_chengdu-rongcheng.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_chengdu-rongcheng.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_chengdu-rongcheng_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_chengdu-rongcheng_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>天津津门虎</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_tianjin-jinmen-tiger.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_tianjin-jinmen-tiger.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_tianjin-jinmen-tiger_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_tianjin-jinmen-tiger_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>浙江队</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_zhejiang.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_zhejiang.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_zhejiang_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_zhejiang_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>河南队</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_henan.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_henan.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_henan_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_henan_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>武汉三镇</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_wuhan-three-towns.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_wuhan-three-towns.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_wuhan-three-towns_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_wuhan-three-towns_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>长春亚泰</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_changchun-yatai.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_changchun-yatai.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_changchun-yatai_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_changchun-yatai_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>青岛海牛</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_qingdao-hainiu.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_qingdao-hainiu.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_qingdao-hainiu_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_qingdao-hainiu_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>青岛西海岸</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_qingdao-west-coast.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_qingdao-west-coast.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_qingdao-west-coast_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_qingdao-west-coast_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>梅州客家</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_meizhou-hakka.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_meizhou-hakka.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_meizhou-hakka_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_meizhou-hakka_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>深圳新鹏城</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_shenzhen-peng-city.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_shenzhen-peng-city.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_shenzhen-peng-city_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_shenzhen-peng-city_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>云南玉昆</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_yunnan-yukun.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_yunnan-yukun.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_yunnan-yukun_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_yunnan-yukun_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-              <tr>
-                <td>大连英博</td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_dalian-yingbo.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_dalian-yingbo.ics">https 备用</a></div></td>
-                <td><div class="sub-links"><a class="primary" href="webcal://vamosdalian.github.io/sports-calendar/calendar/csl_dalian-yingbo_with_ticket.ics">webcal 订阅</a><a class="secondary" href="https://vamosdalian.github.io/sports-calendar/calendar/csl_dalian-yingbo_with_ticket.ics">https 备用</a></div></td>
-              </tr>
-            </tbody>
+            <tbody id="team-table-body"></tbody>
           </table>
         </div>
       </section>
     </main>
+
+    <script>
+      (function () {
+        var BASE_SITE = "https://vamosdalian.github.io/sports-calendar/";
+        var CALENDAR_BASE = BASE_SITE + "calendar/";
+        var LEAGUES_DATA_URL = "data/leagues.json";
+
+        var FALLBACK_DATA = {
+          defaultLeague: "csl",
+          leagues: [
+            {
+              id: "csl",
+              name: "中超联赛",
+              filePrefix: "csl",
+              teams: [
+                { code: "beijing-guoan", name: "北京国安" },
+                { code: "shanghai-shenhua", name: "上海申花" },
+                { code: "shanghai-port", name: "上海海港" },
+                { code: "shandong-taishan", name: "山东泰山" },
+                { code: "chengdu-rongcheng", name: "成都蓉城" },
+                { code: "tianjin-jinmen-tiger", name: "天津津门虎" },
+                { code: "zhejiang", name: "浙江队" },
+                { code: "henan", name: "河南队" },
+                { code: "wuhan-three-towns", name: "武汉三镇" },
+                { code: "changchun-yatai", name: "长春亚泰" },
+                { code: "qingdao-hainiu", name: "青岛海牛" },
+                { code: "qingdao-west-coast", name: "青岛西海岸" },
+                { code: "meizhou-hakka", name: "梅州客家" },
+                { code: "shenzhen-peng-city", name: "深圳新鹏城" },
+                { code: "yunnan-yukun", name: "云南玉昆" },
+                { code: "dalian-yingbo", name: "大连英博" }
+              ]
+            }
+          ]
+        };
+
+        var state = {
+          config: FALLBACK_DATA,
+          activeLeagueId: "csl"
+        };
+
+        function isWeChat() {
+          return /MicroMessenger/i.test(navigator.userAgent || "");
+        }
+
+        function normalizeConfig(raw) {
+          if (!raw || !Array.isArray(raw.leagues) || raw.leagues.length === 0) {
+            return FALLBACK_DATA;
+          }
+
+          var leagues = raw.leagues
+            .map(function (league) {
+              var id = String(league.id || "").trim().toLowerCase();
+              var name = String(league.name || id || "").trim();
+              var filePrefix = String(league.filePrefix || id).trim();
+              var teams = Array.isArray(league.teams)
+                ? league.teams
+                    .map(function (team) {
+                      return {
+                        code: String(team.code || "").trim(),
+                        name: String(team.name || "").trim()
+                      };
+                    })
+                    .filter(function (team) {
+                      return team.code && team.name;
+                    })
+                : [];
+
+              return { id: id, name: name, filePrefix: filePrefix, teams: teams };
+            })
+            .filter(function (league) {
+              return league.id && league.filePrefix;
+            });
+
+          if (leagues.length === 0) {
+            return FALLBACK_DATA;
+          }
+
+          var defaultLeague = String(raw.defaultLeague || "").trim().toLowerCase();
+          var ids = leagues.map(function (item) {
+            return item.id;
+          });
+
+          if (ids.indexOf(defaultLeague) === -1) {
+            defaultLeague = leagues[0].id;
+          }
+
+          return {
+            defaultLeague: defaultLeague,
+            leagues: leagues
+          };
+        }
+
+        async function loadConfig() {
+          try {
+            var response = await fetch(LEAGUES_DATA_URL, { cache: "no-store" });
+            if (!response.ok) {
+              return FALLBACK_DATA;
+            }
+            var raw = await response.json();
+            return normalizeConfig(raw);
+          } catch (_error) {
+            return FALLBACK_DATA;
+          }
+        }
+
+        function currentLeagueFromUrl(config) {
+          var ids = config.leagues.map(function (league) {
+            return league.id;
+          });
+
+          var params = new URLSearchParams(window.location.search);
+          var leagueFromQuery = (params.get("league") || "").trim().toLowerCase();
+          if (ids.indexOf(leagueFromQuery) !== -1) {
+            return leagueFromQuery;
+          }
+
+          var hash = (window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
+          if (hash) {
+            var hashLeague = hash.indexOf("league=") === 0 ? hash.slice(7) : hash;
+            if (ids.indexOf(hashLeague) !== -1) {
+              return hashLeague;
+            }
+          }
+
+          return config.defaultLeague;
+        }
+
+        function findLeague(leagueId) {
+          return state.config.leagues.find(function (league) {
+            return league.id === leagueId;
+          });
+        }
+
+        function buildCell(filePrefix, teamCode, withTicket) {
+          var fileName =
+            filePrefix + "_" + teamCode + (withTicket ? "_with_ticket" : "") + ".ics";
+          var httpsUrl = CALENDAR_BASE + fileName;
+          var webcalUrl = httpsUrl.replace("https://", "webcal://");
+
+          return (
+            '<div class="sub-links">' +
+            '<a class="primary" href="' + webcalUrl + '">webcal 订阅</a>' +
+            '<a class="secondary" href="' + httpsUrl + '" target="_blank" rel="noopener noreferrer">https 打开</a>' +
+            '<button type="button" class="copy-btn" data-copy="' + httpsUrl + '">复制链接</button>' +
+            "</div>"
+          );
+        }
+
+        function renderLeagueSwitch(activeLeagueId) {
+          var root = document.getElementById("league-switch");
+          if (!root) {
+            return;
+          }
+
+          root.innerHTML = state.config.leagues
+            .map(function (league) {
+              var activeClass = league.id === activeLeagueId ? " active" : "";
+              return (
+                '<button type="button" class="league-btn' +
+                activeClass +
+                '" data-league="' +
+                league.id +
+                '">' +
+                league.name +
+                "</button>"
+              );
+            })
+            .join("");
+        }
+
+        function setLeagueDeeplink(leagueId) {
+          var deepLink = document.getElementById("league-deeplink");
+          if (!deepLink) {
+            return;
+          }
+
+          var url = new URL(window.location.href);
+          url.searchParams.set("league", leagueId);
+          url.hash = "";
+
+          var next = url.origin + url.pathname + url.search;
+          deepLink.href = next;
+          deepLink.textContent = next;
+
+          var copyBtn = document.getElementById("copy-deeplink");
+          if (copyBtn) {
+            copyBtn.setAttribute("data-copy", next);
+          }
+        }
+
+        function renderLeague(leagueId, options) {
+          var league = findLeague(leagueId);
+          if (!league) {
+            return;
+          }
+
+          state.activeLeagueId = league.id;
+
+          var pageTitle = document.getElementById("page-title");
+          if (pageTitle) {
+            pageTitle.textContent = league.name + " ICS 订阅";
+          }
+          document.title = league.name + " ICS 订阅 | sports-calendar";
+
+          var tableTitle = document.getElementById("table-title");
+          if (tableTitle) {
+            tableTitle.textContent = league.name + " 球队订阅链接";
+          }
+
+          renderLeagueSwitch(league.id);
+          setLeagueDeeplink(league.id);
+
+          var tbody = document.getElementById("team-table-body");
+          if (!tbody) {
+            return;
+          }
+
+          if (!Array.isArray(league.teams) || league.teams.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3">当前联赛暂无球队配置</td></tr>';
+          } else {
+            tbody.innerHTML = league.teams
+              .map(function (team) {
+                return (
+                  "<tr>" +
+                  "<td>" + team.name + "</td>" +
+                  "<td>" + buildCell(league.filePrefix, team.code, false) + "</td>" +
+                  "<td>" + buildCell(league.filePrefix, team.code, true) + "</td>" +
+                  "</tr>"
+                );
+              })
+              .join("");
+          }
+
+          if (!options || !options.keepUrl) {
+            var url = new URL(window.location.href);
+            url.searchParams.set("league", league.id);
+            url.hash = "";
+            window.history.replaceState({}, "", url.pathname + url.search);
+          }
+        }
+
+        async function copyText(text) {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return;
+          }
+
+          var textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.setAttribute("readonly", "");
+          textArea.style.position = "absolute";
+          textArea.style.left = "-9999px";
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textArea);
+        }
+
+        function bindEvents() {
+          document.addEventListener("click", function (event) {
+            var leagueBtn = event.target.closest(".league-btn");
+            if (leagueBtn) {
+              var leagueId = leagueBtn.getAttribute("data-league");
+              if (leagueId && leagueId !== state.activeLeagueId) {
+                renderLeague(leagueId);
+              }
+              return;
+            }
+
+            var copyBtn = event.target.closest(".copy-btn");
+            if (!copyBtn) {
+              return;
+            }
+
+            var target = copyBtn.getAttribute("data-copy");
+            if (!target) {
+              return;
+            }
+
+            copyText(target)
+              .then(function () {
+                var origin = copyBtn.textContent;
+                copyBtn.textContent = "已复制";
+                copyBtn.disabled = true;
+                setTimeout(function () {
+                  copyBtn.textContent = origin;
+                  copyBtn.disabled = false;
+                }, 1400);
+              })
+              .catch(function () {
+                copyBtn.textContent = "复制失败";
+              });
+          });
+        }
+
+        function showWeChatTip() {
+          if (!isWeChat()) {
+            return;
+          }
+          var tip = document.getElementById("wx-tip");
+          if (tip) {
+            tip.classList.remove("hidden");
+          }
+        }
+
+        loadConfig().then(function (config) {
+          state.config = config;
+          var leagueId = currentLeagueFromUrl(config);
+          renderLeague(leagueId, { keepUrl: true });
+        });
+
+        bindEvents();
+        showWeChatTip();
+      })();
+    </script>
   </body>
 </html>
