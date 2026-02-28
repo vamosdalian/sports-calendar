@@ -32,6 +32,7 @@ class Fixture:
     city: str
     ticket_open: datetime | None
     ticket_url: str
+    ticket_channel: str
     status: str
 
 
@@ -69,6 +70,7 @@ DEFAULT_MATCH_DESCRIPTION_TEMPLATE = (
 DEFAULT_TICKET_DESCRIPTION_TEMPLATE = (
     "抢票时间: {ticket_open_iso}\\n"
     "比赛: {home_team} vs {away_team}\\n"
+    "售票方式: {ticket_channel}\\n"
     "售票链接: {ticket_url}"
 )
 
@@ -230,6 +232,7 @@ def load_fixtures(csv_path: Path, tz: ZoneInfo) -> list[Fixture]:
             "city",
             "ticket_open",
             "ticket_url",
+            "ticket_channel",
             "status",
         }
         missing = required_columns - set(reader.fieldnames or [])
@@ -252,6 +255,7 @@ def load_fixtures(csv_path: Path, tz: ZoneInfo) -> list[Fixture]:
                     city=row["city"].strip(),
                     ticket_open=ticket_open,
                     ticket_url=row["ticket_url"].strip(),
+                    ticket_channel=row["ticket_channel"].strip(),
                     status=row["status"].strip(),
                 )
             )
@@ -317,6 +321,7 @@ def make_template_context(league: LeagueConfig, fixture: Fixture, ticket_url: st
         "kickoff_iso": fixture.kickoff.isoformat(),
         "ticket_open_iso": fixture.ticket_open.isoformat() if fixture.ticket_open else "",
         "ticket_url": ticket_url,
+        "ticket_channel": fixture.ticket_channel,
     }
     return context
 

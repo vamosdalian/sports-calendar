@@ -72,6 +72,7 @@ sports-calendar/
 - `city`
 - `ticket_open`
 - `ticket_url`
+- `ticket_channel`（售票方式，如"小程序"）
 - `status`
 
 时间字段使用 ISO-8601，例如：`2026-03-06T19:35:00+08:00`。
