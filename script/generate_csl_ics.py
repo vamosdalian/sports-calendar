@@ -40,39 +40,35 @@ class Fixture:
 class LeagueConfig:
     league_id: str
     league_name: str
+    display_name: str
     season: str
     timezone: str
     file_prefix: str
     default_match_duration_minutes: int
-    calendar_name_template: str
-    calendar_with_ticket_name_template: str
-    calendar_description: str
     source_file: str
     prodid: str
-    match_summary_template: str
-    match_description_template: str
-    match_category: str
-    ticket_summary_template: str
-    ticket_description_template: str
     ticket_duration_minutes: int
-    ticket_category: str
-    ticket_location: str
     teams: list[Team]
 
 
-DEFAULT_MATCH_DESCRIPTION_TEMPLATE = (
-    "赛事: {home_team} vs {away_team}\\n"
-    "轮次: 第{round_no}轮\\n"
-    "状态: {status}\\n"
+MATCH_SUMMARY_TEMPLATE = "【{display_name}】{home_team} vs {away_team}"
+MATCH_DESCRIPTION_TEMPLATE = (
+    "赛事: {home_team} vs {away_team}\n"
+    "轮次: 第{round_no}轮\n"
+    "状态: {status}\n"
     "比赛编号: {match_id}"
 )
+MATCH_CATEGORY = "比赛"
 
-DEFAULT_TICKET_DESCRIPTION_TEMPLATE = (
-    "抢票时间: {ticket_open_iso}\\n"
-    "比赛: {home_team} vs {away_team}\\n"
-    "售票方式: {ticket_channel}\\n"
+TICKET_SUMMARY_TEMPLATE = "【抢票提醒】{home_team} vs {away_team}"
+TICKET_DESCRIPTION_TEMPLATE = (
+    "抢票时间: {ticket_open_iso}\n"
+    "比赛: {home_team} vs {away_team}\n"
+    "售票方式: {ticket_channel}\n"
     "售票链接: {ticket_url}"
 )
+TICKET_CATEGORY = "抢票"
+TICKET_LOCATION = "线上售票"
 
 
 def parse_args() -> argparse.Namespace:
@@ -159,54 +155,20 @@ def load_leagues(config_path: Path) -> list[LeagueConfig]:
         ticket_duration = int(league.get("ticket_duration_minutes", 15))
 
         prodid = str(league.get("prodid", f"-//sports-calendar//{league_id.upper()}//CN"))
+        display_name = str(league.get("displayName") or league.get("display_name") or league_name).strip()
 
         result.append(
             LeagueConfig(
                 league_id=league_id,
                 league_name=league_name,
+                display_name=display_name,
                 season=season,
                 timezone=timezone,
                 file_prefix=file_prefix,
                 default_match_duration_minutes=duration,
-                calendar_name_template=ensure_str(
-                    league.get("calendar_name_template"),
-                    f"{league_id}.calendar_name_template",
-                ),
-                calendar_with_ticket_name_template=ensure_str(
-                    league.get("calendar_with_ticket_name_template"),
-                    f"{league_id}.calendar_with_ticket_name_template",
-                ),
-                calendar_description=ensure_str(
-                    league.get("calendar_description"),
-                    f"{league_id}.calendar_description",
-                ),
                 source_file=source_file,
                 prodid=prodid,
-                match_summary_template=str(
-                    league.get(
-                        "match_summary_template",
-                        "【{league_name}】{home_team} vs {away_team}",
-                    )
-                ),
-                match_description_template=str(
-                    league.get(
-                        "match_description_template",
-                        DEFAULT_MATCH_DESCRIPTION_TEMPLATE,
-                    )
-                ),
-                match_category=str(league.get("match_category", "比赛")),
-                ticket_summary_template=str(
-                    league.get("ticket_summary_template", "【抢票提醒】{home_team} vs {away_team}")
-                ),
-                ticket_description_template=str(
-                    league.get(
-                        "ticket_description_template",
-                        DEFAULT_TICKET_DESCRIPTION_TEMPLATE,
-                    )
-                ),
                 ticket_duration_minutes=ticket_duration,
-                ticket_category=str(league.get("ticket_category", "抢票")),
-                ticket_location=str(league.get("ticket_location", "线上售票")),
                 teams=teams,
             )
         )
@@ -296,13 +258,9 @@ def build_calendar_base(league: LeagueConfig, team_name: str, include_ticket: bo
     cal.add("calscale", "GREGORIAN")
     cal.add("x-wr-timezone", league.timezone)
 
-    if include_ticket:
-        cal_name = league.calendar_with_ticket_name_template.format(team=team_name)
-    else:
-        cal_name = league.calendar_name_template.format(team=team_name)
-
-    cal.add("x-wr-calname", cal_name)
-    cal.add("x-wr-caldesc", league.calendar_description)
+    suffix = "比赛+抢票日历" if include_ticket else "比赛日历"
+    cal.add("x-wr-calname", f"{team_name} - {league.display_name}{suffix}")
+    cal.add("x-wr-caldesc", f"由 sports-calendar 自动生成的{league.display_name}赛程订阅")
     cal.add("last-modified", datetime.now(UTC))
     cal.add("x-published-ttl", "PT1H")
     return cal
@@ -312,6 +270,7 @@ def make_template_context(league: LeagueConfig, fixture: Fixture, ticket_url: st
     context = {
         "league_id": league.league_id,
         "league_name": league.league_name,
+        "display_name": league.display_name,
         "season": league.season,
         "match_id": fixture.match_id,
         "round_no": fixture.round_no,
@@ -344,23 +303,15 @@ def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> No
     )
     event.add(
         "summary",
-        render_template(
-            league.match_summary_template,
-            context,
-            f"{league.league_id}.match_summary_template",
-        ),
+        render_template(MATCH_SUMMARY_TEMPLATE, context, "match_summary"),
     )
     event.add("location", f"{fixture.stadium}（{fixture.city}）")
     event.add(
         "description",
-        render_template(
-            league.match_description_template,
-            context,
-            f"{league.league_id}.match_description_template",
-        ),
+        render_template(MATCH_DESCRIPTION_TEMPLATE, context, "match_description"),
     )
     event.add("last-modified", datetime.now(UTC))
-    event.add("categories", league.match_category)
+    event.add("categories", MATCH_CATEGORY)
 
     alarm = Alarm()
     alarm.add("action", "DISPLAY")
@@ -391,23 +342,15 @@ def add_ticket_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> N
     )
     event.add(
         "summary",
-        render_template(
-            league.ticket_summary_template,
-            context,
-            f"{league.league_id}.ticket_summary_template",
-        ),
+        render_template(TICKET_SUMMARY_TEMPLATE, context, "ticket_summary"),
     )
-    event.add("location", league.ticket_location)
+    event.add("location", TICKET_LOCATION)
     event.add(
         "description",
-        render_template(
-            league.ticket_description_template,
-            context,
-            f"{league.league_id}.ticket_description_template",
-        ),
+        render_template(TICKET_DESCRIPTION_TEMPLATE, context, "ticket_description"),
     )
     event.add("last-modified", datetime.now(UTC))
-    event.add("categories", league.ticket_category)
+    event.add("categories", TICKET_CATEGORY)
 
     alarm = Alarm()
     alarm.add("action", "DISPLAY")

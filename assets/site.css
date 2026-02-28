@@ -170,6 +170,20 @@ td {
   color: #4f76a9;
 }
 
+.copy-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #4f76a9;
+  cursor: pointer;
+  font: inherit;
+}
+
+.copy-btn:disabled {
+  opacity: 0.8;
+  cursor: default;
+}
+
 .sub-links .secondary::before {
   content: "";
 }
@@ -214,18 +228,12 @@ a:hover {
   th,
   td {
     padding: 8px 4px;
-    font-size: 12px;
   }
 
   .sub-links {
     gap: 6px;
     white-space: normal;
     flex-wrap: wrap;
-  }
-
-  .sub-links .primary,
-  .sub-links .secondary {
-    font-size: 11px;
   }
 
   .hero h1 {

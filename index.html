@@ -38,9 +38,8 @@
         <p>推荐使用“订阅 URL”而不是“导入 .ics 文件”。导入是一次性拷贝，不会自动更新。</p>
         <ol>
           <li>优先点击「订阅」（webcal 协议）。</li>
-          <li>若无反应，点击「下载」（https 链接），并在日历 App 中通过 URL 订阅。</li>
-          <li>iPhone/iPad 建议在 Safari 打开并点击「订阅」；Android 建议使用「下载」链接进行手动订阅。</li>
-          <li>微信内打开时，请点右上角「...」后选择「在浏览器打开」。</li>
+          <li>若无反应，点击「复制」获取 https 链接，并在日历 App 中通过 URL 订阅。</li>
+          <li>iPhone/iPad 建议在 Safari 打开并点击「订阅」；Android 建议先点「复制」再手动订阅。</li>
         </ol>
       </section>
 
@@ -195,7 +194,7 @@
           return (
             '<div class="sub-links">' +
             '<a class="primary" href="' + webcalUrl + '">订阅</a>' +
-            '<a class="secondary" href="' + httpsUrl + '" target="_blank" rel="noopener noreferrer">下载</a>' +
+            '<button type="button" class="copy-btn secondary" data-copy="' + httpsUrl + '">复制</button>' +
             "</div>"
           );
         }
@@ -320,6 +319,48 @@
             .join("");
         }
 
+        async function copyText(text) {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return;
+          }
+          var textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.setAttribute("readonly", "");
+          textArea.style.position = "absolute";
+          textArea.style.left = "-9999px";
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textArea);
+        }
+
+        function bindCopyButtons() {
+          document.addEventListener("click", function (event) {
+            var btn = event.target.closest(".copy-btn");
+            if (!btn) {
+              return;
+            }
+            var target = btn.getAttribute("data-copy");
+            if (!target) {
+              return;
+            }
+            copyText(target)
+              .then(function () {
+                var origin = btn.textContent;
+                btn.textContent = "已复制";
+                btn.disabled = true;
+                setTimeout(function () {
+                  btn.textContent = origin;
+                  btn.disabled = false;
+                }, 1200);
+              })
+              .catch(function () {
+                btn.textContent = "失败";
+              });
+          });
+        }
+
         function showWeChatTip() {
           if (!isWeChat()) {
             return;
@@ -341,6 +382,7 @@
           }
         });
 
+        bindCopyButtons();
         showWeChatTip();
       })();
     </script>
