@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from icalendar import Calendar, Event
+from icalendar import Alarm, Calendar, Event
 
 
 @dataclass(frozen=True)
@@ -303,6 +303,8 @@ def build_calendar_base(league: LeagueConfig, team_name: str, include_ticket: bo
 
     cal.add("x-wr-calname", cal_name)
     cal.add("x-wr-caldesc", league.calendar_description)
+    cal.add("last-modified", datetime.now(UTC))
+    cal.add("x-published-ttl", "PT1H")
     return cal
 
 
@@ -357,7 +359,15 @@ def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> No
             f"{league.league_id}.match_description_template",
         ),
     )
+    event.add("last-modified", datetime.now(UTC))
     event.add("categories", league.match_category)
+
+    alarm = Alarm()
+    alarm.add("action", "DISPLAY")
+    alarm.add("description", "比赛即将开始")
+    alarm.add("trigger", timedelta(hours=-2))
+    event.add_component(alarm)
+
     cal.add_component(event)
 
 
@@ -396,7 +406,15 @@ def add_ticket_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> N
             f"{league.league_id}.ticket_description_template",
         ),
     )
+    event.add("last-modified", datetime.now(UTC))
     event.add("categories", league.ticket_category)
+
+    alarm = Alarm()
+    alarm.add("action", "DISPLAY")
+    alarm.add("description", "抢票即将开始")
+    alarm.add("trigger", timedelta(minutes=-5))
+    event.add_component(alarm)
+
     cal.add_component(event)
 
 
