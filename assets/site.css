@@ -187,6 +187,28 @@ a:hover {
     padding-top: 24px;
   }
 
+  .table-wrap {
+    overflow-x: hidden;
+  }
+
+  table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  th:nth-child(1),
+  td:nth-child(1) {
+    width: 22%;
+    white-space: nowrap;
+  }
+
+  th:nth-child(2),
+  td:nth-child(2),
+  th:nth-child(3),
+  td:nth-child(3) {
+    width: 39%;
+  }
+
   th,
   td {
     padding: 9px 6px;
@@ -194,7 +216,9 @@ a:hover {
   }
 
   .sub-links {
-    gap: 8px;
+    gap: 6px;
+    white-space: normal;
+    flex-wrap: wrap;
   }
 
   .sub-links .primary,
