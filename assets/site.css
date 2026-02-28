@@ -130,7 +130,8 @@ ol {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 700px;
+  min-width: 0;
+  table-layout: fixed;
 }
 
 th,
@@ -182,23 +183,24 @@ a:hover {
   text-decoration-thickness: 2px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
   .container {
     padding-top: 24px;
   }
 
   .table-wrap {
-    overflow-x: hidden;
+    overflow-x: hidden !important;
   }
 
   table {
-    min-width: 0;
-    table-layout: fixed;
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: fixed !important;
   }
 
   th:nth-child(1),
   td:nth-child(1) {
-    width: 22%;
+    width: 24%;
     white-space: nowrap;
   }
 
@@ -206,13 +208,13 @@ a:hover {
   td:nth-child(2),
   th:nth-child(3),
   td:nth-child(3) {
-    width: 39%;
+    width: 38%;
   }
 
   th,
   td {
-    padding: 9px 6px;
-    font-size: 13px;
+    padding: 8px 4px;
+    font-size: 12px;
   }
 
   .sub-links {
@@ -223,7 +225,7 @@ a:hover {
 
   .sub-links .primary,
   .sub-links .secondary {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .hero h1 {
