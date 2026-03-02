@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Generate league calendars from data/leagues.json + league CSV fixtures."""
+"""Generate league calendars from data/leagues.json + league fixtures CSV."""
 
 from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -13,6 +15,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from icalendar import Alarm, Calendar, Event
+
+DATE_RE = re.compile(r"^(\d{1,2})月(\d{1,2})日$")
+TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})$")
 
 
 @dataclass(frozen=True)
@@ -29,7 +34,6 @@ class Fixture:
     home_team: str
     away_team: str
     stadium: str
-    city: str
     ticket_open: datetime | None
     ticket_url: str
     ticket_channel: str
@@ -96,11 +100,58 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_datetime(raw_value: str, default_tz: ZoneInfo) -> datetime:
-    parsed = datetime.fromisoformat(raw_value.strip())
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=default_tz)
-    return parsed
+def parse_season_year(season: str) -> int:
+    season_value = season.strip()
+    if not season_value.isdigit():
+        raise ValueError(f"season must be a numeric year, got: {season!r}")
+    return int(season_value)
+
+
+def parse_csl_style_datetime(date_text: str, time_text: str, season: str, tz: ZoneInfo) -> datetime:
+    date_match = DATE_RE.fullmatch(date_text.strip())
+    if not date_match:
+        raise ValueError(f"invalid date format {date_text!r}, expected M月D日")
+
+    time_match = TIME_RE.fullmatch(time_text.strip())
+    if not time_match:
+        raise ValueError(f"invalid time format {time_text!r}, expected HH:MM")
+
+    year = parse_season_year(season)
+    month = int(date_match.group(1))
+    day = int(date_match.group(2))
+    hour = int(time_match.group(1))
+    minute = int(time_match.group(2))
+
+    return datetime(year, month, day, hour, minute, tzinfo=tz)
+
+
+def parse_ticket_open(raw_value: str, season: str, tz: ZoneInfo) -> datetime | None:
+    value = raw_value.strip()
+    if not value:
+        return None
+
+    parts = value.split()
+    if len(parts) != 2:
+        raise ValueError(
+            f"invalid ticket_open_time format {raw_value!r}, expected 'M月D日 HH:MM'"
+        )
+
+    return parse_csl_style_datetime(parts[0], parts[1], season, tz)
+
+
+def build_auto_match_id(row: dict[str, str], line_number: int) -> str:
+    basis = "|".join(
+        [
+            (row.get("round") or "").strip(),
+            (row.get("home_team") or "").strip(),
+            (row.get("away_team") or "").strip(),
+            (row.get("date") or "").strip(),
+            (row.get("time") or "").strip(),
+            str(line_number),
+        ]
+    )
+    digest = hashlib.blake2s(basis.encode("utf-8"), digest_size=8).hexdigest()
+    return f"auto-{digest}"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -180,66 +231,138 @@ def load_leagues(config_path: Path) -> list[LeagueConfig]:
     return result
 
 
-def load_fixtures(csv_path: Path, tz: ZoneInfo) -> list[Fixture]:
+def load_fixtures(csv_path: Path, tz: ZoneInfo, season: str) -> list[Fixture]:
     fixtures: list[Fixture] = []
+
     with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
+        fieldnames = set(reader.fieldnames or [])
+
         required_columns = {
-            "match_id",
             "round",
-            "kickoff",
             "home_team",
             "away_team",
+            "date",
+            "time",
             "stadium",
-            "city",
-            "ticket_open",
-            "ticket_url",
-            "ticket_channel",
+            "ticket_open_time",
             "status",
         }
-        missing = required_columns - set(reader.fieldnames or [])
+
+        missing = required_columns - fieldnames
         if missing:
             raise ValueError(f"fixtures CSV missing required columns: {sorted(missing)}")
 
-        for row in reader:
-            kickoff = parse_datetime(row["kickoff"], tz)
-            ticket_open_raw = row["ticket_open"].strip()
-            ticket_open = parse_datetime(ticket_open_raw, tz) if ticket_open_raw else None
+        for line_number, row in enumerate(reader, start=2):
+            round_no = (row.get("round") or "").strip()
+            home_team = (row.get("home_team") or "").strip()
+            away_team = (row.get("away_team") or "").strip()
+            stadium = (row.get("stadium") or "").strip()
+            status = (row.get("status") or "").strip()
+
+            if not round_no:
+                raise ValueError(f"line {line_number}: round cannot be empty")
+            if not home_team or not away_team:
+                raise ValueError(f"line {line_number}: home_team/away_team cannot be empty")
+            if home_team == away_team:
+                raise ValueError(f"line {line_number}: home_team cannot equal away_team")
+            if not stadium:
+                raise ValueError(f"line {line_number}: stadium cannot be empty")
+
+            try:
+                kickoff = parse_csl_style_datetime(
+                    (row.get("date") or "").strip(),
+                    (row.get("time") or "").strip(),
+                    season,
+                    tz,
+                )
+            except ValueError as exc:
+                raise ValueError(f"line {line_number}: invalid kickoff data: {exc}") from exc
+
+            ticket_open_raw = (row.get("ticket_open_time") or "").strip()
+            try:
+                ticket_open = parse_ticket_open(ticket_open_raw, season, tz)
+            except ValueError as exc:
+                raise ValueError(f"line {line_number}: invalid ticket open data: {exc}") from exc
+
+            match_id = (row.get("match_id") or "").strip() or build_auto_match_id(row, line_number)
+            ticket_url = (row.get("ticket_url") or "").strip()
+            ticket_channel = (row.get("ticket_channel") or "").strip()
 
             fixtures.append(
                 Fixture(
-                    match_id=row["match_id"].strip(),
-                    round_no=row["round"].strip(),
+                    match_id=match_id,
+                    round_no=round_no,
                     kickoff=kickoff,
-                    home_team=row["home_team"].strip(),
-                    away_team=row["away_team"].strip(),
-                    stadium=row["stadium"].strip(),
-                    city=row["city"].strip(),
+                    home_team=home_team,
+                    away_team=away_team,
+                    stadium=stadium,
                     ticket_open=ticket_open,
-                    ticket_url=row["ticket_url"].strip(),
-                    ticket_channel=row["ticket_channel"].strip(),
-                    status=row["status"].strip(),
+                    ticket_url=ticket_url,
+                    ticket_channel=ticket_channel,
+                    status=status,
                 )
             )
+
+    if not fixtures:
+        raise ValueError(f"no fixtures loaded from {csv_path}")
+
     return fixtures
 
 
-def ensure_fixture_teams_exist(fixtures: list[Fixture], teams: list[Team], league_id: str) -> None:
-    team_names = {team.name for team in teams}
-    unknown = sorted(
-        {
-            fixture.home_team
-            for fixture in fixtures
-            if fixture.home_team not in team_names
-        }
-        | {
-            fixture.away_team
-            for fixture in fixtures
-            if fixture.away_team not in team_names
-        }
-    )
-    if unknown:
-        raise ValueError(f"{league_id}: fixture has teams not found in teams list: {unknown}")
+def team_code_from_name(name: str) -> str:
+    code = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    if code:
+        return code
+
+    digest = hashlib.blake2s(name.encode("utf-8"), digest_size=5).hexdigest()
+    return f"team-{digest}"
+
+
+def resolve_teams(
+    fixtures: list[Fixture],
+    configured_teams: list[Team],
+) -> tuple[list[Team], list[Team], list[Team]]:
+    configured_by_name = {team.name: team for team in configured_teams}
+
+    fixture_team_order: list[str] = []
+    seen: set[str] = set()
+    for fixture in fixtures:
+        for team_name in (fixture.home_team, fixture.away_team):
+            if team_name not in seen:
+                seen.add(team_name)
+                fixture_team_order.append(team_name)
+
+    resolved: list[Team] = []
+    unknown_from_config: list[Team] = []
+    for team_name in fixture_team_order:
+        configured = configured_by_name.get(team_name)
+        if configured:
+            resolved.append(configured)
+        else:
+            generated = Team(code=team_code_from_name(team_name), name=team_name)
+            resolved.append(generated)
+            unknown_from_config.append(generated)
+
+    missing_from_fixtures = [team for team in configured_teams if team.name not in seen]
+
+    used_codes: set[str] = set()
+    unique_resolved: list[Team] = []
+    for team in resolved:
+        code = team.code
+        if code not in used_codes:
+            used_codes.add(code)
+            unique_resolved.append(team)
+            continue
+
+        suffix = 2
+        while f"{code}-{suffix}" in used_codes:
+            suffix += 1
+        new_code = f"{code}-{suffix}"
+        used_codes.add(new_code)
+        unique_resolved.append(Team(code=new_code, name=team.name))
+
+    return unique_resolved, unknown_from_config, missing_from_fixtures
 
 
 def render_template(template: str, context: dict[str, Any], field_name: str) -> str:
@@ -277,7 +400,6 @@ def make_template_context(league: LeagueConfig, fixture: Fixture, ticket_url: st
         "home_team": fixture.home_team,
         "away_team": fixture.away_team,
         "stadium": fixture.stadium,
-        "city": fixture.city,
         "status": fixture.status,
         "kickoff_iso": fixture.kickoff.isoformat(),
         "ticket_open_iso": fixture.ticket_open.isoformat() if fixture.ticket_open else "",
@@ -305,7 +427,7 @@ def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> No
         "summary",
         render_template(MATCH_SUMMARY_TEMPLATE, context, "match_summary"),
     )
-    event.add("location", f"{fixture.stadium}（{fixture.city}）")
+    event.add("location", fixture.stadium)
     event.add(
         "description",
         render_template(MATCH_DESCRIPTION_TEMPLATE, context, "match_description"),
@@ -381,10 +503,19 @@ def generate_league_calendars(
 ) -> int:
     tz = ZoneInfo(league.timezone)
     fixtures_path = data_dir / league.source_file
-    fixtures = load_fixtures(fixtures_path, tz)
-    ensure_fixture_teams_exist(fixtures, league.teams, league.league_id)
+    fixtures = load_fixtures(fixtures_path, tz, league.season)
 
-    for team in league.teams:
+    target_teams, unknown_teams, missing_teams = resolve_teams(fixtures, league.teams)
+
+    if unknown_teams:
+        team_text = ", ".join(f"{team.name}->{team.code}" for team in unknown_teams)
+        print(f"[{league.league_id}] warning: fixture teams missing in config, generated codes: {team_text}")
+
+    if missing_teams:
+        names = ", ".join(team.name for team in missing_teams)
+        print(f"[{league.league_id}] warning: config teams not found in fixture: {names}")
+
+    for team in target_teams:
         team_fixtures = fixtures_for_team(fixtures, team.name)
 
         match_only_cal = build_calendar_base(league, team.name, include_ticket=False)
@@ -401,7 +532,7 @@ def generate_league_calendars(
         write_calendar(match_only_path, match_only_cal)
         write_calendar(with_ticket_path, with_ticket_cal)
 
-    return len(league.teams) * 2
+    return len(target_teams) * 2
 
 
 def main() -> None:

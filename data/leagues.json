@@ -12,22 +12,22 @@
       "default_match_duration_minutes": 120,
       "ticket_duration_minutes": 15,
       "teams": [
-        { "code": "beijing-guoan", "name": "北京国安" },
-        { "code": "shanghai-shenhua", "name": "上海申花" },
-        { "code": "shanghai-port", "name": "上海海港" },
-        { "code": "shandong-taishan", "name": "山东泰山" },
         { "code": "chengdu-rongcheng", "name": "成都蓉城" },
-        { "code": "tianjin-jinmen-tiger", "name": "天津津门虎" },
-        { "code": "zhejiang", "name": "浙江队" },
-        { "code": "henan", "name": "河南队" },
-        { "code": "wuhan-three-towns", "name": "武汉三镇" },
-        { "code": "changchun-yatai", "name": "长春亚泰" },
-        { "code": "qingdao-hainiu", "name": "青岛海牛" },
-        { "code": "qingdao-west-coast", "name": "青岛西海岸" },
-        { "code": "meizhou-hakka", "name": "梅州客家" },
-        { "code": "shenzhen-peng-city", "name": "深圳新鹏城" },
+        { "code": "shenzhen-xinpengcheng", "name": "深圳新鹏城" },
+        { "code": "tianjin-jinmenhu", "name": "天津津门虎" },
+        { "code": "chongqing-tonglianglong", "name": "重庆铜梁龙" },
+        { "code": "shandong-taishan", "name": "山东泰山" },
+        { "code": "liaoning-tieren", "name": "辽宁铁人" },
+        { "code": "shanghai-shenhua", "name": "上海申花" },
+        { "code": "dalian-yingbo-haifa", "name": "大连英博海发" },
+        { "code": "shanghai-haigang", "name": "上海海港" },
+        { "code": "henan-julebu", "name": "河南俱乐部" },
         { "code": "yunnan-yukun", "name": "云南玉昆" },
-        { "code": "dalian-yingbo", "name": "大连英博" }
+        { "code": "qingdao-hainiu", "name": "青岛海牛" },
+        { "code": "zhejiang-julebu", "name": "浙江俱乐部" },
+        { "code": "qingdao-xihaian", "name": "青岛西海岸" },
+        { "code": "wuhan-sanzhen", "name": "武汉三镇" },
+        { "code": "beijing-guoan", "name": "北京国安" }
       ]
     }
   ]

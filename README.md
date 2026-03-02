@@ -11,7 +11,7 @@
 3. 数据目录统一使用：
    - `JSON`：联赛元信息（`data/leagues.json`）
    - `CSV`：赛程数据（`data/*_fixtures.csv`）
-4. 使用 `script/generate_csl_ics.py` 从 JSON + CSV 生成并更新 `calendar/`。
+4. 使用 `script/generate_ics.py` 从 JSON + CSV 生成并更新 `calendar/`。
 5. 不使用 GitHub Action。
 
 ## 目录结构
@@ -25,7 +25,7 @@ sports-calendar/
 │   ├── leagues.json              # 联赛元信息（前端 + 脚本共用）
 │   └── csl_fixtures.csv          # 赛程数据
 ├── script/
-│   └── generate_csl_ics.py       # 生成 ICS 的脚本
+│   └── generate_ics.py           # 生成 ICS 的脚本
 ├── .nojekyll
 ├── index.html                    # GitHub Pages 首页（订阅入口）
 ├── requirements.txt
@@ -88,19 +88,19 @@ pip install -r requirements.txt
 2. 生成全部已配置联赛
 
 ```bash
-python script/generate_csl_ics.py
+python script/generate_ics.py
 ```
 
 3. 仅生成某个联赛
 
 ```bash
-python script/generate_csl_ics.py --league csl
+python script/generate_ics.py --league csl
 ```
 
 4. 指定配置文件/输出目录
 
 ```bash
-python script/generate_csl_ics.py --config data/leagues.json --output-dir calendar
+python script/generate_ics.py --config data/leagues.json --output-dir calendar
 ```
 
 ## 输出文件命名
@@ -125,7 +125,7 @@ python script/generate_csl_ics.py --config data/leagues.json --output-dir calend
 1. 在 `data/leagues.json` 里新增联赛对象（含球队列表与模板）。
 2. 在 `data/` 下新增对应 `source_file` 指向的 CSV。
 3. 执行：
-   - `python script/generate_csl_ics.py --league <league-id>`
+   - `python script/generate_ics.py --league <league-id>`
 4. 提交 `data/` 与 `calendar/` 更新。
 
 ## GitHub Pages（vamosdalian/sports-calendar）
