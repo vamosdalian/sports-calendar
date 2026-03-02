@@ -71,37 +71,8 @@
         var CALENDAR_BASE = BASE_SITE + "calendar/";
         var LEAGUES_DATA_URL = "data/leagues.json";
 
-        var FALLBACK_DATA = {
-          leagues: [
-            {
-              id: "csl",
-              name: "中国足球协会超级联赛",
-              displayName: "中超联赛",
-              filePrefix: "csl",
-              teams: [
-                { code: "beijing-guoan", name: "北京国安" },
-                { code: "shanghai-shenhua", name: "上海申花" },
-                { code: "shanghai-port", name: "上海海港" },
-                { code: "shandong-taishan", name: "山东泰山" },
-                { code: "chengdu-rongcheng", name: "成都蓉城" },
-                { code: "tianjin-jinmen-tiger", name: "天津津门虎" },
-                { code: "zhejiang", name: "浙江队" },
-                { code: "henan", name: "河南队" },
-                { code: "wuhan-three-towns", name: "武汉三镇" },
-                { code: "changchun-yatai", name: "长春亚泰" },
-                { code: "qingdao-hainiu", name: "青岛海牛" },
-                { code: "qingdao-west-coast", name: "青岛西海岸" },
-                { code: "meizhou-hakka", name: "梅州客家" },
-                { code: "shenzhen-peng-city", name: "深圳新鹏城" },
-                { code: "yunnan-yukun", name: "云南玉昆" },
-                { code: "dalian-yingbo", name: "大连英博" }
-              ]
-            }
-          ]
-        };
-
         var state = {
-          config: FALLBACK_DATA,
+          config: { leagues: [] },
           activeLeagueId: ""
         };
 
@@ -111,7 +82,7 @@
 
         function normalizeConfig(raw) {
           if (!raw || !Array.isArray(raw.leagues) || raw.leagues.length === 0) {
-            return FALLBACK_DATA;
+            throw new Error("Invalid leagues config: leagues must be a non-empty array");
           }
 
           var leagues = raw.leagues
@@ -146,23 +117,21 @@
             });
 
           if (leagues.length === 0) {
-            return FALLBACK_DATA;
+            throw new Error("Invalid leagues config: no valid league entries");
           }
 
           return { leagues: leagues };
         }
 
         async function loadConfig() {
-          try {
-            var response = await fetch(LEAGUES_DATA_URL, { cache: "no-store" });
-            if (!response.ok) {
-              return FALLBACK_DATA;
-            }
-            var raw = await response.json();
-            return normalizeConfig(raw);
-          } catch (_error) {
-            return FALLBACK_DATA;
+          var response = await fetch(LEAGUES_DATA_URL, { cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(
+              "Failed to load leagues config: " + LEAGUES_DATA_URL + " (" + response.status + ")"
+            );
           }
+          var raw = await response.json();
+          return normalizeConfig(raw);
         }
 
         function currentLeagueFromUrl(config) {
@@ -371,16 +340,21 @@
           }
         }
 
-        loadConfig().then(function (config) {
-          state.config = config;
-          var leagueId = currentLeagueFromUrl(config);
-          if (leagueId) {
-            renderLeague(leagueId);
-          } else {
-            renderNoLeagueSelected();
-            renderLeagueSwitch("");
-          }
-        });
+        loadConfig()
+          .then(function (config) {
+            state.config = config;
+            var leagueId = currentLeagueFromUrl(config);
+            if (leagueId) {
+              renderLeague(leagueId);
+            } else {
+              renderNoLeagueSelected();
+              renderLeagueSwitch("");
+            }
+          })
+          .catch(function (error) {
+            console.error(error);
+            throw error;
+          });
 
         bindCopyButtons();
         showWeChatTip();
