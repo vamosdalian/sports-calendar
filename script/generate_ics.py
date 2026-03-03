@@ -393,6 +393,7 @@ def build_calendar_base(league: LeagueConfig, team_name: str, include_ticket: bo
 
 
 def make_template_context(league: LeagueConfig, fixture: Fixture, ticket_url: str = "") -> dict[str, Any]:
+    name_to_code = {t.name: t.code for t in league.teams}
     context = {
         "league_id": league.league_id,
         "league_name": league.league_name,
@@ -402,6 +403,8 @@ def make_template_context(league: LeagueConfig, fixture: Fixture, ticket_url: st
         "round_no": fixture.round_no,
         "home_team": fixture.home_team,
         "away_team": fixture.away_team,
+        "home_code": name_to_code.get(fixture.home_team, team_code_from_name(fixture.home_team)),
+        "away_code": name_to_code.get(fixture.away_team, team_code_from_name(fixture.away_team)),
         "stadium": fixture.stadium,
         "status": {"Scheduled": "未赛", "Playing": "进行中", "Finished": "结束"}.get(fixture.status, fixture.status),
         "kickoff_iso": fixture.kickoff.isoformat(),
@@ -418,7 +421,7 @@ def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> No
     event = Event()
     event.add(
         "uid",
-        f"{league.league_id}-{league.season}-{fixture.match_id}@sports-calendar",
+        f"{league.league_id}-{league.season}-{context['home_code']}-{context['away_code']}@sports-calendar",
     )
     event.add("dtstamp", datetime.now(UTC))
     event.add("dtstart", fixture.kickoff)
@@ -457,7 +460,7 @@ def add_ticket_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> N
     event = Event()
     event.add(
         "uid",
-        f"{league.league_id}-{league.season}-{fixture.match_id}-ticket@sports-calendar",
+        f"{league.league_id}-{league.season}-{context['home_code']}-{context['away_code']}-ticket@sports-calendar",
     )
     event.add("dtstamp", datetime.now(UTC))
     event.add("dtstart", fixture.ticket_open)
