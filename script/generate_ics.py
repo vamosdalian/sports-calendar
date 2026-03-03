@@ -531,7 +531,8 @@ def generate_league_calendars(
         with_ticket_cal = build_calendar_base(league, team.name, include_ticket=True)
         for fixture in team_fixtures:
             add_match_event(with_ticket_cal, fixture, league)
-            add_ticket_event(with_ticket_cal, fixture, league)
+            if fixture.home_team == team.name:
+                add_ticket_event(with_ticket_cal, fixture, league)
 
         match_only_path = output_dir / f"{league.file_prefix}_{team.code}.ics"
         with_ticket_path = output_dir / f"{league.file_prefix}_{team.code}_with_ticket.ics"
