@@ -59,14 +59,13 @@ MATCH_SUMMARY_TEMPLATE = "【{display_name}】{home_team} vs {away_team}"
 MATCH_DESCRIPTION_TEMPLATE = (
     "赛事: {home_team} vs {away_team}\n"
     "轮次: 第{round_no}轮\n"
-    "状态: {status}\n"
-    "比赛编号: {match_id}"
+    "状态: {status}"
 )
 MATCH_CATEGORY = "比赛"
 
 TICKET_SUMMARY_TEMPLATE = "【抢票提醒】{home_team} vs {away_team}"
 TICKET_DESCRIPTION_TEMPLATE = (
-    "抢票时间: {ticket_open_iso}\n"
+    "抢票时间: {ticket_open_time}\n"
     "比赛: {home_team} vs {away_team}\n"
     "售票方式: {ticket_channel}\n"
     "售票链接: {ticket_url}"
@@ -125,18 +124,17 @@ def parse_csl_style_datetime(date_text: str, time_text: str, season: str, tz: Zo
     return datetime(year, month, day, hour, minute, tzinfo=tz)
 
 
-def parse_ticket_open(raw_value: str, season: str, tz: ZoneInfo) -> datetime | None:
-    value = raw_value.strip()
-    if not value:
+def parse_ticket_open(date_text: str, time_text: str, season: str, tz: ZoneInfo) -> datetime | None:
+    date_val = date_text.strip()
+    time_val = time_text.strip()
+    if not date_val and not time_val:
         return None
-
-    parts = value.split()
-    if len(parts) != 2:
+    if not date_val or not time_val:
         raise ValueError(
-            f"invalid ticket_open_time format {raw_value!r}, expected 'M月D日 HH:MM'"
+            f"ticket_open_date and ticket_open_time must both be set or both be empty, "
+            f"got date={date_text!r} time={time_text!r}"
         )
-
-    return parse_csl_style_datetime(parts[0], parts[1], season, tz)
+    return parse_csl_style_datetime(date_val, time_val, season, tz)
 
 
 def build_auto_match_id(row: dict[str, str], line_number: int) -> str:
@@ -245,6 +243,7 @@ def load_fixtures(csv_path: Path, tz: ZoneInfo, season: str) -> list[Fixture]:
             "date",
             "time",
             "stadium",
+            "ticket_open_date",
             "ticket_open_time",
             "status",
         }
@@ -279,9 +278,13 @@ def load_fixtures(csv_path: Path, tz: ZoneInfo, season: str) -> list[Fixture]:
             except ValueError as exc:
                 raise ValueError(f"line {line_number}: invalid kickoff data: {exc}") from exc
 
-            ticket_open_raw = (row.get("ticket_open_time") or "").strip()
             try:
-                ticket_open = parse_ticket_open(ticket_open_raw, season, tz)
+                ticket_open = parse_ticket_open(
+                    (row.get("ticket_open_date") or "").strip(),
+                    (row.get("ticket_open_time") or "").strip(),
+                    season,
+                    tz,
+                )
             except ValueError as exc:
                 raise ValueError(f"line {line_number}: invalid ticket open data: {exc}") from exc
 
@@ -400,9 +403,9 @@ def make_template_context(league: LeagueConfig, fixture: Fixture, ticket_url: st
         "home_team": fixture.home_team,
         "away_team": fixture.away_team,
         "stadium": fixture.stadium,
-        "status": fixture.status,
+        "status": {"Scheduled": "未赛", "Playing": "进行中", "Finished": "结束"}.get(fixture.status, fixture.status),
         "kickoff_iso": fixture.kickoff.isoformat(),
-        "ticket_open_iso": fixture.ticket_open.isoformat() if fixture.ticket_open else "",
+        "ticket_open_time": fixture.ticket_open.strftime("%Y-%m-%d %H:%M") if fixture.ticket_open else "",
         "ticket_url": ticket_url,
         "ticket_channel": fixture.ticket_channel,
     }
