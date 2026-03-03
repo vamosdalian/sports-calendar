@@ -438,7 +438,7 @@ def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> No
     alarm = Alarm()
     alarm.add("action", "DISPLAY")
     alarm.add("description", "比赛即将开始")
-    alarm.add("trigger", timedelta(hours=-2))
+    alarm.add("trigger", timedelta(minutes=-30))
     event.add_component(alarm)
 
     cal.add_component(event)
