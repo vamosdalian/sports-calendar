@@ -214,7 +214,7 @@ a:hover {
 
   th:nth-child(1),
   td:nth-child(1) {
-    width: 24%;
+    width: 30%;
     white-space: nowrap;
   }
 
@@ -222,7 +222,7 @@ a:hover {
   td:nth-child(2),
   th:nth-child(3),
   td:nth-child(3) {
-    width: 38%;
+    width: 35%;
   }
 
   th,

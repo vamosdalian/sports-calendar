@@ -117,8 +117,8 @@ python script/generate_ics.py --config data/leagues.json --output-dir calendar
 
 首页默认不自动选择联赛，需要先点联赛列表。
 
-- 首页：`https://vamosdalian.github.io/sports-calendar/`
-- 联赛直达：`https://vamosdalian.github.io/sports-calendar/?league=csl`
+- 首页：`https://sports-calendar.com/`
+- 联赛直达：`https://sports-calendar.com/?league=csl`
 
 ## 新增其他联赛
 
