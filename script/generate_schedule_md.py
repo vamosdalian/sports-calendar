@@ -96,17 +96,11 @@ def build_markdown(league: LeagueConfig, rows: list[dict[str, Any]]) -> str:
         fixtures = rounds[rnd]
         lines.append(f"### 第{rnd}轮\n")
 
-        lines.append("| 时间 | 主队 | 客队 | 球场 |")
-        lines.append("|------|------|------|------|")
-
         for row in fixtures:
             time_str = format_kickoff(row["kickoff"])
-            lines.append(
-                f"| {time_str} "
-                f"| **{row['home_team']}** "
-                f"| {row['away_team']} "
-                f"| {row['stadium']} |"
-            )
+            lines.append(f"- **{row['home_team']}** vs **{row['away_team']}**  ")
+            lines.append(f"  {time_str}  ")
+            lines.append(f"  📍 {row['stadium']}  ")
 
         lines.append("")
 
