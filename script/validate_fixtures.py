@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Validate league fixtures CSV integrity."""
 
 from __future__ import annotations

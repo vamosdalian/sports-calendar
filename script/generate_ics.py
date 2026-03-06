@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Generate league calendars from data/leagues.json + league fixtures CSV."""
 
 from __future__ import annotations
@@ -137,7 +137,7 @@ def parse_ticket_open(date_text: str, time_text: str, season: str, tz: ZoneInfo)
     return parse_csl_style_datetime(date_val, time_val, season, tz)
 
 
-def build_auto_match_id(row: dict[str, str], line_number: int) -> str:
+def build_auto_match_id(row: dict[str, str]) -> str:
     basis = "|".join(
         [
             (row.get("round") or "").strip(),
@@ -145,7 +145,7 @@ def build_auto_match_id(row: dict[str, str], line_number: int) -> str:
             (row.get("away_team") or "").strip(),
             (row.get("date") or "").strip(),
             (row.get("time") or "").strip(),
-            str(line_number),
+            (row.get("stadium") or "").strip(),
         ]
     )
     digest = hashlib.blake2s(basis.encode("utf-8"), digest_size=8).hexdigest()
@@ -231,6 +231,7 @@ def load_leagues(config_path: Path) -> list[LeagueConfig]:
 
 def load_fixtures(csv_path: Path, tz: ZoneInfo, season: str) -> list[Fixture]:
     fixtures: list[Fixture] = []
+    match_id_lines: dict[str, int] = {}
 
     with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -288,7 +289,13 @@ def load_fixtures(csv_path: Path, tz: ZoneInfo, season: str) -> list[Fixture]:
             except ValueError as exc:
                 raise ValueError(f"line {line_number}: invalid ticket open data: {exc}") from exc
 
-            match_id = (row.get("match_id") or "").strip() or build_auto_match_id(row, line_number)
+            match_id = (row.get("match_id") or "").strip() or build_auto_match_id(row)
+            first_seen_line = match_id_lines.get(match_id)
+            if first_seen_line is not None:
+                raise ValueError(
+                    f"line {line_number}: duplicate match_id {match_id!r}, first seen at line {first_seen_line}"
+                )
+            match_id_lines[match_id] = line_number
             ticket_url = (row.get("ticket_url") or "").strip()
             ticket_channel = (row.get("ticket_channel") or "").strip()
 
@@ -387,9 +394,100 @@ def build_calendar_base(league: LeagueConfig, team_name: str, include_ticket: bo
     suffix = "比赛+抢票日历" if include_ticket else "比赛日历"
     cal.add("x-wr-calname", f"{team_name} - {league.display_name}{suffix}")
     cal.add("x-wr-caldesc", f"由 sports-calendar 自动生成的{league.display_name}赛程订阅")
-    cal.add("last-modified", datetime.now(UTC))
     cal.add("x-published-ttl", "PT1H")
     return cal
+
+
+def to_datetime(value: Any) -> datetime | None:
+    raw = value
+    if hasattr(raw, "dt"):
+        raw = raw.dt
+
+    if not isinstance(raw, datetime):
+        return None
+
+    if raw.tzinfo is None:
+        return raw.replace(tzinfo=UTC)
+    return raw
+
+
+def normalize_ical_value(value: Any) -> Any:
+    raw = value
+    if hasattr(raw, "dt"):
+        raw = raw.dt
+
+    if isinstance(raw, datetime):
+        if raw.tzinfo is None:
+            raw = raw.replace(tzinfo=UTC)
+        return raw.astimezone(UTC).isoformat()
+    if isinstance(raw, timedelta):
+        return int(raw.total_seconds())
+    if isinstance(raw, (list, tuple)):
+        return [normalize_ical_value(item) for item in raw]
+    if raw is None:
+        return None
+    return str(raw)
+
+
+def event_fingerprint(event: Event) -> str:
+    alarms: list[dict[str, Any]] = []
+    for component in event.subcomponents:
+        if component.name != "VALARM":
+            continue
+        alarms.append(
+            {
+                "action": normalize_ical_value(component.get("action")),
+                "description": normalize_ical_value(component.get("description")),
+                "trigger": normalize_ical_value(component.get("trigger")),
+            }
+        )
+
+    payload = {
+        "uid": normalize_ical_value(event.get("uid")),
+        "dtstart": normalize_ical_value(event.get("dtstart")),
+        "dtend": normalize_ical_value(event.get("dtend")),
+        "summary": normalize_ical_value(event.get("summary")),
+        "location": normalize_ical_value(event.get("location")),
+        "description": normalize_ical_value(event.get("description")),
+        "categories": normalize_ical_value(event.get("categories")),
+        "alarms": alarms,
+    }
+    text = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.blake2s(text.encode("utf-8"), digest_size=16).hexdigest()
+
+
+def load_existing_calendar(path: Path) -> tuple[dict[str, Event], datetime | None]:
+    if not path.exists():
+        return {}, None
+
+    try:
+        calendar = Calendar.from_ical(path.read_bytes())
+    except Exception as exc:  # pragma: no cover - best effort compatibility
+        print(f"warning: failed to parse existing calendar {path}: {exc}")
+        return {}, None
+
+    events_by_uid: dict[str, Event] = {}
+    for component in calendar.walk("VEVENT"):
+        uid = str(component.get("uid") or "").strip()
+        if uid:
+            events_by_uid[uid] = component
+
+    return events_by_uid, to_datetime(calendar.get("last-modified"))
+
+
+def apply_event_timestamps(event: Event, previous: Event | None, generated_at: datetime) -> bool:
+    if previous is not None and event_fingerprint(previous) == event_fingerprint(event):
+        dtstamp = to_datetime(previous.get("dtstamp")) or generated_at
+        last_modified = to_datetime(previous.get("last-modified")) or generated_at
+        changed = False
+    else:
+        dtstamp = generated_at
+        last_modified = generated_at
+        changed = True
+
+    event.add("dtstamp", dtstamp)
+    event.add("last-modified", last_modified)
+    return changed
 
 
 def make_template_context(league: LeagueConfig, fixture: Fixture, ticket_url: str = "") -> dict[str, Any]:
@@ -415,7 +513,7 @@ def make_template_context(league: LeagueConfig, fixture: Fixture, ticket_url: st
     return context
 
 
-def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> None:
+def build_match_event(fixture: Fixture, league: LeagueConfig) -> Event:
     context = make_template_context(league, fixture)
 
     event = Event()
@@ -423,7 +521,6 @@ def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> No
         "uid",
         f"{league.league_id}-{league.season}-{context['home_code']}-{context['away_code']}@sports-calendar",
     )
-    event.add("dtstamp", datetime.now(UTC))
     event.add("dtstart", fixture.kickoff)
     event.add(
         "dtend",
@@ -438,7 +535,6 @@ def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> No
         "description",
         render_template(MATCH_DESCRIPTION_TEMPLATE, context, "match_description"),
     )
-    event.add("last-modified", datetime.now(UTC))
     event.add("categories", MATCH_CATEGORY)
 
     alarm = Alarm()
@@ -447,12 +543,12 @@ def add_match_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> No
     alarm.add("trigger", timedelta(minutes=-30))
     event.add_component(alarm)
 
-    cal.add_component(event)
+    return event
 
 
-def add_ticket_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> None:
+def build_ticket_event(fixture: Fixture, league: LeagueConfig) -> Event | None:
     if fixture.ticket_open is None:
-        return
+        return None
 
     ticket_text = fixture.ticket_url if fixture.ticket_url else "暂无"
     context = make_template_context(league, fixture, ticket_url=ticket_text)
@@ -462,7 +558,6 @@ def add_ticket_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> N
         "uid",
         f"{league.league_id}-{league.season}-{context['home_code']}-{context['away_code']}-ticket@sports-calendar",
     )
-    event.add("dtstamp", datetime.now(UTC))
     event.add("dtstart", fixture.ticket_open)
     event.add(
         "dtend",
@@ -477,7 +572,6 @@ def add_ticket_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> N
         "description",
         render_template(TICKET_DESCRIPTION_TEMPLATE, context, "ticket_description"),
     )
-    event.add("last-modified", datetime.now(UTC))
     event.add("categories", TICKET_CATEGORY)
 
     alarm = Alarm()
@@ -486,7 +580,7 @@ def add_ticket_event(cal: Calendar, fixture: Fixture, league: LeagueConfig) -> N
     alarm.add("trigger", timedelta(minutes=-5))
     event.add_component(alarm)
 
-    cal.add_component(event)
+    return event
 
 
 def fixtures_for_team(fixtures: list[Fixture], team_name: str) -> list[Fixture]:
@@ -497,9 +591,14 @@ def fixtures_for_team(fixtures: list[Fixture], team_name: str) -> list[Fixture]:
     ]
 
 
-def write_calendar(output_path: Path, calendar: Calendar) -> None:
+def write_calendar(output_path: Path, calendar: Calendar) -> bool:
+    new_bytes = calendar.to_ical()
+    if output_path.exists() and output_path.read_bytes() == new_bytes:
+        return False
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(calendar.to_ical())
+    output_path.write_bytes(new_bytes)
+    return True
 
 
 def generate_league_calendars(
@@ -521,23 +620,73 @@ def generate_league_calendars(
         names = ", ".join(team.name for team in missing_teams)
         print(f"[{league.league_id}] warning: config teams not found in fixture: {names}")
 
+    generated_at = datetime.now(UTC)
+    changed_files = 0
+
     for team in target_teams:
         team_fixtures = fixtures_for_team(fixtures, team.name)
 
-        match_only_cal = build_calendar_base(league, team.name, include_ticket=False)
-        for fixture in team_fixtures:
-            add_match_event(match_only_cal, fixture, league)
-
-        with_ticket_cal = build_calendar_base(league, team.name, include_ticket=True)
-        for fixture in team_fixtures:
-            add_match_event(with_ticket_cal, fixture, league)
-            if fixture.home_team == team.name:
-                add_ticket_event(with_ticket_cal, fixture, league)
-
         match_only_path = output_dir / f"{league.file_prefix}_{team.code}.ics"
         with_ticket_path = output_dir / f"{league.file_prefix}_{team.code}_with_ticket.ics"
-        write_calendar(match_only_path, match_only_cal)
-        write_calendar(with_ticket_path, with_ticket_cal)
+
+        old_match_events, old_match_last_modified = load_existing_calendar(match_only_path)
+        old_with_ticket_events, old_with_ticket_last_modified = load_existing_calendar(with_ticket_path)
+
+        match_only_cal = build_calendar_base(league, team.name, include_ticket=False)
+        match_only_changed = False
+        match_only_uids: set[str] = set()
+        for fixture in team_fixtures:
+            event = build_match_event(fixture, league)
+            uid = str(event.get("uid") or "").strip()
+            if uid:
+                match_only_uids.add(uid)
+            if apply_event_timestamps(event, old_match_events.get(uid), generated_at):
+                match_only_changed = True
+            match_only_cal.add_component(event)
+
+        if set(old_match_events.keys()) - match_only_uids:
+            match_only_changed = True
+        match_only_cal.add(
+            "last-modified",
+            generated_at if match_only_changed or old_match_last_modified is None else old_match_last_modified,
+        )
+
+        with_ticket_cal = build_calendar_base(league, team.name, include_ticket=True)
+        with_ticket_changed = False
+        with_ticket_uids: set[str] = set()
+        for fixture in team_fixtures:
+            match_event = build_match_event(fixture, league)
+            match_uid = str(match_event.get("uid") or "").strip()
+            if match_uid:
+                with_ticket_uids.add(match_uid)
+            if apply_event_timestamps(match_event, old_with_ticket_events.get(match_uid), generated_at):
+                with_ticket_changed = True
+            with_ticket_cal.add_component(match_event)
+
+            if fixture.home_team == team.name:
+                ticket_event = build_ticket_event(fixture, league)
+                if ticket_event is None:
+                    continue
+                ticket_uid = str(ticket_event.get("uid") or "").strip()
+                if ticket_uid:
+                    with_ticket_uids.add(ticket_uid)
+                if apply_event_timestamps(ticket_event, old_with_ticket_events.get(ticket_uid), generated_at):
+                    with_ticket_changed = True
+                with_ticket_cal.add_component(ticket_event)
+
+        if set(old_with_ticket_events.keys()) - with_ticket_uids:
+            with_ticket_changed = True
+        with_ticket_cal.add(
+            "last-modified",
+            generated_at if with_ticket_changed or old_with_ticket_last_modified is None else old_with_ticket_last_modified,
+        )
+
+        if write_calendar(match_only_path, match_only_cal):
+            changed_files += 1
+        if write_calendar(with_ticket_path, with_ticket_cal):
+            changed_files += 1
+
+    print(f"[{league.league_id}] changed {changed_files} ICS files")
 
     return len(target_teams) * 2
 

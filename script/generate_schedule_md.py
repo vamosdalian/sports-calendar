@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Generate a readable markdown schedule from data/leagues.json + league fixtures CSV."""
 
 from __future__ import annotations

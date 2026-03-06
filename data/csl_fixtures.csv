@@ -1,5 +1,5 @@
 round,home_team,away_team,date,time,stadium,ticket_open_date,ticket_open_time,ticket_url,ticket_channel,status
-1,成都蓉城,深圳新鹏城,3月6日,19:35,五粮液文化体育中心专业足球场,3月4日,14:00,,成都蓉城足球俱乐部 小程序,Scheduled
+1,成都蓉城,深圳新鹏城,3月6日,19:35,五粮液文化体育中心专业足球场,3月4日,14:00,#小程序://成都蓉城足球俱乐部/0hESsal12mzvAIb,成都蓉城足球俱乐部 小程序,Scheduled
 1,天津津门虎,重庆铜梁龙,3月7日,15:30,天津泰达足球场,3月1日,12:00,#小程序://看个比赛/aiS01aiJbiOA2Pw,看个比赛 小程序,Scheduled
 1,山东泰山,辽宁铁人,3月7日,15:30,济南奥体中心体育场,3月2日,10:00,#小程序://票星球/tqSubA72dpQCW1e,票星球 小程序,Scheduled
 1,上海申花,大连英博海发,3月7日,17:00,上海体育场,3月1日,10:00,#小程序://久事体育/uQNbsP13OcXMqpB,久事体育 小程序,Scheduled
