@@ -27,10 +27,31 @@ export async function generateMetadata({
     return {};
   }
 
+  const year = extractPrimaryYear(data.season.slug, data.season.label);
+  const leagueName = pickLocalized(data.league.names, lang);
+  const title =
+    lang === "zh"
+      ? `${leagueName} ${year} 年赛程日历 | sports-calendar.com`
+      : `${leagueName} ${year} Season Calendar | sports-calendar.com`;
+
   return {
-    title: `${pickLocalized(data.league.names, lang)} ${data.season.label} | sports-calendar.com`,
+    title,
     description: pickLocalized(data.season.calendarDescription, lang),
   };
+}
+
+function extractPrimaryYear(seasonSlug: string, seasonLabel: string): string {
+  const slugMatch = seasonSlug.match(/\d{4}/);
+  if (slugMatch) {
+    return slugMatch[0];
+  }
+
+  const labelMatch = seasonLabel.match(/\d{4}/);
+  if (labelMatch) {
+    return labelMatch[0];
+  }
+
+  return seasonLabel;
 }
 
 export default async function SeasonRoutePage({
