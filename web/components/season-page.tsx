@@ -4,9 +4,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getDictionary } from "../lib/dictionaries";
-import { getSeasonPageData, matchLabel, pickLocalized, statusLabel, type Match } from "../lib/catalog";
+import { getHomeEntries, getSeasonPageData, matchLabel, pickLocalized, type Match } from "../lib/catalog";
 import { localizedDateLocale, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
+import { YearLeagueNav } from "./year-league-nav";
 
 type SeasonPageProps = {
   locale: Locale;
@@ -36,6 +37,13 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
     month: "long",
     day: "numeric",
   });
+  const catalog = await getHomeEntries();
+  const yearOptions = collectSeasonSlugs(catalog);
+  const selectedYear = data.season.slug;
+  const yearLabel = locale === "zh" ? "年份" : "Year";
+  const competitionLabel = locale === "zh" ? "赛事" : "Competitions";
+  const yearDestinations = buildYearDestinations(catalog, locale, data.sport.slug, data.league.slug);
+  const competitions = buildCompetitionsForYear(catalog, locale, selectedYear, sportSlug, leagueSlug);
 
   return (
     <div>
@@ -48,61 +56,16 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1200px] grid gap-0 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <main className="mx-auto w-full max-w-[1200px] grid gap-0 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="bg-aside px-5 py-6 text-ink sm:px-6 lg:rounded-l-panel lg:py-8">
-          <div className="rounded-3xl border border-white/40 bg-white/25 p-4 backdrop-blur-sm">
-            <p className="text-xs uppercase tracking-[0.3em] text-ink/60">{pickLocalized(data.sport.names, locale)}</p>
-            <h1 className="mt-2 font-serif text-4xl leading-tight">{pickLocalized(data.league.names, locale)}</h1>
-            <p className="mt-3 text-sm text-ink/70">{pickLocalized(data.league.countryNames, locale)}</p>
-          </div>
-
-          <section className="mt-6">
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.3em] text-ink/60">
-              {dictionary.seasonLabel}
-            </label>
-            <div className="grid gap-2">
-              {data.league.seasons.map((season) => {
-                const href = toPath(locale, data.sport.slug, data.league.slug, season.slug);
-                const active = season.slug === data.season.slug;
-
-                return (
-                  <Link
-                    key={season.slug}
-                    className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                      active
-                        ? "border-ink bg-white text-ink shadow-sm"
-                        : "border-white/40 bg-white/20 text-ink/80 hover:bg-white/35"
-                    }`}
-                    href={href}
-                  >
-                    {season.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="mt-6">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-ink/60">{dictionary.matchesLabel}</h2>
-            <div className="mt-3 space-y-3">
-              {data.season.matches.length === 0 ? (
-                <p className="rounded-3xl bg-white/25 p-4 text-sm text-ink/70">{dictionary.noMatches}</p>
-              ) : (
-                data.season.matches.map((match) => (
-                  <article key={match.id} className="rounded-3xl border border-white/40 bg-white/25 p-4 backdrop-blur-sm">
-                    <p className="text-xs uppercase tracking-[0.24em] text-ink/55">{match.round}</p>
-                    <h3 className="mt-2 text-lg font-semibold leading-6 text-ink">{matchLabel(match, locale)}</h3>
-                    <p className="mt-2 text-sm text-ink/70">{formatKickoff(match, locale, data.season.timezone)}</p>
-                    <p className="mt-1 text-sm text-ink/70">{dictionary.venueLabel}: {match.venue}</p>
-                    <div className="mt-3 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.2em] text-ink/55">
-                      <span>{statusLabel(match.status, locale)}</span>
-                      <span>{match.city}</span>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
+          <YearLeagueNav
+            yearLabel={yearLabel}
+            competitionLabel={competitionLabel}
+            yearOptions={yearOptions}
+            selectedYear={selectedYear}
+            yearDestinations={yearDestinations}
+            competitions={competitions}
+          />
         </aside>
 
         <section className="bg-panel px-5 py-6 text-ink sm:px-6 lg:rounded-r-panel lg:py-8">
@@ -115,7 +78,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
               <p className="text-sm text-ink/60">{dictionary.updatedAtLabel}: {updatedAt}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               {monthSpecs.map((month) => (
                 <MonthCalendar
                   key={`${month.year}-${month.monthIndex}`}
@@ -186,9 +149,9 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
 
 function InfoSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="mt-6 rounded-3xl border border-ink/10 bg-white/28 p-5 backdrop-blur-sm">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-ink/55">{title}</h2>
-      <div className="mt-4">{children}</div>
+    <section className="mt-6 bg-transparent p-0">
+      <h2 className="bg-aside px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-ink/75">{title}</h2>
+      <div className="px-5 pt-4">{children}</div>
     </section>
   );
 }
@@ -207,7 +170,6 @@ function MonthCalendar({
   const monthLabel = new Intl.DateTimeFormat(localizedDateLocale(locale), {
     timeZone: "UTC",
     month: "long",
-    year: "numeric",
   }).format(new Date(Date.UTC(month.year, month.monthIndex, 1)));
 
   const days = buildCalendarCells(month.year, month.monthIndex);
@@ -245,7 +207,6 @@ function MonthCalendar({
               className={`flex aspect-square flex-col items-center justify-center rounded-2xl ${count > 0 ? "bg-header text-white" : "bg-white/50"}`}
             >
               <span>{day}</span>
-              <span className="mt-1 text-[10px] opacity-80">{count > 0 ? count : ""}</span>
             </div>
           );
         })}
@@ -319,4 +280,84 @@ function formatDateOnly(iso: string, locale: Locale, timezone: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function collectSeasonSlugs(catalog: Awaited<ReturnType<typeof getHomeEntries>>) {
+  const values = new Set<string>();
+  for (const sport of catalog.sports) {
+    for (const league of sport.leagues) {
+      for (const season of league.seasons) {
+        values.add(season.slug);
+      }
+    }
+  }
+  return Array.from(values).sort((left, right) => right.localeCompare(left));
+}
+
+function buildCompetitionsForYear(
+  catalog: Awaited<ReturnType<typeof getHomeEntries>>,
+  locale: Locale,
+  yearSlug: string,
+  currentSportSlug: string,
+  currentLeagueSlug: string,
+) {
+  const result: Array<{ key: string; name: string; href: string; active: boolean }> = [];
+
+  for (const sport of catalog.sports) {
+    for (const league of sport.leagues) {
+      const season = league.seasons.find((entry) => entry.slug === yearSlug);
+      if (!season) {
+        continue;
+      }
+
+      result.push({
+        key: `${sport.slug}-${league.slug}`,
+        name: pickLocalized(league.names, locale),
+        href: toPath(locale, sport.slug, league.slug, season.slug),
+        active: sport.slug === currentSportSlug && league.slug === currentLeagueSlug,
+      });
+    }
+  }
+
+  return result;
+}
+
+function buildYearDestinations(
+  catalog: Awaited<ReturnType<typeof getHomeEntries>>,
+  locale: Locale,
+  currentSportSlug: string,
+  currentLeagueSlug: string,
+) {
+  const destinations: Record<string, string> = {};
+  const yearOptions = collectSeasonSlugs(catalog);
+
+  const currentLeague = catalog.sports
+    .flatMap((sport) => sport.leagues.map((league) => ({ sportSlug: sport.slug, league })))
+    .find((item) => item.sportSlug === currentSportSlug && item.league.slug === currentLeagueSlug);
+
+  for (const year of yearOptions) {
+    const currentSeason = currentLeague?.league.seasons.find((season) => season.slug === year);
+    if (currentSeason) {
+      destinations[year] = toPath(locale, currentSportSlug, currentLeagueSlug, currentSeason.slug);
+      continue;
+    }
+
+    const firstAvailable = catalog.sports
+      .flatMap((sport) =>
+        sport.leagues.map((league) => {
+          const season = league.seasons.find((entry) => entry.slug === year);
+          if (!season) {
+            return null;
+          }
+          return { sportSlug: sport.slug, leagueSlug: league.slug, seasonSlug: season.slug };
+        }),
+      )
+      .find((entry) => entry !== null);
+
+    if (firstAvailable) {
+      destinations[year] = toPath(locale, firstAvailable.sportSlug, firstAvailable.leagueSlug, firstAvailable.seasonSlug);
+    }
+  }
+
+  return destinations;
 }
