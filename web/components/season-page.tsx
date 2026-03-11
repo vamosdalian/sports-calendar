@@ -186,7 +186,7 @@ function MonthCalendar({
 
   return (
     <article className="rounded-3xl border border-ink/10 bg-white/35 p-4 backdrop-blur-sm">
-      <h3 className="font-serif text-xl text-ink">{monthLabel}</h3>
+      <h3 className="text-center text-base text-ink">{monthLabel}</h3>
       <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs uppercase tracking-[0.18em] text-ink/50">
         {weekLabels.map((label) => (
           <span key={label}>{label}</span>
