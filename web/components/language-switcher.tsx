@@ -1,22 +1,40 @@
-import Link from "next/link";
+"use client";
 
-import type { Locale } from "../lib/site";
+import { useRouter } from "next/navigation";
+
+import { localeOptions, type Locale } from "../lib/site";
 
 type LanguageSwitcherProps = {
   currentLocale: Locale;
-  alternatePath: string;
-  label: string;
+  localePaths?: Partial<Record<Locale, string>>;
 };
 
-export function LanguageSwitcher({ currentLocale, alternatePath, label }: LanguageSwitcherProps) {
-  const nextLocale: Locale = currentLocale === "en" ? "zh" : "en";
+export function LanguageSwitcher({ currentLocale, localePaths }: LanguageSwitcherProps) {
+  const router = useRouter();
+  const safeLocalePaths = localePaths ?? {};
+  const options = localeOptions.filter((option) => safeLocalePaths[option.code]);
+
+  if (options.length === 0) {
+    return null;
+  }
 
   return (
-    <div className="flex items-center gap-3 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white">
-      <span className="text-white/70">{label}</span>
-      <Link className="text-white" href={alternatePath}>
-        {nextLocale.toUpperCase()}
-      </Link>
-    </div>
+    <select
+      aria-label="Language selector"
+      className="border border-white/20 bg-white/10 px-3 py-2 text-sm text-white outline-none"
+      defaultValue={currentLocale}
+      onChange={(event) => {
+        const target = safeLocalePaths[event.target.value as Locale];
+        if (target) {
+          router.push(target);
+        }
+      }}
+    >
+      {options.map((option) => (
+        <option key={option.code} value={option.code} className="text-ink">
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }

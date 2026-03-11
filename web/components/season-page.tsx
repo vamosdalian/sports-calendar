@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 
 import { getDictionary } from "../lib/dictionaries";
 import { getHomeEntries, getSeasonPageData, matchLabel, pickLocalized, type Match } from "../lib/catalog";
-import { localizedDateLocale, type Locale, toPath } from "../lib/site";
+import { localizedDateLocale, locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { YearLeagueNav } from "./year-league-nav";
 
@@ -28,15 +28,10 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   }
 
   const dictionary = getDictionary(locale);
-  const alternateLocale: Locale = locale === "en" ? "zh" : "en";
-  const alternatePath = toPath(alternateLocale, sportSlug, leagueSlug, seasonSlug);
+  const localePaths = Object.fromEntries(
+    locales.map((entry) => [entry, toPath(entry, sportSlug, leagueSlug, seasonSlug)]),
+  ) as Record<Locale, string>;
   const monthSpecs = buildMonthSpecs(data.season.slug, data.season.matches);
-  const dateLocale = localizedDateLocale(locale);
-  const updatedAt = new Date(data.updatedAt).toLocaleDateString(dateLocale, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
   const catalog = await getHomeEntries();
   const yearOptions = collectSeasonSlugs(catalog);
   const selectedYear = data.season.slug;
@@ -54,7 +49,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             <span className="block text-sm text-white/58">{dictionary.siteName}</span>
             <span className="mt-1 block text-lg font-medium text-white">{pageTitle}</span>
           </Link>
-          <LanguageSwitcher currentLocale={locale} alternatePath={alternatePath} label={dictionary.languageLabel} />
+          <LanguageSwitcher currentLocale={locale} localePaths={localePaths} />
         </div>
       </header>
 
@@ -72,14 +67,6 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
 
         <section className="bg-panel px-5 py-6 text-ink sm:px-6 lg:rounded-r-panel lg:py-8">
           <section>
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-xs text-ink/55">{dictionary.calendarLabel}</p>
-                <h2 className="mt-1 text-2xl font-medium leading-tight">{data.season.label}</h2>
-              </div>
-              <p className="text-sm text-ink/60">{dictionary.updatedAtLabel}: {updatedAt}</p>
-            </div>
-
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               {monthSpecs.map((month) => (
                 <MonthCalendar
@@ -165,7 +152,7 @@ function MonthCalendar({
 
   return (
     <article className="rounded-3xl border border-ink/10 bg-white/35 px-4 py-3 backdrop-blur-sm">
-      <h3 className="text-center text-base text-ink">{monthLabel}</h3>
+      <h3 className="text-center text-sm text-ink">{monthLabel}</h3>
       <div className="mt-2 grid grid-cols-7 gap-1 text-center text-xs uppercase tracking-[0.18em] text-ink/50">
         {weekLabels.map((label) => (
           <span key={label}>{label}</span>
