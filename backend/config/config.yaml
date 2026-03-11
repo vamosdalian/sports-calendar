@@ -1,0 +1,7 @@
+server:
+  port: 8080
+rateLimit:
+  requestsPerSecond: 8
+  burst: 16
+data:
+  mockFile: /shared/mock/catalog.json
