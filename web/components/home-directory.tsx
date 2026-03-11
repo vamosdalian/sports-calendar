@@ -34,15 +34,12 @@ export async function HomeDirectory({ locale, selectedYear }: HomeDirectoryProps
       </header>
 
       <main className="mx-auto w-full max-w-[1200px] bg-panel px-5 py-6 text-ink sm:px-6 lg:py-8">
-        <section className="mb-6 rounded-3xl border border-ink/10 bg-white/35 px-5 py-4">
-          <p className="text-sm text-ink/70">{t("homeLead")}</p>
-          <form className="mt-4 flex items-center gap-3" method="get">
-            <label className="text-sm font-medium text-ink/70" htmlFor="year-select">
-              {t("yearLabel")}
-            </label>
+        <section className="mb-6 px-1 py-1">
+          <form className="flex items-center gap-3" method="get">
             <select
               id="year-select"
               name="year"
+              aria-label="Year selector"
               defaultValue={String(activeYear)}
               className="border border-white/40 bg-white/25 px-3 py-2 text-sm text-ink"
             >
@@ -58,43 +55,29 @@ export async function HomeDirectory({ locale, selectedYear }: HomeDirectoryProps
           </form>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
+        <section className="space-y-6">
           {directory.items.map((sport) => (
-            <article key={sport.sportSlug} className="rounded-panel border border-ink/10 bg-white/35 px-6 py-6">
-              <p className="text-xs text-header/60">{sport.sportName}</p>
-              <h2 className="mt-2 text-2xl font-medium text-ink">{sport.sportName}</h2>
-              <div className="mt-6 space-y-4">
+            <section key={sport.sportSlug} className="mt-6 bg-transparent p-0">
+              <h2 className="bg-aside px-5 py-3 text-sm font-medium text-ink/80">{sport.sportName}</h2>
+              <div className="px-5 pt-4 space-y-3">
                 {sport.leagues.map((league) => (
-                  <div key={league.leagueSlug} className="rounded-3xl border border-line bg-shell/70 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-medium text-ink">{league.leagueName}</h3>
-                      <p className="text-sm text-ink/60">{league.countryName}</p>
-                    </div>
-                    <span className="rounded-full bg-header px-3 py-1 text-xs uppercase tracking-[0.25em] text-white">
-                      {league.leagueSlug}
-                    </span>
+                  <div key={league.leagueSlug}>
+                    {league.seasons[0] ? (
+                      <Link
+                        className="text-base font-medium text-ink transition hover:text-header"
+                        href={toPath(locale, sport.sportSlug, league.leagueSlug, league.seasons[0].slug)}
+                      >
+                        {league.leagueName}
+                      </Link>
+                    ) : (
+                      <span className="text-base font-medium text-ink">{league.leagueName}</span>
+                    )}
                   </div>
-
-                  <ul className="mt-4 space-y-2">
-                    {league.seasons.map((season) => (
-                      <li key={season.slug} className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3">
-                        <span className="text-sm text-ink">{season.label}</span>
-                        <Link
-                          className="rounded-full bg-header px-4 py-2 text-sm text-white transition hover:bg-header/90"
-                          href={toPath(locale, sport.sportSlug, league.leagueSlug, season.slug)}
-                        >
-                          {t("viewSeason")}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </article>
-        ))}
-      </section>
+                ))}
+              </div>
+            </section>
+          ))}
+        </section>
 
         {directory.items.length === 0 ? <p className="text-sm text-ink/70">{t("noCompetitionsInYear")}</p> : null}
       </main>
