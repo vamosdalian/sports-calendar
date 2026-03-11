@@ -1,6 +1,6 @@
 {
   "siteName": "sports-calendar.com",
-  "homeTitle": "覆盖足球与赛车的赛季日历",
+  "homeTitle": "覆盖全球的体育赛事日历",
   "homeLead": "这是基于共享 mock 数据驱动的重构前端原型，后续可以直接切换到 Go API。",
   "exploreLabel": "浏览赛季",
   "seasonLabel": "赛季",

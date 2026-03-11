@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { getAvailableYears, getLeaguesByYear } from "../lib/catalog";
 import { locales, type Locale, toPath } from "../lib/site";
+import { HomeYearSelector } from "./home-year-selector";
 import { LanguageSwitcher } from "./language-switcher";
 
 type HomeDirectoryProps = {
@@ -11,7 +12,7 @@ type HomeDirectoryProps = {
 };
 
 export async function HomeDirectory({ locale, selectedYear }: HomeDirectoryProps) {
-  const t = await getTranslations();
+  const t = await getTranslations({ locale });
   const years = await getAvailableYears();
   const currentYear = new Date().getFullYear();
   const fallbackYear = years.find((year) => year === currentYear) ?? years[0] ?? currentYear;
@@ -34,25 +35,8 @@ export async function HomeDirectory({ locale, selectedYear }: HomeDirectoryProps
       </header>
 
       <main className="mx-auto w-full max-w-[1200px] bg-panel px-5 py-6 text-ink sm:px-6 lg:py-8">
-        <section className="mb-6 px-1 py-1">
-          <form className="flex items-center gap-3" method="get">
-            <select
-              id="year-select"
-              name="year"
-              aria-label="Year selector"
-              defaultValue={String(activeYear)}
-              className="border border-white/40 bg-white/25 px-3 py-2 text-sm text-ink"
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-            <button className="rounded-full bg-header px-4 py-2 text-sm text-white" type="submit">
-              {t("applyLabel")}
-            </button>
-          </form>
+        <section className="mb-6 flex justify-end px-1 py-1">
+          <HomeYearSelector years={years} selectedYear={activeYear} />
         </section>
 
         <section className="space-y-6">
@@ -64,13 +48,13 @@ export async function HomeDirectory({ locale, selectedYear }: HomeDirectoryProps
                   <div key={league.leagueSlug}>
                     {league.seasons[0] ? (
                       <Link
-                        className="text-base font-medium text-ink transition hover:text-header"
+                        className="text-sm text-blue-700 underline underline-offset-2 transition hover:text-blue-800"
                         href={toPath(locale, sport.sportSlug, league.leagueSlug, league.seasons[0].slug)}
                       >
                         {league.leagueName}
                       </Link>
                     ) : (
-                      <span className="text-base font-medium text-ink">{league.leagueName}</span>
+                      <span className="text-sm text-ink">{league.leagueName}</span>
                     )}
                   </div>
                 ))}

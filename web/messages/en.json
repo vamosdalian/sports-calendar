@@ -1,6 +1,6 @@
 {
   "siteName": "sports-calendar.com",
-  "homeTitle": "Season calendars for football and racing",
+  "homeTitle": "Season calendar directory for global sports",
   "homeLead": "A refactored front-end prototype powered by shared mock data and ready to switch to the Go API.",
   "exploreLabel": "Explore seasons",
   "seasonLabel": "Season",
