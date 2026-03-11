@@ -1,21 +1,22 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+
+// Keep in sync with localeOptions in lib/site.ts
+const localePattern = "en|zh";
 
 const nextConfig: NextConfig = {
   trailingSlash: true,
   async redirects() {
     return [
       {
-        source: "/",
-        destination: "/index.html",
-        permanent: true,
-      },
-      {
-        source: "/:lang(en|zh)",
+        source: `/:lang(${localePattern})`,
         destination: "/:lang/index.html",
         permanent: true,
       },
       {
-        source: "/:lang(en|zh)/:sport/:league/:season",
+        source: `/:lang(${localePattern})/:sport/:league/:season`,
         destination: "/:lang/:sport/:league/:season/index.html",
         permanent: true,
       },
@@ -28,15 +29,15 @@ const nextConfig: NextConfig = {
         destination: "/",
       },
       {
-        source: "/:lang(en|zh)/index.html",
+        source: `/:lang(${localePattern})/index.html`,
         destination: "/:lang",
       },
       {
-        source: "/:lang(en|zh)/:sport/:league/:season/index.html",
+        source: `/:lang(${localePattern})/:sport/:league/:season/index.html`,
         destination: "/:lang/:sport/:league/:season",
       },
     ];
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

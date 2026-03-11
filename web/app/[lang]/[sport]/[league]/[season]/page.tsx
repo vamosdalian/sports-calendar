@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { SeasonPage } from "../../../../../components/season-page";
 import { getAllSeasonRoutes, getSeasonPageData, pickLocalized } from "../../../../../lib/catalog";
@@ -27,15 +28,12 @@ export async function generateMetadata({
     return {};
   }
 
+  const t = await getTranslations({ locale: lang });
   const year = extractPrimaryYear(data.season.slug, data.season.label);
   const leagueName = pickLocalized(data.league.names, lang);
-  const title =
-    lang === "zh"
-      ? `${leagueName} ${year} 年赛程日历 | sports-calendar.com`
-      : `${leagueName} ${year} Season Calendar | sports-calendar.com`;
 
   return {
-    title,
+    title: t("metaTitleSeason", { leagueName, year }),
     description: pickLocalized(data.season.calendarDescription, lang),
   };
 }

@@ -1,15 +1,16 @@
 "use client";
 
+import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 
 import { localeOptions, type Locale } from "../lib/site";
 
 type LanguageSwitcherProps = {
-  currentLocale: Locale;
   localePaths?: Partial<Record<Locale, string>>;
 };
 
-export function LanguageSwitcher({ currentLocale, localePaths }: LanguageSwitcherProps) {
+export function LanguageSwitcher({ localePaths }: LanguageSwitcherProps) {
+  const currentLocale = useLocale() as Locale;
   const router = useRouter();
   const safeLocalePaths = localePaths ?? {};
   const options = localeOptions.filter((option) => safeLocalePaths[option.code]);

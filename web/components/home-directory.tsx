@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
-import { getDictionary } from "../lib/dictionaries";
 import { getHomeEntries, pickLocalized } from "../lib/catalog";
 import { type Locale, toPath } from "../lib/site";
 
@@ -9,15 +9,15 @@ type HomeDirectoryProps = {
 };
 
 export async function HomeDirectory({ locale }: HomeDirectoryProps) {
-  const dictionary = getDictionary(locale);
+  const t = await getTranslations();
   const catalog = await getHomeEntries();
 
   return (
     <main className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 lg:px-8">
       <section className="rounded-panel bg-white px-6 py-8 shadow-panel sm:px-10">
-        <p className="mb-2 text-sm text-header/70">{dictionary.siteName}</p>
-        <h1 className="max-w-3xl text-3xl font-medium text-ink sm:text-4xl">{dictionary.homeTitle}</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/70 sm:text-base">{dictionary.homeLead}</p>
+        <p className="mb-2 text-sm text-header/70">{t("siteName")}</p>
+        <h1 className="max-w-3xl text-3xl font-medium text-ink sm:text-4xl">{t("homeTitle")}</h1>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/70 sm:text-base">{t("homeLead")}</p>
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -46,7 +46,7 @@ export async function HomeDirectory({ locale }: HomeDirectoryProps) {
                           className="rounded-full bg-header px-4 py-2 text-sm text-white transition hover:bg-header/90"
                           href={toPath(locale, sport.slug, league.slug, season.slug)}
                         >
-                          {dictionary.viewSeason}
+                          {t("viewSeason")}
                         </Link>
                       </li>
                     ))}

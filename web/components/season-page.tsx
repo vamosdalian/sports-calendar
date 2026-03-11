@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
-import { getDictionary } from "../lib/dictionaries";
 import { getHomeEntries, getSeasonPageData, matchLabel, pickLocalized, type Match } from "../lib/catalog";
 import { localizedDateLocale, locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
@@ -27,7 +27,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
     notFound();
   }
 
-  const dictionary = getDictionary(locale);
+  const t = await getTranslations();
   const localePaths = Object.fromEntries(
     locales.map((entry) => [entry, toPath(entry, sportSlug, leagueSlug, seasonSlug)]),
   ) as Record<Locale, string>;
@@ -35,21 +35,24 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   const catalog = await getHomeEntries();
   const yearOptions = collectSeasonSlugs(catalog);
   const selectedYear = data.season.slug;
-  const yearLabel = locale === "zh" ? "年份" : "Year";
-  const competitionLabel = locale === "zh" ? "赛事" : "Competitions";
+  const yearLabel = t("yearLabel");
+  const competitionLabel = t("competitionLabel");
   const yearDestinations = buildYearDestinations(catalog, locale, data.sport.slug, data.league.slug);
   const competitions = buildCompetitionsForYear(catalog, locale, selectedYear, sportSlug, leagueSlug);
-  const pageTitle = buildSeasonTitle(locale, pickLocalized(data.league.names, locale), data.season.slug, data.season.label);
+  const leagueName = pickLocalized(data.league.names, locale);
+  const year = extractPrimaryYear(data.season.slug, data.season.label);
+  const pageTitle = t("seasonTitle", { leagueName, year });
+  const weekLabels = t.raw("weekDays") as string[];
 
   return (
     <div>
       <header className="mx-auto w-full max-w-[1200px] bg-header text-white">
         <div className="flex items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <Link className="block" href={toPath(locale)}>
-            <span className="block text-sm text-white/58">{dictionary.siteName}</span>
+            <span className="block text-sm text-white/58">{t("siteName")}</span>
             <span className="mt-1 block text-lg font-medium text-white">{pageTitle}</span>
           </Link>
-          <LanguageSwitcher currentLocale={locale} localePaths={localePaths} />
+          <LanguageSwitcher localePaths={localePaths} />
         </div>
       </header>
 
@@ -75,12 +78,13 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
                   matches={data.season.matches}
                   month={month}
                   timezone={data.season.timezone}
+                  weekLabels={weekLabels}
                 />
               ))}
             </div>
           </section>
 
-          <InfoSection title={dictionary.calendarDescriptionLabel}>
+          <InfoSection title={t("calendarDescriptionLabel")}>
             <p className="text-base leading-7 text-ink/75">{pickLocalized(data.season.calendarDescription, locale)}</p>
             <ul className="mt-4 space-y-2 text-sm text-ink/75">
               {data.season.matches.map((match) => (
@@ -93,11 +97,11 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             </ul>
           </InfoSection>
 
-          <InfoSection title={dictionary.dataSourceLabel}>
+          <InfoSection title={t("dataSourceLabel")}>
             <p className="text-base leading-7 text-ink/75">{pickLocalized(data.season.dataSourceNote, locale)}</p>
           </InfoSection>
 
-          <InfoSection title={dictionary.notesLabel}>
+          <InfoSection title={t("notesLabel")}>
             <p className="text-base leading-7 text-ink/75">{pickLocalized(data.season.notes, locale)}</p>
           </InfoSection>
         </section>
@@ -105,7 +109,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
 
       <footer className="mx-auto w-full max-w-[1200px] bg-header text-white">
         <div className="flex flex-col gap-2 px-4 py-6 text-sm text-white/80 sm:px-6 lg:px-8">
-          <span>{dictionary.siteName}</span>
+          <span>{t("siteName")}</span>
           <span>{pickLocalized(data.league.names, locale)} · {data.season.label}</span>
         </div>
       </footer>
@@ -127,11 +131,13 @@ function MonthCalendar({
   matches,
   month,
   timezone,
+  weekLabels,
 }: {
   locale: Locale;
   matches: Match[];
   month: MonthSpec;
   timezone: string;
+  weekLabels: string[];
 }) {
   const monthLabel = new Intl.DateTimeFormat(localizedDateLocale(locale), {
     timeZone: "UTC",
@@ -147,8 +153,6 @@ function MonthCalendar({
       dots.set(key, (dots.get(key) ?? 0) + 1);
     }
   }
-
-  const weekLabels = locale === "zh" ? ["日", "一", "二", "三", "四", "五", "六"] : ["S", "M", "T", "W", "T", "F", "S"];
 
   return (
     <article className="rounded-3xl border border-ink/10 bg-white/35 px-4 py-3 backdrop-blur-sm">
@@ -246,11 +250,6 @@ function formatDateOnly(iso: string, locale: Locale, timezone: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
-}
-
-function buildSeasonTitle(locale: Locale, leagueName: string, seasonSlug: string, seasonLabel: string) {
-  const year = extractPrimaryYear(seasonSlug, seasonLabel);
-  return locale === "zh" ? `${leagueName} ${year} 年赛程日历` : `${leagueName} ${year} Season Calendar`;
 }
 
 function extractPrimaryYear(seasonSlug: string, seasonLabel: string): string {

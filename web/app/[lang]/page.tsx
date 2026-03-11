@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { HomeDirectory } from "../../components/home-directory";
 import { getHomeEntries } from "../../lib/catalog";
@@ -21,10 +22,10 @@ export async function generateMetadata({
     return {};
   }
 
+  const t = await getTranslations({ locale: lang });
   return {
     title: "sports-calendar.com",
-    description:
-      lang === "zh" ? "覆盖足球与赛车的赛季日历入口。" : "Season calendar directory for football and racing.",
+    description: t("metaDescriptionHome"),
   };
 }
 
