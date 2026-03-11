@@ -20,6 +20,11 @@ type Service struct {
 	repo catalogProvider
 }
 
+type YearsResponse struct {
+	Years     []int  `json:"years"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type SportsYearResponse struct {
 	Year      int              `json:"year"`
 	Items     []SportsYearItem `json:"items"`
@@ -82,6 +87,38 @@ type SeasonDetail struct {
 
 func New(repo catalogProvider) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) ListYears(ctx context.Context) (YearsResponse, error) {
+	catalog, err := s.repo.Catalog(ctx)
+	if err != nil {
+		return YearsResponse{}, err
+	}
+
+	values := map[int]struct{}{}
+	for _, sport := range catalog.Sports {
+		for _, league := range sport.Leagues {
+			for _, season := range league.Seasons {
+				startYear, endYear, parseErr := mockdata.ParseSeasonYears(season.Slug)
+				if parseErr != nil {
+					continue
+				}
+				for year := startYear; year <= endYear; year++ {
+					values[year] = struct{}{}
+				}
+			}
+		}
+	}
+
+	years := make([]int, 0, len(values))
+	for year := range values {
+		years = append(years, year)
+	}
+	sort.Slice(years, func(i, j int) bool {
+		return years[i] > years[j]
+	})
+
+	return YearsResponse{Years: years, UpdatedAt: catalog.UpdatedAt}, nil
 }
 
 func (s *Service) ListSportsByYear(ctx context.Context, year int) (SportsYearResponse, error) {

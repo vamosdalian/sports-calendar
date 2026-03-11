@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { getHomeEntries, getSeasonPageData, matchLabel, type Match } from "../lib/catalog";
+import { getAvailableYears, getLeaguesByYear, getSeasonPageData, matchLabel, type Match, type YearDirectory } from "../lib/catalog";
 import { localizedDateLocale, locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { YearLeagueNav } from "./year-league-nav";
@@ -32,13 +32,19 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
     locales.map((entry) => [entry, toPath(entry, sportSlug, leagueSlug, seasonSlug)]),
   ) as Record<Locale, string>;
   const monthSpecs = buildMonthSpecs(data.season.slug, data.season.matches);
-  const catalog = await getHomeEntries(locale);
-  const yearOptions = collectSeasonSlugs(catalog);
-  const selectedYear = data.season.slug;
+  const availableYears = await getAvailableYears();
+  const primaryYear = Number(extractPrimaryYear(data.season.slug, data.season.label));
+  const selectedYear = Number.isFinite(primaryYear) ? primaryYear : new Date().getFullYear();
+  const yearNumbers = availableYears.length > 0 ? availableYears : [selectedYear];
+  const yearOptions = yearNumbers.map((year) => String(year));
+  const directories = await Promise.all(yearNumbers.map((year) => getLeaguesByYear(year, locale)));
+  const directoriesByYear = Object.fromEntries(
+    directories.map((directory) => [String(directory.year), directory]),
+  ) as Record<string, YearDirectory>;
   const yearLabel = t("yearLabel");
   const competitionLabel = t("competitionLabel");
-  const yearDestinations = buildYearDestinations(catalog, locale, data.sport.slug, data.league.slug);
-  const competitions = buildCompetitionsForYear(catalog, locale, selectedYear, sportSlug, leagueSlug);
+  const yearDestinations = buildYearDestinations(directoriesByYear, locale, data.sport.slug, data.league.slug);
+  const competitions = buildCompetitionsForYear(directoriesByYear[String(selectedYear)], locale, sportSlug, leagueSlug);
   const leagueName = data.league.name;
   const year = extractPrimaryYear(data.season.slug, data.season.label);
   const pageTitle = t("seasonTitle", { leagueName, year });
@@ -62,7 +68,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             yearLabel={yearLabel}
             competitionLabel={competitionLabel}
             yearOptions={yearOptions}
-            selectedYear={selectedYear}
+            selectedYear={String(selectedYear)}
             yearDestinations={yearDestinations}
             competitions={competitions}
           />
@@ -266,39 +272,29 @@ function extractPrimaryYear(seasonSlug: string, seasonLabel: string): string {
   return seasonLabel;
 }
 
-function collectSeasonSlugs(catalog: Awaited<ReturnType<typeof getHomeEntries>>) {
-  const values = new Set<string>();
-  for (const sport of catalog.sports) {
-    for (const league of sport.leagues) {
-      for (const season of league.seasons) {
-        values.add(season.slug);
-      }
-    }
-  }
-  return Array.from(values).sort((left, right) => right.localeCompare(left));
-}
-
 function buildCompetitionsForYear(
-  catalog: Awaited<ReturnType<typeof getHomeEntries>>,
+  directory: YearDirectory | undefined,
   locale: Locale,
-  yearSlug: string,
   currentSportSlug: string,
   currentLeagueSlug: string,
 ) {
   const result: Array<{ key: string; name: string; href: string; active: boolean }> = [];
 
-  for (const sport of catalog.sports) {
+  if (!directory) {
+    return result;
+  }
+
+  for (const sport of directory.items) {
     for (const league of sport.leagues) {
-      const season = league.seasons.find((entry) => entry.slug === yearSlug);
+      const season = league.seasons[0];
       if (!season) {
         continue;
       }
-
       result.push({
-        key: `${sport.slug}-${league.slug}`,
-        name: league.name,
-        href: toPath(locale, sport.slug, league.slug, season.slug),
-        active: sport.slug === currentSportSlug && league.slug === currentLeagueSlug,
+        key: `${sport.sportSlug}-${league.leagueSlug}`,
+        name: league.leagueName,
+        href: toPath(locale, sport.sportSlug, league.leagueSlug, season.slug),
+        active: sport.sportSlug === currentSportSlug && league.leagueSlug === currentLeagueSlug,
       });
     }
   }
@@ -307,33 +303,33 @@ function buildCompetitionsForYear(
 }
 
 function buildYearDestinations(
-  catalog: Awaited<ReturnType<typeof getHomeEntries>>,
+  directoriesByYear: Record<string, YearDirectory>,
   locale: Locale,
   currentSportSlug: string,
   currentLeagueSlug: string,
 ) {
   const destinations: Record<string, string> = {};
-  const yearOptions = collectSeasonSlugs(catalog);
-
-  const currentLeague = catalog.sports
-    .flatMap((sport) => sport.leagues.map((league) => ({ sportSlug: sport.slug, league })))
-    .find((item) => item.sportSlug === currentSportSlug && item.league.slug === currentLeagueSlug);
+  const yearOptions = Object.keys(directoriesByYear).sort((left, right) => right.localeCompare(left));
 
   for (const year of yearOptions) {
-    const currentSeason = currentLeague?.league.seasons.find((season) => season.slug === year);
-    if (currentSeason) {
-      destinations[year] = toPath(locale, currentSportSlug, currentLeagueSlug, currentSeason.slug);
+    const directory = directoriesByYear[year];
+    const currentLeague = directory.items
+      .flatMap((sport) => sport.leagues.map((league) => ({ sportSlug: sport.sportSlug, league })))
+      .find((item) => item.sportSlug === currentSportSlug && item.league.leagueSlug === currentLeagueSlug);
+    const currentSeason = currentLeague?.league.seasons[0];
+    if (currentSeason && currentLeague) {
+      destinations[year] = toPath(locale, currentLeague.sportSlug, currentLeague.league.leagueSlug, currentSeason.slug);
       continue;
     }
 
-    const firstAvailable = catalog.sports
+    const firstAvailable = directory.items
       .flatMap((sport) =>
         sport.leagues.map((league) => {
-          const season = league.seasons.find((entry) => entry.slug === year);
+          const season = league.seasons[0];
           if (!season) {
             return null;
           }
-          return { sportSlug: sport.slug, leagueSlug: league.slug, seasonSlug: season.slug };
+          return { sportSlug: sport.sportSlug, leagueSlug: league.leagueSlug, seasonSlug: season.slug };
         }),
       )
       .find((entry) => entry !== null);

@@ -25,8 +25,17 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	router.GET("/api/sports", func(c *gin.Context) {
-		yearText := c.DefaultQuery("year", strconv.Itoa(2026))
+	router.GET("/api/years", func(c *gin.Context) {
+		payload, err := svc.ListYears(c.Request.Context())
+		if err != nil {
+			httputil.JSONError(c, http.StatusInternalServerError, "years_failed", err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, payload)
+	})
+
+	listLeaguesByYear := func(c *gin.Context) {
+		yearText := c.DefaultQuery("year", strconv.Itoa(time.Now().Year()))
 		lang := normalizeLocale(c.Query("lang"))
 		year, err := strconv.Atoi(yearText)
 		if err != nil {
@@ -41,17 +50,9 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 		}
 
 		c.JSON(http.StatusOK, localizeSportsYearResponse(payload, lang))
-	})
+	}
 
-	router.GET("/api/catalog", func(c *gin.Context) {
-		lang := normalizeLocale(c.Query("lang"))
-		payload, err := svc.GetCatalogSummary(c.Request.Context(), lang)
-		if err != nil {
-			httputil.JSONError(c, http.StatusInternalServerError, "catalog_failed", err.Error())
-			return
-		}
-		c.JSON(http.StatusOK, payload)
-	})
+	router.GET("/api/leagues", listLeaguesByYear)
 
 	router.GET("/api/sports/:league", func(c *gin.Context) {
 		handleLeagueDetail(c, svc, c.Param("league"), "", normalizeLocale(c.Query("lang")))

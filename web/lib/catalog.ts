@@ -40,22 +40,23 @@ export type SeasonReference = {
   label: string;
 };
 
-export type League = {
-  slug: string;
-  name: string;
+export type YearDirectoryLeague = {
+  leagueSlug: string;
+  leagueName: string;
   countryName: string;
   seasons: SeasonReference[];
 };
 
-export type Sport = {
-  slug: string;
-  name: string;
-  leagues: League[];
+export type YearDirectorySport = {
+  sportSlug: string;
+  sportName: string;
+  leagues: YearDirectoryLeague[];
 };
 
-export type Catalog = {
+export type YearDirectory = {
+  year: number;
   updatedAt: string;
-  sports: Sport[];
+  items: YearDirectorySport[];
 };
 
 export type SeasonPageData = {
@@ -103,8 +104,14 @@ async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | n
 }
 
 type CatalogResponse = {
+  years: number[];
   updatedAt: string;
-  sports: Sport[];
+};
+
+type LeaguesByYearResponse = {
+  year: number;
+  items: YearDirectorySport[];
+  updatedAt: string;
 };
 
 type SeasonDetailResponse = {
@@ -125,8 +132,15 @@ type SeasonDetailResponse = {
   updatedAt: string;
 };
 
-export async function getHomeEntries(locale: Locale): Promise<Catalog> {
-  return fetchJson<CatalogResponse>(`/api/catalog?lang=${encodeURIComponent(locale)}`);
+export async function getAvailableYears(): Promise<number[]> {
+  const payload = await fetchJson<CatalogResponse>("/api/years");
+  return payload.years;
+}
+
+export async function getLeaguesByYear(year: number, locale: Locale): Promise<YearDirectory> {
+  return fetchJson<LeaguesByYearResponse>(
+    `/api/leagues?year=${encodeURIComponent(String(year))}&lang=${encodeURIComponent(locale)}`,
+  );
 }
 
 export async function getSeasonPageData(
@@ -171,16 +185,35 @@ export async function getSeasonPageData(
 }
 
 export async function getAllSeasonRoutes() {
-  const catalog = await fetchJson<CatalogResponse>("/api/catalog?lang=en");
-  return catalog.sports.flatMap((sport) =>
-    sport.leagues.flatMap((league) =>
-      league.seasons.map((season) => ({
-        sport: sport.slug,
-        league: league.slug,
-        season: season.slug,
-      })),
-    ),
-  );
+  try {
+    const years = await getAvailableYears();
+    const directories = await Promise.all(years.map((year) => getLeaguesByYear(year, "en")));
+    const seen = new Set<string>();
+    const routes: Array<{ sport: string; league: string; season: string }> = [];
+
+    for (const directory of directories) {
+      for (const sport of directory.items) {
+        for (const league of sport.leagues) {
+          for (const season of league.seasons) {
+            const key = `${sport.sportSlug}/${league.leagueSlug}/${season.slug}`;
+            if (seen.has(key)) {
+              continue;
+            }
+            seen.add(key);
+            routes.push({
+              sport: sport.sportSlug,
+              league: league.leagueSlug,
+              season: season.slug,
+            });
+          }
+        }
+      }
+    }
+
+    return routes;
+  } catch {
+    return [];
+  }
 }
 
 export function matchLabel(match: Match) {

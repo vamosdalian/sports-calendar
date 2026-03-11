@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { HomeDirectory } from "../../components/home-directory";
-import { getHomeEntries } from "../../lib/catalog";
+import { getAvailableYears, getLeaguesByYear } from "../../lib/catalog";
 import { isLocale, locales, type Locale, toPath } from "../../lib/site";
 
 export const revalidate = 3600;
@@ -34,7 +34,7 @@ export default async function LanguageHomePage({
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{ league?: string }>;
+  searchParams: Promise<{ league?: string; year?: string }>;
 }) {
   const { lang } = await params;
   if (!isLocale(lang)) {
@@ -42,7 +42,8 @@ export default async function LanguageHomePage({
   }
 
   const locale = lang as Locale;
-  const legacyLeague = (await searchParams).league;
+  const { league: legacyLeague, year: yearParam } = await searchParams;
+  const selectedYear = Number(yearParam);
   if (legacyLeague) {
     const route = await resolveLegacyLeagueRoute(legacyLeague, locale);
     if (route) {
@@ -50,19 +51,23 @@ export default async function LanguageHomePage({
     }
   }
 
-  return <HomeDirectory locale={locale} />;
+  return <HomeDirectory locale={locale} selectedYear={Number.isFinite(selectedYear) ? selectedYear : undefined} />;
 }
 
 async function resolveLegacyLeagueRoute(leagueSlug: string, locale: Locale): Promise<string | null> {
-  const catalog = await getHomeEntries(locale);
-  for (const sport of catalog.sports) {
-    for (const league of sport.leagues) {
-      if (league.slug === leagueSlug) {
+  const years = await getAvailableYears();
+  for (const year of years) {
+    const directory = await getLeaguesByYear(year, locale);
+    for (const sport of directory.items) {
+      for (const league of sport.leagues) {
+        if (league.leagueSlug !== leagueSlug) {
+          continue;
+        }
         const season = league.seasons[0];
         if (!season) {
           return null;
         }
-        return toPath(locale, sport.slug, league.slug, season.slug);
+        return toPath(locale, sport.sportSlug, league.leagueSlug, season.slug);
       }
     }
   }

@@ -30,10 +30,31 @@ func testRouter(t *testing.T) *gin.Engine {
 	return NewRouter(logger, service.New(repo), rate.NewLimiter(rate.Limit(100), 100))
 }
 
-func TestSportsByYear(t *testing.T) {
+func TestYears(t *testing.T) {
 	router := testRouter(t)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/sports?year=2026", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/years", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	years, ok := payload["years"].([]any)
+	if !ok || len(years) == 0 {
+		t.Fatalf("expected years in response")
+	}
+}
+
+func TestLeaguesDefaultLocale(t *testing.T) {
+	router := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/leagues?year=2026", nil)
 
 	router.ServeHTTP(recorder, request)
 
@@ -54,45 +75,17 @@ func TestSportsByYear(t *testing.T) {
 		t.Fatalf("expected first item object")
 	}
 	if _, exists := firstItem["sportNames"]; exists {
-		t.Fatalf("expected single-field response, got sportNames")
+		t.Fatalf("expected localized field sportName, got sportNames")
 	}
 	if _, exists := firstItem["sportName"]; !exists {
 		t.Fatalf("expected sportName in default response")
 	}
 }
 
-func TestCatalogSummaryDefaultLocale(t *testing.T) {
+func TestLeaguesLocalized(t *testing.T) {
 	router := testRouter(t)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/catalog", nil)
-
-	router.ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("unexpected status: %d", recorder.Code)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode payload: %v", err)
-	}
-	sports, ok := payload["sports"].([]any)
-	if !ok || len(sports) == 0 {
-		t.Fatalf("expected sports in response")
-	}
-	firstSport, ok := sports[0].(map[string]any)
-	if !ok {
-		t.Fatalf("expected sport object")
-	}
-	if _, exists := firstSport["name"]; !exists {
-		t.Fatalf("expected single-field name")
-	}
-}
-
-func TestSportsByYearLocalized(t *testing.T) {
-	router := testRouter(t)
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/sports?year=2026&lang=zh", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/leagues?year=2026&lang=zh", nil)
 
 	router.ServeHTTP(recorder, request)
 
