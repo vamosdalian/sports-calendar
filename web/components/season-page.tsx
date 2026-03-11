@@ -39,8 +39,8 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
 
   return (
     <div>
-      <header className="bg-header text-white">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
+      <header className="mx-auto w-full max-w-[1200px] bg-header text-white">
+        <div className="flex items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <Link className="font-serif text-2xl tracking-tight" href={toPath(locale)}>
             {dictionary.siteName}
           </Link>
@@ -48,7 +48,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1200px] gap-0 px-0 md:px-4 lg:grid-cols-[360px_minmax(0,1fr)] lg:py-8">
+      <main className="mx-auto w-full max-w-[1200px] grid gap-0 lg:grid-cols-[360px_minmax(0,1fr)]">
         <aside className="bg-aside px-5 py-6 text-ink sm:px-6 lg:rounded-l-panel lg:py-8">
           <div className="rounded-3xl border border-white/40 bg-white/25 p-4 backdrop-blur-sm">
             <p className="text-xs uppercase tracking-[0.3em] text-ink/60">{pickLocalized(data.sport.names, locale)}</p>
@@ -174,8 +174,8 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
         </section>
       </main>
 
-      <footer className="bg-header text-white">
-        <div className="mx-auto flex max-w-[1200px] flex-col gap-2 px-4 py-6 text-sm text-white/80 sm:px-6 lg:px-8">
+      <footer className="mx-auto w-full max-w-[1200px] bg-header text-white">
+        <div className="flex flex-col gap-2 px-4 py-6 text-sm text-white/80 sm:px-6 lg:px-8">
           <span>{dictionary.siteName}</span>
           <span>{pickLocalized(data.league.names, locale)} · {data.season.label}</span>
         </div>
