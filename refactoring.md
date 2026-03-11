@@ -22,7 +22,6 @@
 例如： 
 - sports-calendar.com/zh/football/csl/2026/index.html
 - sports-calendar.com/en/racing/f1/2026/index.html
-- sports-calendar.com/football/pl/2025-2026/index.html
 
 所有页面遵循如下设计：
 网页端页面宽度为 1200，其他部分以 #F7F8F0 填充

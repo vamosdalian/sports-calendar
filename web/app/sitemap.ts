@@ -7,7 +7,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const routes = await getAllSeasonRoutes();
   const entries: MetadataRoute.Sitemap = [
     {
-      url: siteUrl,
+      url: `${siteUrl}/en/`,
       lastModified: new Date("2026-03-10T00:00:00Z"),
     },
     {
