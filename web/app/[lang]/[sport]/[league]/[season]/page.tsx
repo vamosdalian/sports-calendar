@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { SeasonPage } from "../../../../../components/season-page";
-import { getAllSeasonRoutes, getSeasonPageData, pickLocalized } from "../../../../../lib/catalog";
+import { getAllSeasonRoutes, getSeasonPageData } from "../../../../../lib/catalog";
 import { isLocale, locales } from "../../../../../lib/site";
 
 export const revalidate = 3600;
@@ -23,18 +23,18 @@ export async function generateMetadata({
     return {};
   }
 
-  const data = await getSeasonPageData(sport, league, season);
+  const data = await getSeasonPageData(sport, league, season, lang);
   if (!data) {
     return {};
   }
 
   const t = await getTranslations({ locale: lang });
   const year = extractPrimaryYear(data.season.slug, data.season.label);
-  const leagueName = pickLocalized(data.league.names, lang);
+  const leagueName = data.league.name;
 
   return {
     title: t("metaTitleSeason", { leagueName, year }),
-    description: pickLocalized(data.season.calendarDescription, lang),
+    description: data.season.calendarDescription,
   };
 }
 

@@ -54,7 +54,7 @@ export default async function LanguageHomePage({
 }
 
 async function resolveLegacyLeagueRoute(leagueSlug: string, locale: Locale): Promise<string | null> {
-  const catalog = await getHomeEntries();
+  const catalog = await getHomeEntries(locale);
   for (const sport of catalog.sports) {
     for (const league of sport.leagues) {
       if (league.slug === leagueSlug) {

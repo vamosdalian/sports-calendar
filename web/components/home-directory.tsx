@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { getHomeEntries, pickLocalized } from "../lib/catalog";
+import { getHomeEntries } from "../lib/catalog";
 import { type Locale, toPath } from "../lib/site";
 
 type HomeDirectoryProps = {
@@ -10,7 +10,7 @@ type HomeDirectoryProps = {
 
 export async function HomeDirectory({ locale }: HomeDirectoryProps) {
   const t = await getTranslations();
-  const catalog = await getHomeEntries();
+  const catalog = await getHomeEntries(locale);
 
   return (
     <main className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 lg:px-8">
@@ -23,15 +23,15 @@ export async function HomeDirectory({ locale }: HomeDirectoryProps) {
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
         {catalog.sports.map((sport) => (
           <article key={sport.slug} className="rounded-panel bg-white px-6 py-6 shadow-panel">
-            <p className="text-xs text-header/60">{pickLocalized(sport.names, locale)}</p>
-            <h2 className="mt-2 text-2xl font-medium text-ink">{pickLocalized(sport.names, locale)}</h2>
+            <p className="text-xs text-header/60">{sport.name}</p>
+            <h2 className="mt-2 text-2xl font-medium text-ink">{sport.name}</h2>
             <div className="mt-6 space-y-4">
               {sport.leagues.map((league) => (
                 <div key={league.slug} className="rounded-3xl border border-line bg-shell/70 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-medium text-ink">{pickLocalized(league.names, locale)}</h3>
-                      <p className="text-sm text-ink/60">{pickLocalized(league.countryNames, locale)}</p>
+                      <h3 className="text-lg font-medium text-ink">{league.name}</h3>
+                      <p className="text-sm text-ink/60">{league.countryName}</p>
                     </div>
                     <span className="rounded-full bg-header px-3 py-1 text-xs uppercase tracking-[0.25em] text-white">
                       {league.slug}

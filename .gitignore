@@ -204,9 +204,22 @@ node_modules/
 web/node_modules/
 web/.next/
 web/out/
+web/.turbo/
+web/.vercel/
+web/tsconfig.tsbuildinfo
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/.env*
+!web/.env.example
 
 # Go
 backend/bin/
+backend/coverage.out
+backend/coverage/
+backend/tmp/
+backend/.env*
+!backend/.env.example
 
 # OS
 .DS_Store

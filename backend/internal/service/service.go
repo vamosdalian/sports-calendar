@@ -44,6 +44,24 @@ type SeasonReference struct {
 	Label string `json:"label"`
 }
 
+type CatalogSummaryResponse struct {
+	UpdatedAt string                `json:"updatedAt"`
+	Sports    []CatalogSportSummary `json:"sports"`
+}
+
+type CatalogSportSummary struct {
+	Slug    string                 `json:"slug"`
+	Name    string                 `json:"name"`
+	Leagues []CatalogLeagueSummary `json:"leagues"`
+}
+
+type CatalogLeagueSummary struct {
+	Slug        string            `json:"slug"`
+	Name        string            `json:"name"`
+	CountryName string            `json:"countryName"`
+	Seasons     []SeasonReference `json:"seasons"`
+}
+
 type SeasonDetail struct {
 	SportSlug                   string                 `json:"sportSlug"`
 	SportNames                  mockdata.LocalizedText `json:"sportNames"`
@@ -99,6 +117,39 @@ func (s *Service) ListSportsByYear(ctx context.Context, year int) (SportsYearRes
 	}
 
 	return SportsYearResponse{Year: year, Items: items, UpdatedAt: catalog.UpdatedAt}, nil
+}
+
+func (s *Service) GetCatalogSummary(ctx context.Context, locale string) (CatalogSummaryResponse, error) {
+	catalog, err := s.repo.Catalog(ctx)
+	if err != nil {
+		return CatalogSummaryResponse{}, err
+	}
+
+	sports := make([]CatalogSportSummary, 0, len(catalog.Sports))
+	for _, sport := range catalog.Sports {
+		leagues := make([]CatalogLeagueSummary, 0, len(sport.Leagues))
+		for _, league := range sport.Leagues {
+			seasons := make([]SeasonReference, 0, len(league.Seasons))
+			for _, season := range league.Seasons {
+				seasons = append(seasons, SeasonReference{Slug: season.Slug, Label: season.Label})
+			}
+
+			leagues = append(leagues, CatalogLeagueSummary{
+				Slug:        league.Slug,
+				Name:        pickLocalized(league.Names, locale),
+				CountryName: pickLocalized(league.CountryNames, locale),
+				Seasons:     seasons,
+			})
+		}
+
+		sports = append(sports, CatalogSportSummary{
+			Slug:    sport.Slug,
+			Name:    pickLocalized(sport.Names, locale),
+			Leagues: leagues,
+		})
+	}
+
+	return CatalogSummaryResponse{UpdatedAt: catalog.UpdatedAt, Sports: sports}, nil
 }
 
 func (s *Service) GetLeagueSeason(ctx context.Context, leagueSlug, seasonSlug string) (SeasonDetail, error) {
@@ -173,4 +224,20 @@ func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, sea
 		DefaultMatchDurationMinutes: detail.DefaultMatchDurationMinutes,
 		Matches:                     detail.Matches,
 	}, time.Now().UTC())
+}
+
+func pickLocalized(value map[string]string, locale string) string {
+	if value == nil {
+		return ""
+	}
+	if text := value[locale]; text != "" {
+		return text
+	}
+	if text := value["en"]; text != "" {
+		return text
+	}
+	for _, text := range value {
+		return text
+	}
+	return ""
 }

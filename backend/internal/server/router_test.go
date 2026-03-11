@@ -49,6 +49,121 @@ func TestSportsByYear(t *testing.T) {
 	if !ok || len(items) == 0 {
 		t.Fatalf("expected sports items in response")
 	}
+	firstItem, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first item object")
+	}
+	if _, exists := firstItem["sportNames"]; exists {
+		t.Fatalf("expected single-field response, got sportNames")
+	}
+	if _, exists := firstItem["sportName"]; !exists {
+		t.Fatalf("expected sportName in default response")
+	}
+}
+
+func TestCatalogSummaryDefaultLocale(t *testing.T) {
+	router := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/catalog", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	sports, ok := payload["sports"].([]any)
+	if !ok || len(sports) == 0 {
+		t.Fatalf("expected sports in response")
+	}
+	firstSport, ok := sports[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected sport object")
+	}
+	if _, exists := firstSport["name"]; !exists {
+		t.Fatalf("expected single-field name")
+	}
+}
+
+func TestSportsByYearLocalized(t *testing.T) {
+	router := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/sports?year=2026&lang=zh", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	items, ok := payload["items"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("expected sports items in response")
+	}
+	firstItem, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first item object")
+	}
+	if _, exists := firstItem["sportNames"]; exists {
+		t.Fatalf("expected localized field sportName, got sportNames")
+	}
+	if _, exists := firstItem["sportName"]; !exists {
+		t.Fatalf("expected sportName in localized response")
+	}
+}
+
+func TestSeasonDetailLocalized(t *testing.T) {
+	router := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/sports/csl/2026?lang=zh", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if _, exists := payload["leagueNames"]; exists {
+		t.Fatalf("expected localized field leagueName, got leagueNames")
+	}
+	if _, exists := payload["leagueName"]; !exists {
+		t.Fatalf("expected leagueName in localized response")
+	}
+}
+
+func TestSeasonDetailDefaultLocaleWhenEmptyLang(t *testing.T) {
+	router := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/sports/csl/2026?lang=", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if _, exists := payload["leagueNames"]; exists {
+		t.Fatalf("expected single-field response, got leagueNames")
+	}
+	if _, exists := payload["leagueName"]; !exists {
+		t.Fatalf("expected leagueName in default response")
+	}
 }
 
 func TestICSFeed(t *testing.T) {

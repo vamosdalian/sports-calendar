@@ -27,6 +27,7 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 
 	router.GET("/api/sports", func(c *gin.Context) {
 		yearText := c.DefaultQuery("year", strconv.Itoa(2026))
+		lang := normalizeLocale(c.Query("lang"))
 		year, err := strconv.Atoi(yearText)
 		if err != nil {
 			httputil.JSONError(c, http.StatusBadRequest, "invalid_year", "year must be numeric")
@@ -39,15 +40,25 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 			return
 		}
 
+		c.JSON(http.StatusOK, localizeSportsYearResponse(payload, lang))
+	})
+
+	router.GET("/api/catalog", func(c *gin.Context) {
+		lang := normalizeLocale(c.Query("lang"))
+		payload, err := svc.GetCatalogSummary(c.Request.Context(), lang)
+		if err != nil {
+			httputil.JSONError(c, http.StatusInternalServerError, "catalog_failed", err.Error())
+			return
+		}
 		c.JSON(http.StatusOK, payload)
 	})
 
 	router.GET("/api/sports/:league", func(c *gin.Context) {
-		handleLeagueDetail(c, svc, c.Param("league"), "")
+		handleLeagueDetail(c, svc, c.Param("league"), "", normalizeLocale(c.Query("lang")))
 	})
 
 	router.GET("/api/sports/:league/:season", func(c *gin.Context) {
-		handleLeagueDetail(c, svc, c.Param("league"), c.Param("season"))
+		handleLeagueDetail(c, svc, c.Param("league"), c.Param("season"), normalizeLocale(c.Query("lang")))
 	})
 
 	router.GET("/ics/:sport/:league/:season/matches.ics", func(c *gin.Context) {
@@ -70,7 +81,7 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	return router
 }
 
-func handleLeagueDetail(c *gin.Context, svc *service.Service, league, season string) {
+func handleLeagueDetail(c *gin.Context, svc *service.Service, league, season, lang string) {
 	payload, err := svc.GetLeagueSeason(c.Request.Context(), league, season)
 	if err != nil {
 		if err == service.ErrNotFound {
@@ -81,7 +92,14 @@ func handleLeagueDetail(c *gin.Context, svc *service.Service, league, season str
 		return
 	}
 
-	c.JSON(http.StatusOK, payload)
+	c.JSON(http.StatusOK, localizeSeasonDetail(payload, lang))
+}
+
+func normalizeLocale(value string) string {
+	if value == "" {
+		return "en"
+	}
+	return value
 }
 
 func requestLogger(logger *logrus.Logger) gin.HandlerFunc {

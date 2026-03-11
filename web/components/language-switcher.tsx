@@ -1,8 +1,5 @@
 "use client";
-
-"use client";
 import { usePathname, useRouter } from "next/navigation";
-
 import { localeOptions, type Locale } from "../lib/site";
 
 type LanguageSwitcherProps = {

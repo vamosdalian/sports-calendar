@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { getHomeEntries, getSeasonPageData, matchLabel, pickLocalized, type Match } from "../lib/catalog";
+import { getHomeEntries, getSeasonPageData, matchLabel, type Match } from "../lib/catalog";
 import { localizedDateLocale, locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { YearLeagueNav } from "./year-league-nav";
@@ -22,7 +22,7 @@ type MonthSpec = {
 };
 
 export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: SeasonPageProps) {
-  const data = await getSeasonPageData(sportSlug, leagueSlug, seasonSlug);
+  const data = await getSeasonPageData(sportSlug, leagueSlug, seasonSlug, locale);
   if (!data) {
     notFound();
   }
@@ -32,14 +32,14 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
     locales.map((entry) => [entry, toPath(entry, sportSlug, leagueSlug, seasonSlug)]),
   ) as Record<Locale, string>;
   const monthSpecs = buildMonthSpecs(data.season.slug, data.season.matches);
-  const catalog = await getHomeEntries();
+  const catalog = await getHomeEntries(locale);
   const yearOptions = collectSeasonSlugs(catalog);
   const selectedYear = data.season.slug;
   const yearLabel = t("yearLabel");
   const competitionLabel = t("competitionLabel");
   const yearDestinations = buildYearDestinations(catalog, locale, data.sport.slug, data.league.slug);
   const competitions = buildCompetitionsForYear(catalog, locale, selectedYear, sportSlug, leagueSlug);
-  const leagueName = pickLocalized(data.league.names, locale);
+  const leagueName = data.league.name;
   const year = extractPrimaryYear(data.season.slug, data.season.label);
   const pageTitle = t("seasonTitle", { leagueName, year });
   const weekLabels = t.raw("weekDays") as string[];
@@ -85,24 +85,24 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
           </section>
 
           <InfoSection title={t("calendarDescriptionLabel")}>
-            <p className="text-base leading-7 text-ink/75">{pickLocalized(data.season.calendarDescription, locale)}</p>
+            <p className="text-base leading-7 text-ink/75">{data.season.calendarDescription}</p>
             <ul className="mt-4 space-y-2 text-sm text-ink/75">
               {data.season.matches.map((match) => (
                 <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
                   <span className="font-medium text-ink">{formatKickoff(match, locale, data.season.timezone)}</span>
                   <span className="mx-2 text-ink/45">/</span>
-                  <span>{matchLabel(match, locale)}</span>
+                  <span>{matchLabel(match)}</span>
                 </li>
               ))}
             </ul>
           </InfoSection>
 
           <InfoSection title={t("dataSourceLabel")}>
-            <p className="text-base leading-7 text-ink/75">{pickLocalized(data.season.dataSourceNote, locale)}</p>
+            <p className="text-base leading-7 text-ink/75">{data.season.dataSourceNote}</p>
           </InfoSection>
 
           <InfoSection title={t("notesLabel")}>
-            <p className="text-base leading-7 text-ink/75">{pickLocalized(data.season.notes, locale)}</p>
+            <p className="text-base leading-7 text-ink/75">{data.season.notes}</p>
           </InfoSection>
         </section>
       </main>
@@ -110,7 +110,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
       <footer className="mx-auto w-full max-w-[1200px] bg-header text-white">
         <div className="flex flex-col gap-2 px-4 py-6 text-sm text-white/80 sm:px-6 lg:px-8">
           <span>{t("siteName")}</span>
-          <span>{pickLocalized(data.league.names, locale)} · {data.season.label}</span>
+          <span>{data.league.name} · {data.season.label}</span>
         </div>
       </footer>
     </div>
@@ -296,7 +296,7 @@ function buildCompetitionsForYear(
 
       result.push({
         key: `${sport.slug}-${league.slug}`,
-        name: pickLocalized(league.names, locale),
+        name: league.name,
         href: toPath(locale, sport.slug, league.slug, season.slug),
         active: sport.slug === currentSportSlug && league.slug === currentLeagueSlug,
       });
