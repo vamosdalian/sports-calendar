@@ -32,7 +32,7 @@ export function LanguageSwitcher({ localePaths }: LanguageSwitcherProps) {
       onChange={(event) => {
         const target = safeLocalePaths[event.target.value as Locale];
         if (target) {
-          router.push(target);
+          router.replace(target);
         }
       }}
     >
