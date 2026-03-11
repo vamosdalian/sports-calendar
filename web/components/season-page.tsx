@@ -44,13 +44,15 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   const competitionLabel = locale === "zh" ? "赛事" : "Competitions";
   const yearDestinations = buildYearDestinations(catalog, locale, data.sport.slug, data.league.slug);
   const competitions = buildCompetitionsForYear(catalog, locale, selectedYear, sportSlug, leagueSlug);
+  const pageTitle = buildSeasonTitle(locale, pickLocalized(data.league.names, locale), data.season.slug, data.season.label);
 
   return (
     <div>
       <header className="mx-auto w-full max-w-[1200px] bg-header text-white">
         <div className="flex items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
-          <Link className="font-serif text-2xl tracking-tight" href={toPath(locale)}>
-            {dictionary.siteName}
+          <Link className="block" href={toPath(locale)}>
+            <span className="block text-sm text-white/58">{dictionary.siteName}</span>
+            <span className="mt-1 block text-lg font-medium text-white">{pageTitle}</span>
           </Link>
           <LanguageSwitcher currentLocale={locale} alternatePath={alternatePath} label={dictionary.languageLabel} />
         </div>
@@ -72,8 +74,8 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
           <section>
             <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-ink/55">{dictionary.calendarLabel}</p>
-                <h2 className="mt-2 font-serif text-3xl leading-tight">{data.season.label}</h2>
+                <p className="text-xs text-ink/55">{dictionary.calendarLabel}</p>
+                <h2 className="mt-1 text-2xl font-medium leading-tight">{data.season.label}</h2>
               </div>
               <p className="text-sm text-ink/60">{dictionary.updatedAtLabel}: {updatedAt}</p>
             </div>
@@ -96,7 +98,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             <ul className="mt-4 space-y-2 text-sm text-ink/75">
               {data.season.matches.map((match) => (
                 <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
-                  <span className="font-semibold text-ink">{formatKickoff(match, locale, data.season.timezone)}</span>
+                  <span className="font-medium text-ink">{formatKickoff(match, locale, data.season.timezone)}</span>
                   <span className="mx-2 text-ink/45">/</span>
                   <span>{matchLabel(match, locale)}</span>
                 </li>
@@ -110,29 +112,6 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
 
           <InfoSection title={dictionary.notesLabel}>
             <p className="text-base leading-7 text-ink/75">{pickLocalized(data.season.notes, locale)}</p>
-          </InfoSection>
-
-          <InfoSection title={dictionary.allMatchesLabel}>
-            <div className="grid gap-3">
-              {data.season.matches.map((match) => (
-                <div key={`detail-${match.id}`} className="rounded-3xl border border-ink/10 bg-white/35 px-4 py-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-base font-semibold text-ink">{matchLabel(match, locale)}</h3>
-                    <span className="rounded-full bg-header px-3 py-1 text-xs uppercase tracking-[0.24em] text-white">
-                      {match.round}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-ink/75">{formatKickoff(match, locale, data.season.timezone)}</p>
-                  <p className="mt-1 text-sm text-ink/75">{dictionary.venueLabel}: {match.venue}</p>
-                  <p className="mt-1 text-sm text-ink/75">{dictionary.cityLabel}: {match.city}</p>
-                  {match.ticket?.openAt ? (
-                    <p className="mt-1 text-sm text-ink/75">
-                      {dictionary.ticketOpenLabel}: {formatDateOnly(match.ticket.openAt, locale, data.season.timezone)}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
           </InfoSection>
         </section>
       </main>
@@ -150,7 +129,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
 function InfoSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mt-6 bg-transparent p-0">
-      <h2 className="bg-aside px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-ink/75">{title}</h2>
+      <h2 className="bg-aside px-5 py-3 text-sm font-medium text-ink/80">{title}</h2>
       <div className="px-5 pt-4">{children}</div>
     </section>
   );
@@ -185,9 +164,9 @@ function MonthCalendar({
   const weekLabels = locale === "zh" ? ["日", "一", "二", "三", "四", "五", "六"] : ["S", "M", "T", "W", "T", "F", "S"];
 
   return (
-    <article className="rounded-3xl border border-ink/10 bg-white/35 p-4 backdrop-blur-sm">
+    <article className="rounded-3xl border border-ink/10 bg-white/35 px-4 py-3 backdrop-blur-sm">
       <h3 className="text-center text-base text-ink">{monthLabel}</h3>
-      <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs uppercase tracking-[0.18em] text-ink/50">
+      <div className="mt-2 grid grid-cols-7 gap-1 text-center text-xs uppercase tracking-[0.18em] text-ink/50">
         {weekLabels.map((label) => (
           <span key={label}>{label}</span>
         ))}
@@ -280,6 +259,25 @@ function formatDateOnly(iso: string, locale: Locale, timezone: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function buildSeasonTitle(locale: Locale, leagueName: string, seasonSlug: string, seasonLabel: string) {
+  const year = extractPrimaryYear(seasonSlug, seasonLabel);
+  return locale === "zh" ? `${leagueName} ${year} 年赛程日历` : `${leagueName} ${year} Season Calendar`;
+}
+
+function extractPrimaryYear(seasonSlug: string, seasonLabel: string): string {
+  const slugMatch = seasonSlug.match(/\d{4}/);
+  if (slugMatch) {
+    return slugMatch[0];
+  }
+
+  const labelMatch = seasonLabel.match(/\d{4}/);
+  if (labelMatch) {
+    return labelMatch[0];
+  }
+
+  return seasonLabel;
 }
 
 function collectSeasonSlugs(catalog: Awaited<ReturnType<typeof getHomeEntries>>) {
