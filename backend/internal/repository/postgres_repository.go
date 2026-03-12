@@ -28,7 +28,7 @@ func (r *PostgresRepository) ListYears(ctx context.Context) ([]int, string, erro
 	rows, err := r.pool.Query(ctx, `
 		SELECT DISTINCT year
 		FROM (
-			SELECT generate_series(start_year, end_year) AS year
+			SELECT generate_series(start_year::integer, end_year::integer) AS year
 			FROM seasons
 		) AS expanded
 		ORDER BY year DESC
@@ -285,8 +285,9 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 		if awayTeamSlug != nil {
 			match.AwayTeam = &domain.Team{Slug: *awayTeamSlug, Names: decodeLocalizedText(awayTeamNamesRaw)}
 		}
-		if ticketOpenAt != nil || ticketURL != nil || len(ticketChannelRaw) > 0 {
-			match.Ticket = &domain.Ticket{ChannelNames: decodeLocalizedText(ticketChannelRaw)}
+		channelNames := decodeLocalizedText(ticketChannelRaw)
+		if ticketOpenAt != nil || ticketURL != nil || len(channelNames) > 0 {
+			match.Ticket = &domain.Ticket{ChannelNames: channelNames}
 			if ticketOpenAt != nil {
 				match.Ticket.OpenAt = ticketOpenAt.UTC().Format(time.RFC3339)
 			}
