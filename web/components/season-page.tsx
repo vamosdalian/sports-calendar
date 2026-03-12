@@ -83,7 +83,6 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
                   locale={locale}
                   matches={data.season.matches}
                   month={month}
-                  timezone={data.season.timezone}
                   weekLabels={weekLabels}
                 />
               ))}
@@ -95,7 +94,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             <ul className="mt-4 space-y-2 text-sm text-ink/75">
               {data.season.matches.map((match) => (
                 <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
-                  <span className="font-medium text-ink">{formatKickoff(match, locale, data.season.timezone)}</span>
+                  <span className="font-medium text-ink">{formatKickoff(match, locale)}</span>
                   <span className="mx-2 text-ink/45">/</span>
                   <span>{matchLabel(match)}</span>
                 </li>
@@ -136,13 +135,11 @@ function MonthCalendar({
   locale,
   matches,
   month,
-  timezone,
   weekLabels,
 }: {
   locale: Locale;
   matches: Match[];
   month: MonthSpec;
-  timezone: string;
   weekLabels: string[];
 }) {
   const monthLabel = new Intl.DateTimeFormat(localizedDateLocale(locale), {
@@ -153,7 +150,7 @@ function MonthCalendar({
   const days = buildCalendarCells(month.year, month.monthIndex);
   const dots = new Map<string, number>();
   for (const match of matches) {
-    const parts = getDateParts(match.startsAt, timezone);
+    const parts = getDateParts(match.startsAt);
     if (parts.year === month.year && parts.monthIndex === month.monthIndex) {
       const key = `${parts.year}-${parts.monthIndex}-${parts.day}`;
       dots.set(key, (dots.get(key) ?? 0) + 1);
@@ -222,9 +219,8 @@ function buildCalendarCells(year: number, monthIndex: number) {
   return cells;
 }
 
-function getDateParts(iso: string, timezone: string) {
+function getDateParts(iso: string) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
     year: "numeric",
     month: "numeric",
     day: "numeric",
@@ -236,26 +232,14 @@ function getDateParts(iso: string, timezone: string) {
   return { year, monthIndex, day };
 }
 
-function formatKickoff(match: Match, locale: Locale, timezone: string) {
+function formatKickoff(match: Match, locale: Locale) {
   return new Intl.DateTimeFormat(localizedDateLocale(locale), {
-    timeZone: timezone,
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(match.startsAt));
-}
-
-function formatDateOnly(iso: string, locale: Locale, timezone: string) {
-  return new Intl.DateTimeFormat(localizedDateLocale(locale), {
-    timeZone: timezone,
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
 }
 
 function extractPrimaryYear(seasonSlug: string, seasonLabel: string): string {

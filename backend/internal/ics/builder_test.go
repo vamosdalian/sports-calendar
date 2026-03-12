@@ -21,12 +21,13 @@ func TestBuildCalendar(t *testing.T) {
 		Matches: []domain.Match{
 			{
 				ID:       "csl-2026-r1-guoan-shenhua",
-				Round:    "Round 1",
-				Title:    domain.LocalizedText{"en": "Beijing Guoan vs Shanghai Shenhua"},
+				Round:    domain.LocalizedText{"en": "Round 1"},
 				StartsAt: "2026-03-14T11:35:00Z",
 				Status:   "scheduled",
-				Venue:    "Workers Stadium",
-				City:     "Beijing",
+				Venue:    domain.LocalizedText{"en": "Workers Stadium"},
+				City:     domain.LocalizedText{"en": "Beijing"},
+				HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan"}},
+				AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua"}},
 			},
 		},
 	}, time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC))

@@ -39,10 +39,9 @@ func (fakeRepository) ListSportsByYear(_ context.Context, year int) ([]domain.Sp
 			SportNames: domain.LocalizedText{"en": "Football", "zh": "足球"},
 			Leagues: []domain.LeagueSeasonReference{
 				{
-					LeagueSlug:   "csl",
-					LeagueNames:  domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
-					CountryNames: domain.LocalizedText{"en": "China", "zh": "中国"},
-					Seasons:      []domain.SeasonReference{{Slug: "2026", Label: "2026"}},
+					LeagueSlug:  "csl",
+					LeagueNames: domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+					Seasons:     []domain.SeasonReference{{Slug: "2026", Label: "2026"}},
 				},
 			},
 		},
@@ -65,10 +64,8 @@ func (fakeRepository) GetLeagueSeason(_ context.Context, leagueSlug, seasonSlug 
 		SportNames:                  domain.LocalizedText{"en": "Football", "zh": "足球"},
 		LeagueSlug:                  "csl",
 		LeagueNames:                 domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
-		CountryNames:                domain.LocalizedText{"en": "China", "zh": "中国"},
 		SeasonSlug:                  "2026",
 		SeasonLabel:                 "2026",
-		Timezone:                    "Asia/Shanghai",
 		DefaultMatchDurationMinutes: 120,
 		AvailableSeasons:            []domain.SeasonReference{{Slug: "2026", Label: "2026"}},
 		CalendarDescription:         domain.LocalizedText{"en": "Season calendar", "zh": "赛程日历"},
@@ -77,15 +74,13 @@ func (fakeRepository) GetLeagueSeason(_ context.Context, leagueSlug, seasonSlug 
 		Matches: []domain.Match{
 			{
 				ID:       "csl-2026-r1-guoan-shenhua",
-				Round:    "Round 1",
-				Title:    domain.LocalizedText{"en": "Beijing Guoan vs Shanghai Shenhua", "zh": "北京国安 vs 上海申花"},
+				Round:    domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
 				StartsAt: "2026-03-14T11:35:00Z",
 				Status:   "scheduled",
-				Venue:    "Workers Stadium",
-				City:     "Beijing",
+				Venue:    domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
+				City:     domain.LocalizedText{"en": "Beijing", "zh": "北京"},
 				HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
 				AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
-				Ticket:   &domain.Ticket{OpenAt: "2026-03-10T02:00:00Z", URL: "https://tickets.example.com/csl/guoan-shenhua", ChannelNames: domain.LocalizedText{"en": "Official Ticketing", "zh": "官方票务"}},
 			},
 		},
 		UpdatedAt: "2026-03-10T00:00:00Z",
@@ -195,6 +190,12 @@ func TestSeasonDetailLocalized(t *testing.T) {
 	}
 	if _, exists := payload["leagueName"]; !exists {
 		t.Fatalf("expected leagueName in localized response")
+	}
+	if _, exists := payload["countryName"]; exists {
+		t.Fatalf("expected countryName to be removed")
+	}
+	if _, exists := payload["timezone"]; exists {
+		t.Fatalf("expected timezone to be removed")
 	}
 }
 

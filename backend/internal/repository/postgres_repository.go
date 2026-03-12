@@ -59,7 +59,7 @@ func (r *PostgresRepository) ListYears(ctx context.Context) ([]int, string, erro
 
 func (r *PostgresRepository) ListSportsByYear(ctx context.Context, year int) ([]domain.SportsYearItem, string, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT s.slug, s.name, l.slug, l.name, l.country_name, se.slug, se.label
+		SELECT s.slug, s.name, l.slug, l.name, se.slug, se.label
 		FROM sports s
 		JOIN leagues l ON l.sport_id = s.id
 		JOIN seasons se ON se.league_id = l.id
@@ -77,15 +77,14 @@ func (r *PostgresRepository) ListSportsByYear(ctx context.Context, year int) ([]
 
 	for rows.Next() {
 		var (
-			sportSlug       string
-			sportNamesRaw   []byte
-			leagueSlug      string
-			leagueNamesRaw  []byte
-			countryNamesRaw []byte
-			seasonSlug      string
-			seasonLabel     string
+			sportSlug      string
+			sportNamesRaw  []byte
+			leagueSlug     string
+			leagueNamesRaw []byte
+			seasonSlug     string
+			seasonLabel    string
 		)
-		if scanErr := rows.Scan(&sportSlug, &sportNamesRaw, &leagueSlug, &leagueNamesRaw, &countryNamesRaw, &seasonSlug, &seasonLabel); scanErr != nil {
+		if scanErr := rows.Scan(&sportSlug, &sportNamesRaw, &leagueSlug, &leagueNamesRaw, &seasonSlug, &seasonLabel); scanErr != nil {
 			return nil, "", fmt.Errorf("scan sports by year row: %w", scanErr)
 		}
 
@@ -104,10 +103,9 @@ func (r *PostgresRepository) ListSportsByYear(ctx context.Context, year int) ([]
 		leagueIndex, exists := leagueIndexes[leagueKey]
 		if !exists {
 			items[sportIndex].Leagues = append(items[sportIndex].Leagues, domain.LeagueSeasonReference{
-				LeagueSlug:   leagueSlug,
-				LeagueNames:  decodeLocalizedText(leagueNamesRaw),
-				CountryNames: decodeLocalizedText(countryNamesRaw),
-				Seasons:      make([]domain.SeasonReference, 0),
+				LeagueSlug:  leagueSlug,
+				LeagueNames: decodeLocalizedText(leagueNamesRaw),
+				Seasons:     make([]domain.SeasonReference, 0),
 			})
 			leagueIndex = len(items[sportIndex].Leagues) - 1
 			leagueIndexes[leagueKey] = leagueIndex
@@ -131,21 +129,33 @@ func (r *PostgresRepository) ListSportsByYear(ctx context.Context, year int) ([]
 
 func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
 	var (
-		leagueID        int64
-		sportID         int64
-		sportSlug       string
-		sportNamesRaw   []byte
-		leagueNamesRaw  []byte
-		countryNamesRaw []byte
-		leagueUpdatedAt time.Time
+		leagueID               int64
+		sportID                int64
+		sportSlug              string
+		sportNamesRaw          []byte
+		leagueNamesRaw         []byte
+		calendarDescriptionRaw []byte
+		dataSourceNoteRaw      []byte
+		notesRaw               []byte
+		leagueUpdatedAt        time.Time
 	)
 
 	err := r.pool.QueryRow(ctx, `
-		SELECT l.id, s.id, s.slug, s.name, l.name, l.country_name, GREATEST(s.updated_at, l.updated_at)
+		SELECT l.id, s.id, s.slug, s.name, l.name, l.calendar_description, l.data_source_note, l.notes, GREATEST(s.updated_at, l.updated_at)
 		FROM leagues l
 		JOIN sports s ON s.id = l.sport_id
 		WHERE l.slug = $1
-	`, leagueSlug).Scan(&leagueID, &sportID, &sportSlug, &sportNamesRaw, &leagueNamesRaw, &countryNamesRaw, &leagueUpdatedAt)
+	`, leagueSlug).Scan(
+		&leagueID,
+		&sportID,
+		&sportSlug,
+		&sportNamesRaw,
+		&leagueNamesRaw,
+		&calendarDescriptionRaw,
+		&dataSourceNoteRaw,
+		&notesRaw,
+		&leagueUpdatedAt,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.SeasonDetail{}, domain.ErrNotFound
@@ -157,16 +167,12 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 		id                          int64
 		slug                        string
 		label                       string
-		timezone                    string
 		defaultMatchDurationMinutes int
-		calendarDescription         domain.LocalizedText
-		dataSourceNote              domain.LocalizedText
-		notes                       domain.LocalizedText
 		updatedAt                   time.Time
 	}
 
 	seasonRows, err := r.pool.Query(ctx, `
-		SELECT id, slug, label, timezone, default_match_duration_minutes, calendar_description, data_source_note, notes, updated_at
+		SELECT id, slug, label, default_match_duration_minutes, updated_at
 		FROM seasons
 		WHERE league_id = $1
 		ORDER BY start_year DESC, end_year DESC, slug DESC
@@ -179,28 +185,16 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 	available := make([]domain.SeasonReference, 0)
 	seasons := make([]seasonRecord, 0)
 	for seasonRows.Next() {
-		var (
-			record                 seasonRecord
-			calendarDescriptionRaw []byte
-			dataSourceNoteRaw      []byte
-			notesRaw               []byte
-		)
+		var record seasonRecord
 		if scanErr := seasonRows.Scan(
 			&record.id,
 			&record.slug,
 			&record.label,
-			&record.timezone,
 			&record.defaultMatchDurationMinutes,
-			&calendarDescriptionRaw,
-			&dataSourceNoteRaw,
-			&notesRaw,
 			&record.updatedAt,
 		); scanErr != nil {
 			return domain.SeasonDetail{}, fmt.Errorf("scan season row: %w", scanErr)
 		}
-		record.calendarDescription = decodeLocalizedText(calendarDescriptionRaw)
-		record.dataSourceNote = decodeLocalizedText(dataSourceNoteRaw)
-		record.notes = decodeLocalizedText(notesRaw)
 		seasons = append(seasons, record)
 		available = append(available, domain.SeasonReference{Slug: record.slug, Label: record.label})
 	}
@@ -227,9 +221,8 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 	}
 
 	matchRows, err := r.pool.Query(ctx, `
-		SELECT m.external_id, m.round_name, m.title, m.starts_at, m.status, m.venue, m.city,
-		       ht.slug, ht.name, at.slug, at.name,
-		       m.ticket_open_at, m.ticket_url, m.ticket_channel, m.updated_at
+		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.venue, m.city,
+		       ht.slug, ht.name, at.slug, at.name, m.updated_at
 		FROM matches m
 		LEFT JOIN teams ht ON ht.id = m.home_team_id
 		LEFT JOIN teams at ON at.id = m.away_team_id
@@ -246,54 +239,41 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 	for matchRows.Next() {
 		var (
 			match            domain.Match
-			titleRaw         []byte
+			roundRaw         []byte
 			startsAt         time.Time
+			venueRaw         []byte
+			cityRaw          []byte
 			homeTeamSlug     *string
 			homeTeamNamesRaw []byte
 			awayTeamSlug     *string
 			awayTeamNamesRaw []byte
-			ticketOpenAt     *time.Time
-			ticketURL        *string
-			ticketChannelRaw []byte
 			matchUpdatedAt   time.Time
 		)
 		if scanErr := matchRows.Scan(
 			&match.ID,
-			&match.Round,
-			&titleRaw,
+			&roundRaw,
 			&startsAt,
 			&match.Status,
-			&match.Venue,
-			&match.City,
+			&venueRaw,
+			&cityRaw,
 			&homeTeamSlug,
 			&homeTeamNamesRaw,
 			&awayTeamSlug,
 			&awayTeamNamesRaw,
-			&ticketOpenAt,
-			&ticketURL,
-			&ticketChannelRaw,
 			&matchUpdatedAt,
 		); scanErr != nil {
 			return domain.SeasonDetail{}, fmt.Errorf("scan match row: %w", scanErr)
 		}
 
-		match.Title = decodeLocalizedText(titleRaw)
+		match.Round = decodeLocalizedText(roundRaw)
 		match.StartsAt = startsAt.UTC().Format(time.RFC3339)
+		match.Venue = decodeLocalizedText(venueRaw)
+		match.City = decodeLocalizedText(cityRaw)
 		if homeTeamSlug != nil {
 			match.HomeTeam = &domain.Team{Slug: *homeTeamSlug, Names: decodeLocalizedText(homeTeamNamesRaw)}
 		}
 		if awayTeamSlug != nil {
 			match.AwayTeam = &domain.Team{Slug: *awayTeamSlug, Names: decodeLocalizedText(awayTeamNamesRaw)}
-		}
-		channelNames := decodeLocalizedText(ticketChannelRaw)
-		if ticketOpenAt != nil || ticketURL != nil || len(channelNames) > 0 {
-			match.Ticket = &domain.Ticket{ChannelNames: channelNames}
-			if ticketOpenAt != nil {
-				match.Ticket.OpenAt = ticketOpenAt.UTC().Format(time.RFC3339)
-			}
-			if ticketURL != nil {
-				match.Ticket.URL = *ticketURL
-			}
 		}
 		matches = append(matches, match)
 		lastUpdatedAt = maxTime(lastUpdatedAt, matchUpdatedAt)
@@ -307,15 +287,13 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 		SportNames:                  decodeLocalizedText(sportNamesRaw),
 		LeagueSlug:                  leagueSlug,
 		LeagueNames:                 decodeLocalizedText(leagueNamesRaw),
-		CountryNames:                decodeLocalizedText(countryNamesRaw),
 		SeasonSlug:                  selected.slug,
 		SeasonLabel:                 selected.label,
-		Timezone:                    selected.timezone,
 		DefaultMatchDurationMinutes: selected.defaultMatchDurationMinutes,
 		AvailableSeasons:            available,
-		CalendarDescription:         selected.calendarDescription,
-		DataSourceNote:              selected.dataSourceNote,
-		Notes:                       selected.notes,
+		CalendarDescription:         decodeLocalizedText(calendarDescriptionRaw),
+		DataSourceNote:              decodeLocalizedText(dataSourceNoteRaw),
+		Notes:                       decodeLocalizedText(notesRaw),
 		Matches:                     matches,
 		UpdatedAt:                   lastUpdatedAt.UTC().Format(time.RFC3339),
 	}, nil

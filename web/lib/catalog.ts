@@ -5,12 +5,6 @@ export type Team = {
   name: string;
 };
 
-export type Ticket = {
-  openAt?: string;
-  url?: string;
-  channelName?: string;
-};
-
 export type Match = {
   id: string;
   round: string;
@@ -21,13 +15,11 @@ export type Match = {
   city: string;
   homeTeam?: Team;
   awayTeam?: Team;
-  ticket?: Ticket;
 };
 
 export type Season = {
   slug: string;
   label: string;
-  timezone: string;
   defaultMatchDurationMinutes: number;
   calendarDescription: string;
   dataSourceNote: string;
@@ -43,7 +35,6 @@ export type SeasonReference = {
 export type YearDirectoryLeague = {
   leagueSlug: string;
   leagueName: string;
-  countryName: string;
   seasons: SeasonReference[];
 };
 
@@ -68,7 +59,6 @@ export type SeasonPageData = {
   league: {
     slug: string;
     name: string;
-    countryName: string;
   };
   season: Season;
 };
@@ -119,10 +109,8 @@ type SeasonDetailResponse = {
   sportName: string;
   leagueSlug: string;
   leagueName: string;
-  countryName: string;
   seasonSlug: string;
   seasonLabel: string;
-  timezone: string;
   defaultMatchDurationMinutes: number;
   availableSeasons: SeasonReference[];
   calendarDescription: string;
@@ -169,12 +157,10 @@ export async function getSeasonPageData(
     league: {
       slug: payload.leagueSlug,
       name: payload.leagueName,
-      countryName: payload.countryName,
     },
     season: {
       slug: payload.seasonSlug,
       label: payload.seasonLabel,
-      timezone: payload.timezone,
       defaultMatchDurationMinutes: payload.defaultMatchDurationMinutes,
       calendarDescription: payload.calendarDescription,
       dataSourceNote: payload.dataSourceNote,

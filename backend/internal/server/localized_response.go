@@ -15,10 +15,9 @@ type localizedSportsYearItem struct {
 }
 
 type localizedLeagueSeasonReference struct {
-	LeagueSlug  string                    `json:"leagueSlug"`
-	LeagueName  string                    `json:"leagueName"`
-	CountryName string                    `json:"countryName"`
-	Seasons     []service.SeasonReference `json:"seasons"`
+	LeagueSlug string                    `json:"leagueSlug"`
+	LeagueName string                    `json:"leagueName"`
+	Seasons    []service.SeasonReference `json:"seasons"`
 }
 
 type localizedSeasonDetail struct {
@@ -26,10 +25,8 @@ type localizedSeasonDetail struct {
 	SportName                   string                    `json:"sportName"`
 	LeagueSlug                  string                    `json:"leagueSlug"`
 	LeagueName                  string                    `json:"leagueName"`
-	CountryName                 string                    `json:"countryName"`
 	SeasonSlug                  string                    `json:"seasonSlug"`
 	SeasonLabel                 string                    `json:"seasonLabel"`
-	Timezone                    string                    `json:"timezone"`
 	DefaultMatchDurationMinutes int                       `json:"defaultMatchDurationMinutes"`
 	AvailableSeasons            []service.SeasonReference `json:"availableSeasons"`
 	CalendarDescription         string                    `json:"calendarDescription"`
@@ -40,27 +37,20 @@ type localizedSeasonDetail struct {
 }
 
 type localizedMatch struct {
-	ID       string           `json:"id"`
-	Round    string           `json:"round"`
-	Title    string           `json:"title"`
-	StartsAt string           `json:"startsAt"`
-	Status   string           `json:"status"`
-	Venue    string           `json:"venue"`
-	City     string           `json:"city"`
-	HomeTeam *localizedTeam   `json:"homeTeam,omitempty"`
-	AwayTeam *localizedTeam   `json:"awayTeam,omitempty"`
-	Ticket   *localizedTicket `json:"ticket,omitempty"`
+	ID       string         `json:"id"`
+	Round    string         `json:"round"`
+	Title    string         `json:"title"`
+	StartsAt string         `json:"startsAt"`
+	Status   string         `json:"status"`
+	Venue    string         `json:"venue"`
+	City     string         `json:"city"`
+	HomeTeam *localizedTeam `json:"homeTeam,omitempty"`
+	AwayTeam *localizedTeam `json:"awayTeam,omitempty"`
 }
 
 type localizedTeam struct {
 	Slug string `json:"slug"`
 	Name string `json:"name"`
-}
-
-type localizedTicket struct {
-	OpenAt      string `json:"openAt,omitempty"`
-	URL         string `json:"url,omitempty"`
-	ChannelName string `json:"channelName,omitempty"`
 }
 
 func localizeSportsYearResponse(payload service.SportsYearResponse, locale string) localizedSportsYearResponse {
@@ -69,10 +59,9 @@ func localizeSportsYearResponse(payload service.SportsYearResponse, locale strin
 		leagues := make([]localizedLeagueSeasonReference, 0, len(item.Leagues))
 		for _, league := range item.Leagues {
 			leagues = append(leagues, localizedLeagueSeasonReference{
-				LeagueSlug:  league.LeagueSlug,
-				LeagueName:  pickLocalizedText(league.LeagueNames, locale),
-				CountryName: pickLocalizedText(league.CountryNames, locale),
-				Seasons:     league.Seasons,
+				LeagueSlug: league.LeagueSlug,
+				LeagueName: pickLocalizedText(league.LeagueNames, locale),
+				Seasons:    league.Seasons,
 			})
 		}
 
@@ -95,12 +84,12 @@ func localizeSeasonDetail(payload service.SeasonDetail, locale string) localized
 	for _, match := range payload.Matches {
 		localized := localizedMatch{
 			ID:       match.ID,
-			Round:    match.Round,
-			Title:    pickLocalizedText(match.Title, locale),
+			Round:    pickLocalizedText(match.Round, locale),
+			Title:    match.DisplayTitle(locale),
 			StartsAt: match.StartsAt,
 			Status:   match.Status,
-			Venue:    match.Venue,
-			City:     match.City,
+			Venue:    pickLocalizedText(match.Venue, locale),
+			City:     pickLocalizedText(match.City, locale),
 		}
 
 		if match.HomeTeam != nil {
@@ -117,14 +106,6 @@ func localizeSeasonDetail(payload service.SeasonDetail, locale string) localized
 			}
 		}
 
-		if match.Ticket != nil {
-			localized.Ticket = &localizedTicket{
-				OpenAt:      match.Ticket.OpenAt,
-				URL:         match.Ticket.URL,
-				ChannelName: pickLocalizedText(match.Ticket.ChannelNames, locale),
-			}
-		}
-
 		matches = append(matches, localized)
 	}
 
@@ -133,10 +114,8 @@ func localizeSeasonDetail(payload service.SeasonDetail, locale string) localized
 		SportName:                   pickLocalizedText(payload.SportNames, locale),
 		LeagueSlug:                  payload.LeagueSlug,
 		LeagueName:                  pickLocalizedText(payload.LeagueNames, locale),
-		CountryName:                 pickLocalizedText(payload.CountryNames, locale),
 		SeasonSlug:                  payload.SeasonSlug,
 		SeasonLabel:                 payload.SeasonLabel,
-		Timezone:                    payload.Timezone,
 		DefaultMatchDurationMinutes: payload.DefaultMatchDurationMinutes,
 		AvailableSeasons:            payload.AvailableSeasons,
 		CalendarDescription:         pickLocalizedText(payload.CalendarDescription, locale),
