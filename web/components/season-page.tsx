@@ -7,6 +7,8 @@ import { getTranslations } from "next-intl/server";
 import { getAvailableYears, getLeaguesByYear, getSeasonPageData, matchLabel, type Match, type YearDirectory } from "../lib/catalog";
 import { localizedDateLocale, locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
+import { LocalizedMatchTime } from "./localized-match-time";
+import { LocalizedMonthCalendars } from "./localized-month-calendars";
 import { YearLeagueNav } from "./year-league-nav";
 
 type SeasonPageProps = {
@@ -14,11 +16,6 @@ type SeasonPageProps = {
   sportSlug: string;
   leagueSlug: string;
   seasonSlug: string;
-};
-
-type MonthSpec = {
-  year: number;
-  monthIndex: number;
 };
 
 export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: SeasonPageProps) {
@@ -31,7 +28,6 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   const localePaths = Object.fromEntries(
     locales.map((entry) => [entry, toPath(entry, sportSlug, leagueSlug, seasonSlug)]),
   ) as Record<Locale, string>;
-  const monthSpecs = buildMonthSpecs(data.season.slug, data.season.matches);
   const availableYears = await getAvailableYears();
   const primaryYear = Number(extractPrimaryYear(data.season.slug, data.season.label));
   const selectedYear = Number.isFinite(primaryYear) ? primaryYear : new Date().getFullYear();
@@ -76,17 +72,12 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
 
         <section className="bg-panel px-5 py-6 text-ink sm:px-6 lg:rounded-r-panel lg:py-8">
           <section>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              {monthSpecs.map((month) => (
-                <MonthCalendar
-                  key={`${month.year}-${month.monthIndex}`}
-                  locale={locale}
-                  matches={data.season.matches}
-                  month={month}
-                  weekLabels={weekLabels}
-                />
-              ))}
-            </div>
+            <LocalizedMonthCalendars
+              locale={locale}
+              matches={data.season.matches}
+              seasonSlug={data.season.slug}
+              weekLabels={weekLabels}
+            />
           </section>
 
           <InfoSection title={t("calendarDescriptionLabel")}>
@@ -94,7 +85,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             <ul className="mt-4 space-y-2 text-sm text-ink/75">
               {data.season.matches.map((match) => (
                 <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
-                  <span className="font-medium text-ink">{formatKickoff(match, locale)}</span>
+                  <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
                   <span className="mx-2 text-ink/45">/</span>
                   <span>{matchLabel(match)}</span>
                 </li>
@@ -129,117 +120,6 @@ function InfoSection({ title, children }: { title: string; children: ReactNode }
       <div className="px-5 pt-4">{children}</div>
     </section>
   );
-}
-
-function MonthCalendar({
-  locale,
-  matches,
-  month,
-  weekLabels,
-}: {
-  locale: Locale;
-  matches: Match[];
-  month: MonthSpec;
-  weekLabels: string[];
-}) {
-  const monthLabel = new Intl.DateTimeFormat(localizedDateLocale(locale), {
-    timeZone: "UTC",
-    month: "long",
-  }).format(new Date(Date.UTC(month.year, month.monthIndex, 1)));
-
-  const days = buildCalendarCells(month.year, month.monthIndex);
-  const dots = new Map<string, number>();
-  for (const match of matches) {
-    const parts = getDateParts(match.startsAt);
-    if (parts.year === month.year && parts.monthIndex === month.monthIndex) {
-      const key = `${parts.year}-${parts.monthIndex}-${parts.day}`;
-      dots.set(key, (dots.get(key) ?? 0) + 1);
-    }
-  }
-
-  return (
-    <article className="rounded-3xl border border-ink/10 bg-white/35 px-4 py-3 backdrop-blur-sm">
-      <h3 className="text-center text-sm text-ink">{monthLabel}</h3>
-      <div className="mt-2 grid grid-cols-7 gap-1 text-center text-xs uppercase tracking-[0.18em] text-ink/50">
-        {weekLabels.map((label) => (
-          <span key={label}>{label}</span>
-        ))}
-      </div>
-      <div className="mt-2 grid grid-cols-7 gap-1 text-sm text-ink">
-        {days.map((day, index) => {
-          if (day === null) {
-            return <div key={`empty-${index}`} className="aspect-square rounded-2xl bg-white/15" />;
-          }
-
-          const key = `${month.year}-${month.monthIndex}-${day}`;
-          const count = dots.get(key) ?? 0;
-
-          return (
-            <div
-              key={key}
-              className={`flex aspect-square flex-col items-center justify-center rounded-2xl ${count > 0 ? "bg-header text-white" : "bg-white/50"}`}
-            >
-              <span>{day}</span>
-            </div>
-          );
-        })}
-      </div>
-    </article>
-  );
-}
-
-function buildMonthSpecs(seasonSlug: string, matches: Match[]): MonthSpec[] {
-  const range = seasonSlug.split("-");
-  if (range.length === 1) {
-    const year = Number(range[0]);
-    return Array.from({ length: 12 }, (_, index) => ({ year, monthIndex: index }));
-  }
-
-  const firstMatch = matches[0] ? new Date(matches[0].startsAt) : new Date(Date.UTC(Number(range[0]), 7, 1));
-  const startYear = firstMatch.getUTCFullYear();
-  const startMonth = firstMatch.getUTCMonth();
-  return Array.from({ length: 12 }, (_, index) => {
-    const current = new Date(Date.UTC(startYear, startMonth + index, 1));
-    return { year: current.getUTCFullYear(), monthIndex: current.getUTCMonth() };
-  });
-}
-
-function buildCalendarCells(year: number, monthIndex: number) {
-  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
-  const firstDay = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay();
-  const cells: Array<number | null> = Array.from({ length: firstDay }, () => null);
-
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push(day);
-  }
-
-  while (cells.length < 42) {
-    cells.push(null);
-  }
-  return cells;
-}
-
-function getDateParts(iso: string) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-  });
-  const parts = formatter.formatToParts(new Date(iso));
-  const year = Number(parts.find((part) => part.type === "year")?.value ?? 0);
-  const monthIndex = Number(parts.find((part) => part.type === "month")?.value ?? 1) - 1;
-  const day = Number(parts.find((part) => part.type === "day")?.value ?? 1);
-  return { year, monthIndex, day };
-}
-
-function formatKickoff(match: Match, locale: Locale) {
-  return new Intl.DateTimeFormat(localizedDateLocale(locale), {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(match.startsAt));
 }
 
 function extractPrimaryYear(seasonSlug: string, seasonLabel: string): string {

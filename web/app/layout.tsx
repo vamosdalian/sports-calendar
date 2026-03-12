@@ -6,6 +6,8 @@ import { getLocale, getMessages } from "next-intl/server";
 
 import "./globals.css";
 
+const DISPLAY_TIME_ZONE = "UTC";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://sports-calendar.com"),
   title: "sports-calendar.com",
@@ -24,7 +26,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang={locale}>
       <body className="font-sans antialiased">
-        <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider messages={messages} timeZone={DISPLAY_TIME_ZONE}>
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );
