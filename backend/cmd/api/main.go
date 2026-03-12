@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
@@ -30,9 +32,21 @@ func main() {
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{TimestampFormat: time.RFC3339})
 
-	repo, err := repository.NewMockRepository(cfg.Data.MockFile)
+	pool, err := pgxpool.New(context.Background(), cfg.Database.ConnectionString())
 	if err != nil {
-		logger.WithError(err).Fatal("load mock catalog")
+		logger.WithError(err).Fatal("connect postgres")
+	}
+	defer pool.Close()
+
+	pingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := pool.Ping(pingCtx); err != nil {
+		logger.WithError(err).Fatal("ping postgres")
+	}
+
+	repo, err := repository.NewPostgresRepository(pool)
+	if err != nil {
+		logger.WithError(err).Fatal("create postgres repository")
 	}
 
 	svc := service.New(repo)

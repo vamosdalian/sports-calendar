@@ -7,14 +7,14 @@ import (
 	"time"
 
 	ical "github.com/emersion/go-ical"
-	"github.com/vamosdalian/sports-calendar/backend/internal/mockdata"
+	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 )
 
 func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 	calendar := ical.NewCalendar()
 	calendar.Props.SetText(ical.PropProductID, "-//sports-calendar//season-feed//EN")
 	calendar.Props.SetText(ical.PropVersion, "2.0")
-	calendar.Props.SetText(ical.PropName, fmt.Sprintf("%s %s", localized(detail.LeagueNames, "en"), detail.SeasonLabel))
+	calendar.Props.SetText(ical.PropName, fmt.Sprintf("%s %s", domain.PickLocalized(detail.LeagueNames, "en"), detail.SeasonLabel))
 
 	for _, match := range detail.Matches {
 		event := ical.NewEvent()
@@ -53,7 +53,7 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func buildDescription(match mockdata.Match) string {
+func buildDescription(match domain.Match) string {
 	description := fmt.Sprintf("Round: %s\nStatus: %s\nVenue: %s\nCity: %s", match.Round, match.Status, match.Venue, match.City)
 	if match.Ticket != nil {
 		description += fmt.Sprintf("\nTicket URL: %s", match.Ticket.URL)
@@ -75,17 +75,4 @@ func normalizeStatus(status string) string {
 	default:
 		return "CONFIRMED"
 	}
-}
-
-func localized(value mockdata.LocalizedText, locale string) string {
-	if text := value[locale]; text != "" {
-		return text
-	}
-	if text := value["en"]; text != "" {
-		return text
-	}
-	for _, text := range value {
-		return text
-	}
-	return ""
 }

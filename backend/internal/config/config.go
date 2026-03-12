@@ -2,8 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
-	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -11,7 +11,7 @@ import (
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	RateLimit RateLimitConfig `yaml:"rateLimit"`
-	Data      DataConfig      `yaml:"data"`
+	Database  DatabaseConfig  `yaml:"database"`
 }
 
 type ServerConfig struct {
@@ -23,8 +23,13 @@ type RateLimitConfig struct {
 	Burst             int     `yaml:"burst"`
 }
 
-type DataConfig struct {
-	MockFile string `yaml:"mockFile"`
+type DatabaseConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	DBName   string `yaml:"dbname"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	SSLMode  string `yaml:"sslmode"`
 }
 
 func Load(path string) (Config, error) {
@@ -48,10 +53,29 @@ func Load(path string) (Config, error) {
 		cfg.RateLimit.Burst = 16
 	}
 
-	configDir := filepath.Dir(path)
-	if cfg.Data.MockFile != "" && !filepath.IsAbs(cfg.Data.MockFile) {
-		cfg.Data.MockFile = filepath.Clean(filepath.Join(configDir, cfg.Data.MockFile))
+	if cfg.Database.Port == 0 {
+		cfg.Database.Port = 5432
+	}
+	if cfg.Database.SSLMode == "" {
+		cfg.Database.SSLMode = "disable"
+	}
+	if cfg.Database.Host == "" || cfg.Database.DBName == "" || cfg.Database.User == "" {
+		return Config{}, fmt.Errorf("database host, dbname, and user are required")
 	}
 
 	return cfg, nil
+}
+
+func (c DatabaseConfig) ConnectionString() string {
+	query := url.Values{}
+	query.Set("sslmode", c.SSLMode)
+
+	uri := &url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(c.User, c.Password),
+		Host:     fmt.Sprintf("%s:%d", c.Host, c.Port),
+		Path:     c.DBName,
+		RawQuery: query.Encode(),
+	}
+	return uri.String()
 }

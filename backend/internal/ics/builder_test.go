@@ -2,38 +2,33 @@ package ics_test
 
 import (
 	"bytes"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
 	ical "github.com/emersion/go-ical"
 
+	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 	backendics "github.com/vamosdalian/sports-calendar/backend/internal/ics"
-	"github.com/vamosdalian/sports-calendar/backend/internal/repository"
-	"github.com/vamosdalian/sports-calendar/backend/internal/service"
 )
 
 func TestBuildCalendar(t *testing.T) {
-	_, currentFile, _, _ := runtime.Caller(0)
-	catalogPath := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "shared", "mock", "catalog.json")
-	repo, err := repository.NewMockRepository(filepath.Clean(catalogPath))
-	if err != nil {
-		t.Fatalf("load repository: %v", err)
-	}
-	svc := service.New(repo)
-	detail, err := svc.GetLeagueSeason(t.Context(), "csl", "2026")
-	if err != nil {
-		t.Fatalf("get detail: %v", err)
-	}
-
 	content, err := backendics.BuildCalendar(backendics.CalendarPayload{
-		SportSlug:                   detail.SportSlug,
-		LeagueSlug:                  detail.LeagueSlug,
-		LeagueNames:                 detail.LeagueNames,
-		SeasonLabel:                 detail.SeasonLabel,
-		DefaultMatchDurationMinutes: detail.DefaultMatchDurationMinutes,
-		Matches:                     detail.Matches,
+		SportSlug:                   "football",
+		LeagueSlug:                  "csl",
+		LeagueNames:                 domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+		SeasonLabel:                 "2026",
+		DefaultMatchDurationMinutes: 120,
+		Matches: []domain.Match{
+			{
+				ID:       "csl-2026-r1-guoan-shenhua",
+				Round:    "Round 1",
+				Title:    domain.LocalizedText{"en": "Beijing Guoan vs Shanghai Shenhua"},
+				StartsAt: "2026-03-14T11:35:00Z",
+				Status:   "scheduled",
+				Venue:    "Workers Stadium",
+				City:     "Beijing",
+			},
+		},
 	}, time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("build calendar: %v", err)
@@ -43,7 +38,7 @@ func TestBuildCalendar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode calendar: %v", err)
 	}
-	if got, want := len(decoded.Events()), len(detail.Matches); got != want {
+	if got, want := len(decoded.Events()), 1; got != want {
 		t.Fatalf("event count = %d, want %d", got, want)
 	}
 }

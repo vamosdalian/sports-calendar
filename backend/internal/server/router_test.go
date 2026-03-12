@@ -1,33 +1,95 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
-	"github.com/vamosdalian/sports-calendar/backend/internal/repository"
+	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 	"github.com/vamosdalian/sports-calendar/backend/internal/service"
 )
 
+type fakeRepository struct{}
+
 func testRouter(t *testing.T) *gin.Engine {
 	t.Helper()
-	_, currentFile, _, _ := runtime.Caller(0)
-	catalogPath := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "shared", "mock", "catalog.json")
-	repo, err := repository.NewMockRepository(filepath.Clean(catalogPath))
-	if err != nil {
-		t.Fatalf("load repository: %v", err)
-	}
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
-	return NewRouter(logger, service.New(repo), rate.NewLimiter(rate.Limit(100), 100))
+	return NewRouter(logger, service.New(fakeRepository{}), rate.NewLimiter(rate.Limit(100), 100))
+}
+
+func (fakeRepository) ListYears(_ context.Context) ([]int, string, error) {
+	return []int{2026, 2025}, "2026-03-10T00:00:00Z", nil
+}
+
+func (fakeRepository) ListSportsByYear(_ context.Context, year int) ([]domain.SportsYearItem, string, error) {
+	if year != 2026 {
+		return []domain.SportsYearItem{}, "2026-03-10T00:00:00Z", nil
+	}
+	return []domain.SportsYearItem{
+		{
+			SportSlug:  "football",
+			SportNames: domain.LocalizedText{"en": "Football", "zh": "足球"},
+			Leagues: []domain.LeagueSeasonReference{
+				{
+					LeagueSlug:   "csl",
+					LeagueNames:  domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+					CountryNames: domain.LocalizedText{"en": "China", "zh": "中国"},
+					Seasons:      []domain.SeasonReference{{Slug: "2026", Label: "2026"}},
+				},
+			},
+		},
+	}, "2026-03-10T00:00:00Z", nil
+}
+
+func (fakeRepository) GetLeagueSeason(_ context.Context, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
+	if leagueSlug != "csl" {
+		return domain.SeasonDetail{}, domain.ErrNotFound
+	}
+	selectedSeason := seasonSlug
+	if selectedSeason == "" {
+		selectedSeason = "2026"
+	}
+	if selectedSeason != "2026" {
+		return domain.SeasonDetail{}, domain.ErrNotFound
+	}
+	return domain.SeasonDetail{
+		SportSlug:                   "football",
+		SportNames:                  domain.LocalizedText{"en": "Football", "zh": "足球"},
+		LeagueSlug:                  "csl",
+		LeagueNames:                 domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+		CountryNames:                domain.LocalizedText{"en": "China", "zh": "中国"},
+		SeasonSlug:                  "2026",
+		SeasonLabel:                 "2026",
+		Timezone:                    "Asia/Shanghai",
+		DefaultMatchDurationMinutes: 120,
+		AvailableSeasons:            []domain.SeasonReference{{Slug: "2026", Label: "2026"}},
+		CalendarDescription:         domain.LocalizedText{"en": "Season calendar", "zh": "赛程日历"},
+		DataSourceNote:              domain.LocalizedText{"en": "Test data", "zh": "测试数据"},
+		Notes:                       domain.LocalizedText{"en": "Note", "zh": "备注"},
+		Matches: []domain.Match{
+			{
+				ID:       "csl-2026-r1-guoan-shenhua",
+				Round:    "Round 1",
+				Title:    domain.LocalizedText{"en": "Beijing Guoan vs Shanghai Shenhua", "zh": "北京国安 vs 上海申花"},
+				StartsAt: "2026-03-14T11:35:00Z",
+				Status:   "scheduled",
+				Venue:    "Workers Stadium",
+				City:     "Beijing",
+				HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
+				AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
+				Ticket:   &domain.Ticket{OpenAt: "2026-03-10T02:00:00Z", URL: "https://tickets.example.com/csl/guoan-shenhua", ChannelNames: domain.LocalizedText{"en": "Official Ticketing", "zh": "官方票务"}},
+			},
+		},
+		UpdatedAt: "2026-03-10T00:00:00Z",
+	}, nil
 }
 
 func TestYears(t *testing.T) {

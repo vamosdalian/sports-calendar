@@ -9,7 +9,7 @@ Install these tools first:
 - Node.js `>= 20.9.0`
 - npm `>= 10`
 - Go `1.25.x`
-- Optional: Docker (for image build verification)
+- Docker
 
 Check versions:
 
@@ -22,13 +22,44 @@ go version
 ## 2. Project Structure Used for Testing
 
 - Frontend: `web/` (Next.js App Router)
-- Backend: `backend/` (Gin + go-ical)
-- Shared mock data: `shared/mock/catalog.json`
+- Backend: `backend/` (Gin + PostgreSQL + go-ical)
+- Database init SQL: `database/init/001_postgres_init.sql`
 - Local backend config: `backend/config/config.local.yaml`
 
 ## 3. Backend Local Testing
 
-### 3.1 Run unit tests
+### 3.1 Start PostgreSQL 16 locally
+
+Use a fresh local PostgreSQL container with the init SQL mounted into `docker-entrypoint-initdb.d`:
+
+```bash
+docker run --name sports-calendar-postgres \
+	-e POSTGRES_DB=sports_calendar \
+	-e POSTGRES_USER=sports_calendar \
+	-e POSTGRES_PASSWORD=sports_calendar \
+	-p 5432:5432 \
+	-v /Users/lmc10232/project/sports-calendar/database/init:/docker-entrypoint-initdb.d \
+	-d postgres:16
+```
+
+Useful checks:
+
+```bash
+docker logs sports-calendar-postgres
+docker exec -it sports-calendar-postgres psql -U sports_calendar -d sports_calendar -c '\dt'
+```
+
+Expected tables:
+
+- `sports`
+- `leagues`
+- `seasons`
+- `teams`
+- `matches`
+
+The init SQL inserts a minimal `football / csl / 2026` seed dataset so the API can be smoke-tested immediately.
+
+### 3.2 Run unit tests
 
 ```bash
 cd backend
@@ -37,7 +68,7 @@ go test ./...
 
 Expected result: all tests pass.
 
-### 3.2 Start backend API locally
+### 3.3 Start backend API locally
 
 Use local config (not container config):
 
@@ -48,7 +79,19 @@ go run ./cmd/api -config ./config/config.local.yaml
 
 Default address: `http://localhost:8080`
 
-### 3.3 API smoke tests
+The backend now reads PostgreSQL connection settings from `backend/config/config.local.yaml`:
+
+```yaml
+database:
+	host: localhost
+	port: 5432
+	dbname: sports_calendar
+	user: sports_calendar
+	password: sports_calendar
+	sslmode: disable
+```
+
+### 3.4 API smoke tests
 
 Open a new terminal:
 
@@ -73,6 +116,7 @@ Notes:
 
 - If `jq` is not installed, remove `| jq .`.
 - ICS response should include `Content-Type: text/calendar` and cache headers.
+- `GET /api/sports/csl/2026` should return seeded CSL season data from PostgreSQL, not from JSON mock files.
 
 ## 4. Frontend Local Testing
 
@@ -138,7 +182,8 @@ If you see shell errors like `fork failed: resource temporarily unavailable`, th
 
 Run this after code changes:
 
-1. `cd backend && go test ./...`
-2. `cd web && npm run build`
-3. Manually open at least one `en` route and one `zh` route.
-4. Verify one ICS endpoint responds correctly.
+1. `docker exec -it sports-calendar-postgres psql -U sports_calendar -d sports_calendar -c '\dt'`
+2. `cd backend && go test ./...`
+3. `cd web && npm run build`
+4. Manually open at least one `en` route and one `zh` route.
+5. Verify one ICS endpoint responds correctly.
