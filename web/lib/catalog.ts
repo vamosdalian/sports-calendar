@@ -64,10 +64,11 @@ export type SeasonPageData = {
 };
 
 const apiBaseUrl = process.env.SPORTS_CALENDAR_API_BASE_URL ?? "http://localhost:8080";
+const REVALIDATE_SECONDS = 3600;
 
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    cache: "no-store",
+    next: { revalidate: REVALIDATE_SECONDS },
   });
 
   if (!response.ok) {
@@ -79,7 +80,7 @@ async function fetchJson<T>(path: string): Promise<T> {
 
 async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | null> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    cache: "no-store",
+    next: { revalidate: REVALIDATE_SECONDS },
   });
 
   if (response.status === 404) {
