@@ -103,12 +103,31 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             />
           </section>
 
-          <InfoSection title={t("calendarDescriptionLabel")}>
-            <p className="text-base leading-7 text-ink/75">{data.season.calendarDescription}</p>
-            <div className="mt-4 space-y-4 text-sm text-ink/75">
-              {data.season.groups.map((group) => (
-                <section key={group.key} className="rounded-3xl bg-white/25 px-4 py-4">
-                  <h3 className="text-sm font-medium text-ink">{group.label}</h3>
+          <InfoSection title={t("leagueCalendarLabel")}>
+            <div className="space-y-4 text-sm text-ink/75">
+              {data.season.groups.map((group, index) => (
+                <details
+                  key={group.key}
+                  className="group rounded-3xl bg-white/25 px-4 py-4"
+                  open={index === 0}
+                >
+                  <summary className="flex cursor-pointer list-none items-center text-sm font-medium text-ink">
+                    <span className="flex items-center gap-3">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 16 16"
+                        className="h-4 w-4 shrink-0 text-ink/60 transition group-open:rotate-90"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M6 3.5L10.5 8L6 12.5" />
+                      </svg>
+                      <span>{group.label}</span>
+                    </span>
+                  </summary>
                   <ul className="mt-3 space-y-2">
                     {group.matches.map((match) => (
                       <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
@@ -118,9 +137,13 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
                       </li>
                     ))}
                   </ul>
-                </section>
+                </details>
               ))}
             </div>
+          </InfoSection>
+
+          <InfoSection title={t("leagueDescriptionLabel")}>
+            <p className="text-base leading-7 text-ink/75">{data.season.calendarDescription}</p>
           </InfoSection>
 
           <InfoSection title={t("dataSourceLabel")}>

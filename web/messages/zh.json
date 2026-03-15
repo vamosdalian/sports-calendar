@@ -6,6 +6,8 @@
   "seasonLabel": "赛季",
   "matchesLabel": "本赛季比赛",
   "calendarLabel": "日历",
+  "leagueCalendarLabel": "赛事日历",
+  "leagueDescriptionLabel": "赛事描述",
   "calendarDescriptionLabel": "日历描述",
   "dataSourceLabel": "数据源说明",
   "notesLabel": "备注",
