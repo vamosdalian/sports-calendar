@@ -25,56 +25,27 @@ func NewPostgresRepository(pool *pgxpool.Pool) (*PostgresRepository, error) {
 	return &PostgresRepository{pool: pool}, nil
 }
 
-func (r *PostgresRepository) ListYears(ctx context.Context) ([]int, string, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT year
-		FROM (
-			SELECT generate_series(start_year::integer, end_year::integer) AS year
-			FROM seasons
-		) AS expanded
-		ORDER BY year DESC
-	`)
-	if err != nil {
-		return nil, "", fmt.Errorf("list years: %w", err)
-	}
-	defer rows.Close()
-
-	years := make([]int, 0)
-	for rows.Next() {
-		var year int
-		if scanErr := rows.Scan(&year); scanErr != nil {
-			return nil, "", fmt.Errorf("scan year: %w", scanErr)
-		}
-		years = append(years, year)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, "", fmt.Errorf("iterate years: %w", err)
-	}
-
-	updatedAt, err := r.latestUpdatedAt(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	return years, updatedAt, nil
-}
-
-func (r *PostgresRepository) ListSportsByYear(ctx context.Context, year int) ([]domain.SportsYearItem, string, error) {
+func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT s.slug, s.name, l.slug, l.name, se.slug, se.label
 		FROM sports s
 		JOIN leagues l ON l.sport_id = s.id
-		JOIN seasons se ON se.league_id = l.id
-		WHERE se.start_year <= $1 AND se.end_year >= $1
-		ORDER BY s.slug ASC, l.slug ASC, se.start_year DESC, se.end_year DESC, se.slug DESC
-	`, year)
+		JOIN LATERAL (
+			SELECT slug, label
+			FROM seasons
+			WHERE league_id = l.id
+			ORDER BY start_year DESC, end_year DESC, slug DESC
+			LIMIT 1
+		) se ON TRUE
+		ORDER BY s.slug ASC, l.slug ASC
+	`)
 	if err != nil {
-		return nil, "", fmt.Errorf("list sports by year: %w", err)
+		return nil, "", fmt.Errorf("list leagues: %w", err)
 	}
 	defer rows.Close()
 
-	items := make([]domain.SportsYearItem, 0)
+	items := make([]domain.SportDirectoryItem, 0)
 	sportIndexes := map[string]int{}
-	leagueIndexes := map[string]int{}
 
 	for rows.Next() {
 		var (
@@ -86,39 +57,31 @@ func (r *PostgresRepository) ListSportsByYear(ctx context.Context, year int) ([]
 			seasonLabel    string
 		)
 		if scanErr := rows.Scan(&sportSlug, &sportNamesRaw, &leagueSlug, &leagueNamesRaw, &seasonSlug, &seasonLabel); scanErr != nil {
-			return nil, "", fmt.Errorf("scan sports by year row: %w", scanErr)
+			return nil, "", fmt.Errorf("scan leagues row: %w", scanErr)
 		}
 
 		sportIndex, exists := sportIndexes[sportSlug]
 		if !exists {
-			items = append(items, domain.SportsYearItem{
+			items = append(items, domain.SportDirectoryItem{
 				SportSlug:  sportSlug,
 				SportNames: decodeLocalizedText(sportNamesRaw),
-				Leagues:    make([]domain.LeagueSeasonReference, 0),
+				Leagues:    make([]domain.LeagueReference, 0),
 			})
 			sportIndex = len(items) - 1
 			sportIndexes[sportSlug] = sportIndex
 		}
 
-		leagueKey := sportSlug + ":" + leagueSlug
-		leagueIndex, exists := leagueIndexes[leagueKey]
-		if !exists {
-			items[sportIndex].Leagues = append(items[sportIndex].Leagues, domain.LeagueSeasonReference{
-				LeagueSlug:  leagueSlug,
-				LeagueNames: decodeLocalizedText(leagueNamesRaw),
-				Seasons:     make([]domain.SeasonReference, 0),
-			})
-			leagueIndex = len(items[sportIndex].Leagues) - 1
-			leagueIndexes[leagueKey] = leagueIndex
-		}
-
-		items[sportIndex].Leagues[leagueIndex].Seasons = append(items[sportIndex].Leagues[leagueIndex].Seasons, domain.SeasonReference{
-			Slug:  seasonSlug,
-			Label: seasonLabel,
+		items[sportIndex].Leagues = append(items[sportIndex].Leagues, domain.LeagueReference{
+			LeagueSlug:  leagueSlug,
+			LeagueNames: decodeLocalizedText(leagueNamesRaw),
+			DefaultSeason: domain.SeasonReference{
+				Slug:  seasonSlug,
+				Label: seasonLabel,
+			},
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, "", fmt.Errorf("iterate sports by year rows: %w", err)
+		return nil, "", fmt.Errorf("iterate leagues rows: %w", err)
 	}
 
 	updatedAt, err := r.latestUpdatedAt(ctx)
@@ -128,11 +91,77 @@ func (r *PostgresRepository) ListSportsByYear(ctx context.Context, year int) ([]
 	return items, updatedAt, nil
 }
 
-func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
+func (r *PostgresRepository) ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error) {
+	var (
+		leagueID        int64
+		sportNamesRaw   []byte
+		leagueNamesRaw  []byte
+		leagueUpdatedAt time.Time
+	)
+
+	err := r.pool.QueryRow(ctx, `
+		SELECT l.id, s.name, l.name, GREATEST(s.updated_at, l.updated_at)
+		FROM leagues l
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2
+	`, sportSlug, leagueSlug).Scan(
+		&leagueID,
+		&sportNamesRaw,
+		&leagueNamesRaw,
+		&leagueUpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.LeagueSeasons{}, domain.ErrNotFound
+		}
+		return domain.LeagueSeasons{}, fmt.Errorf("find league seasons: %w", err)
+	}
+
+	seasonRows, err := r.pool.Query(ctx, `
+		SELECT slug, label, updated_at
+		FROM seasons
+		WHERE league_id = $1
+		ORDER BY start_year DESC, end_year DESC, slug DESC
+	`, leagueID)
+	if err != nil {
+		return domain.LeagueSeasons{}, fmt.Errorf("list league seasons: %w", err)
+	}
+	defer seasonRows.Close()
+
+	seasons := make([]domain.SeasonReference, 0)
+	lastUpdatedAt := leagueUpdatedAt
+	for seasonRows.Next() {
+		var (
+			seasonSlug  string
+			seasonLabel string
+			updatedAt   time.Time
+		)
+		if scanErr := seasonRows.Scan(&seasonSlug, &seasonLabel, &updatedAt); scanErr != nil {
+			return domain.LeagueSeasons{}, fmt.Errorf("scan season row: %w", scanErr)
+		}
+		seasons = append(seasons, domain.SeasonReference{Slug: seasonSlug, Label: seasonLabel})
+		lastUpdatedAt = maxTime(lastUpdatedAt, updatedAt)
+	}
+	if err := seasonRows.Err(); err != nil {
+		return domain.LeagueSeasons{}, fmt.Errorf("iterate seasons: %w", err)
+	}
+	if len(seasons) == 0 {
+		return domain.LeagueSeasons{}, domain.ErrNotFound
+	}
+
+	return domain.LeagueSeasons{
+		SportSlug:   sportSlug,
+		SportNames:  decodeLocalizedText(sportNamesRaw),
+		LeagueSlug:  leagueSlug,
+		LeagueNames: decodeLocalizedText(leagueNamesRaw),
+		Seasons:     seasons,
+		UpdatedAt:   lastUpdatedAt.UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
 	var (
 		leagueID               int64
-		sportID                int64
-		sportSlug              string
 		sportNamesRaw          []byte
 		leagueNamesRaw         []byte
 		calendarDescriptionRaw []byte
@@ -142,14 +171,12 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 	)
 
 	err := r.pool.QueryRow(ctx, `
-		SELECT l.id, s.id, s.slug, s.name, l.name, l.calendar_description, l.data_source_note, l.notes, GREATEST(s.updated_at, l.updated_at)
+		SELECT l.id, s.name, l.name, l.calendar_description, l.data_source_note, l.notes, GREATEST(s.updated_at, l.updated_at)
 		FROM leagues l
 		JOIN sports s ON s.id = l.sport_id
-		WHERE l.slug = $1
-	`, leagueSlug).Scan(
+		WHERE s.slug = $1 AND l.slug = $2
+	`, sportSlug, leagueSlug).Scan(
 		&leagueID,
-		&sportID,
-		&sportSlug,
 		&sportNamesRaw,
 		&leagueNamesRaw,
 		&calendarDescriptionRaw,
@@ -172,53 +199,23 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 		updatedAt                   time.Time
 	}
 
-	seasonRows, err := r.pool.Query(ctx, `
+	var selected seasonRecord
+	err = r.pool.QueryRow(ctx, `
 		SELECT id, slug, label, default_match_duration_minutes, updated_at
 		FROM seasons
-		WHERE league_id = $1
-		ORDER BY start_year DESC, end_year DESC, slug DESC
-	`, leagueID)
+		WHERE league_id = $1 AND slug = $2
+	`, leagueID, seasonSlug).Scan(
+		&selected.id,
+		&selected.slug,
+		&selected.label,
+		&selected.defaultMatchDurationMinutes,
+		&selected.updatedAt,
+	)
 	if err != nil {
-		return domain.SeasonDetail{}, fmt.Errorf("list seasons: %w", err)
-	}
-	defer seasonRows.Close()
-
-	available := make([]domain.SeasonReference, 0)
-	seasons := make([]seasonRecord, 0)
-	for seasonRows.Next() {
-		var record seasonRecord
-		if scanErr := seasonRows.Scan(
-			&record.id,
-			&record.slug,
-			&record.label,
-			&record.defaultMatchDurationMinutes,
-			&record.updatedAt,
-		); scanErr != nil {
-			return domain.SeasonDetail{}, fmt.Errorf("scan season row: %w", scanErr)
-		}
-		seasons = append(seasons, record)
-		available = append(available, domain.SeasonReference{Slug: record.slug, Label: record.label})
-	}
-	if err := seasonRows.Err(); err != nil {
-		return domain.SeasonDetail{}, fmt.Errorf("iterate seasons: %w", err)
-	}
-	if len(seasons) == 0 {
-		return domain.SeasonDetail{}, domain.ErrNotFound
-	}
-
-	selected := seasons[0]
-	if seasonSlug != "" {
-		found := false
-		for _, season := range seasons {
-			if season.slug == seasonSlug {
-				selected = season
-				found = true
-				break
-			}
-		}
-		if !found {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.SeasonDetail{}, domain.ErrNotFound
 		}
+		return domain.SeasonDetail{}, fmt.Errorf("find season: %w", err)
 	}
 
 	teamRows, err := r.pool.Query(ctx, `
@@ -314,7 +311,6 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 		SeasonSlug:                  selected.slug,
 		SeasonLabel:                 selected.label,
 		DefaultMatchDurationMinutes: selected.defaultMatchDurationMinutes,
-		AvailableSeasons:            available,
 		CalendarDescription:         decodeLocalizedText(calendarDescriptionRaw),
 		DataSourceNote:              decodeLocalizedText(dataSourceNoteRaw),
 		Notes:                       decodeLocalizedText(notesRaw),

@@ -99,14 +99,14 @@ Open a new terminal:
 # Health
 curl -i "http://localhost:8080/healthz"
 
-# Sports list by year
-curl -s "http://localhost:8080/api/sports?year=2026" | jq .
+# Competition directory
+curl -s "http://localhost:8080/api/leagues?lang=en" | jq .
 
-# League detail (season default)
-curl -s "http://localhost:8080/api/sports/csl" | jq .
+# League seasons
+curl -s "http://localhost:8080/api/football/csl/seasons?lang=en" | jq .
 
-# League detail (explicit season)
-curl -s "http://localhost:8080/api/sports/csl/2026" | jq .
+# Season detail
+curl -s "http://localhost:8080/api/football/csl/2026?lang=en" | jq .
 
 # ICS feed
 curl -i "http://localhost:8080/ics/football/csl/2026/matches.ics"
@@ -116,7 +116,7 @@ Notes:
 
 - If `jq` is not installed, remove `| jq .`.
 - ICS response should include `Content-Type: text/calendar` and cache headers.
-- `GET /api/sports/csl/2026` should return seeded CSL season data from PostgreSQL, not from JSON mock files.
+- `GET /api/football/csl/2026` should return seeded CSL season data from PostgreSQL, grouped under `groups`, not from JSON mock files.
 
 ## 4. Frontend Local Testing
 
@@ -166,7 +166,7 @@ Open:
 
 - `http://localhost:3000/en?league=csl`
 
-Expected: redirect to first available season route for that league.
+Expected: redirect to the default season route for that league from `/api/leagues`.
 
 ## 7. Optional: Docker Build Verification
 
@@ -186,4 +186,4 @@ Run this after code changes:
 2. `cd backend && go test ./...`
 3. `cd web && npm run build`
 4. Manually open at least one `en` route and one `zh` route.
-5. Verify one ICS endpoint responds correctly.
+5. Verify one ICS endpoint responds correctly and the season page "订阅" button opens a `webcal://` URL.

@@ -25,38 +25,38 @@ func testRouter(t *testing.T) *gin.Engine {
 	return NewRouter(logger, service.New(fakeRepository{}), rate.NewLimiter(rate.Limit(100), 100))
 }
 
-func (fakeRepository) ListYears(_ context.Context) ([]int, string, error) {
-	return []int{2026, 2025}, "2026-03-10T00:00:00Z", nil
-}
-
-func (fakeRepository) ListSportsByYear(_ context.Context, year int) ([]domain.SportsYearItem, string, error) {
-	if year != 2026 {
-		return []domain.SportsYearItem{}, "2026-03-10T00:00:00Z", nil
-	}
-	return []domain.SportsYearItem{
+func (fakeRepository) ListLeagues(_ context.Context) ([]domain.SportDirectoryItem, string, error) {
+	return []domain.SportDirectoryItem{
 		{
 			SportSlug:  "football",
 			SportNames: domain.LocalizedText{"en": "Football", "zh": "足球"},
-			Leagues: []domain.LeagueSeasonReference{
+			Leagues: []domain.LeagueReference{
 				{
-					LeagueSlug:  "csl",
-					LeagueNames: domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
-					Seasons:     []domain.SeasonReference{{Slug: "2026", Label: "2026"}},
+					LeagueSlug:    "csl",
+					LeagueNames:   domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+					DefaultSeason: domain.SeasonReference{Slug: "2026", Label: "2026"},
 				},
 			},
 		},
 	}, "2026-03-10T00:00:00Z", nil
 }
 
-func (fakeRepository) GetLeagueSeason(_ context.Context, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
-	if leagueSlug != "csl" {
-		return domain.SeasonDetail{}, domain.ErrNotFound
+func (fakeRepository) ListLeagueSeasons(_ context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error) {
+	if sportSlug != "football" || leagueSlug != "csl" {
+		return domain.LeagueSeasons{}, domain.ErrNotFound
 	}
-	selectedSeason := seasonSlug
-	if selectedSeason == "" {
-		selectedSeason = "2026"
-	}
-	if selectedSeason != "2026" {
+	return domain.LeagueSeasons{
+		SportSlug:   "football",
+		SportNames:  domain.LocalizedText{"en": "Football", "zh": "足球"},
+		LeagueSlug:  "csl",
+		LeagueNames: domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+		Seasons:     []domain.SeasonReference{{Slug: "2026", Label: "2026"}, {Slug: "2025", Label: "2025"}},
+		UpdatedAt:   "2026-03-10T00:00:00Z",
+	}, nil
+}
+
+func (fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
+	if sportSlug != "football" || leagueSlug != "csl" || seasonSlug != "2026" {
 		return domain.SeasonDetail{}, domain.ErrNotFound
 	}
 	return domain.SeasonDetail{
@@ -67,7 +67,6 @@ func (fakeRepository) GetLeagueSeason(_ context.Context, leagueSlug, seasonSlug 
 		SeasonSlug:                  "2026",
 		SeasonLabel:                 "2026",
 		DefaultMatchDurationMinutes: 120,
-		AvailableSeasons:            []domain.SeasonReference{{Slug: "2026", Label: "2026"}},
 		CalendarDescription:         domain.LocalizedText{"en": "Season calendar", "zh": "赛程日历"},
 		DataSourceNote:              domain.LocalizedText{"en": "Test data", "zh": "测试数据"},
 		Notes:                       domain.LocalizedText{"en": "Note", "zh": "备注"},
@@ -87,31 +86,10 @@ func (fakeRepository) GetLeagueSeason(_ context.Context, leagueSlug, seasonSlug 
 	}, nil
 }
 
-func TestYears(t *testing.T) {
-	router := testRouter(t)
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/years", nil)
-
-	router.ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("unexpected status: %d", recorder.Code)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode payload: %v", err)
-	}
-	years, ok := payload["years"].([]any)
-	if !ok || len(years) == 0 {
-		t.Fatalf("expected years in response")
-	}
-}
-
 func TestLeaguesDefaultLocale(t *testing.T) {
 	router := testRouter(t)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/leagues?year=2026", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/leagues", nil)
 
 	router.ServeHTTP(recorder, request)
 
@@ -142,7 +120,7 @@ func TestLeaguesDefaultLocale(t *testing.T) {
 func TestLeaguesLocalized(t *testing.T) {
 	router := testRouter(t)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/leagues?year=2026&lang=zh", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/leagues?lang=zh", nil)
 
 	router.ServeHTTP(recorder, request)
 
@@ -170,10 +148,34 @@ func TestLeaguesLocalized(t *testing.T) {
 	}
 }
 
+func TestLeagueSeasonsLocalized(t *testing.T) {
+	router := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/football/csl/seasons?lang=zh", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if _, exists := payload["leagueName"]; !exists {
+		t.Fatalf("expected leagueName in localized response")
+	}
+	seasons, ok := payload["seasons"].([]any)
+	if !ok || len(seasons) != 2 {
+		t.Fatalf("expected seasons in response")
+	}
+}
+
 func TestSeasonDetailLocalized(t *testing.T) {
 	router := testRouter(t)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/sports/csl/2026?lang=zh", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/football/csl/2026?lang=zh", nil)
 
 	router.ServeHTTP(recorder, request)
 
@@ -191,34 +193,9 @@ func TestSeasonDetailLocalized(t *testing.T) {
 	if _, exists := payload["leagueName"]; !exists {
 		t.Fatalf("expected leagueName in localized response")
 	}
-	if _, exists := payload["countryName"]; exists {
-		t.Fatalf("expected countryName to be removed")
-	}
-	if _, exists := payload["timezone"]; exists {
-		t.Fatalf("expected timezone to be removed")
-	}
-}
-
-func TestSeasonDetailDefaultLocaleWhenEmptyLang(t *testing.T) {
-	router := testRouter(t)
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/sports/csl/2026?lang=", nil)
-
-	router.ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("unexpected status: %d", recorder.Code)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode payload: %v", err)
-	}
-	if _, exists := payload["leagueNames"]; exists {
-		t.Fatalf("expected single-field response, got leagueNames")
-	}
-	if _, exists := payload["leagueName"]; !exists {
-		t.Fatalf("expected leagueName in default response")
+	groups, ok := payload["groups"].([]any)
+	if !ok || len(groups) != 1 {
+		t.Fatalf("expected grouped matches in response")
 	}
 }
 

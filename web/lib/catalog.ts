@@ -17,6 +17,12 @@ export type Match = {
   awayTeam?: Team;
 };
 
+export type MatchGroup = {
+  key: string;
+  label: string;
+  matches: Match[];
+};
+
 export type Season = {
   slug: string;
   label: string;
@@ -24,6 +30,7 @@ export type Season = {
   calendarDescription: string;
   dataSourceNote: string;
   notes: string;
+  groups: MatchGroup[];
   matches: Match[];
 };
 
@@ -32,22 +39,34 @@ export type SeasonReference = {
   label: string;
 };
 
-export type YearDirectoryLeague = {
+export type LeagueDirectoryLeague = {
   leagueSlug: string;
   leagueName: string;
-  seasons: SeasonReference[];
+  defaultSeason: SeasonReference;
 };
 
-export type YearDirectorySport = {
+export type LeagueDirectorySport = {
   sportSlug: string;
   sportName: string;
-  leagues: YearDirectoryLeague[];
+  leagues: LeagueDirectoryLeague[];
 };
 
-export type YearDirectory = {
-  year: number;
+export type LeaguesDirectory = {
   updatedAt: string;
-  items: YearDirectorySport[];
+  items: LeagueDirectorySport[];
+};
+
+export type LeagueSeasonsData = {
+  updatedAt: string;
+  sport: {
+    slug: string;
+    name: string;
+  };
+  league: {
+    slug: string;
+    name: string;
+  };
+  seasons: SeasonReference[];
 };
 
 export type SeasonPageData = {
@@ -64,6 +83,7 @@ export type SeasonPageData = {
 };
 
 const apiBaseUrl = process.env.SPORTS_CALENDAR_API_BASE_URL ?? "http://localhost:8080";
+const publicApiBaseUrl = process.env.SPORTS_CALENDAR_PUBLIC_API_BASE_URL ?? apiBaseUrl;
 const REVALIDATE_SECONDS = 3600;
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -73,6 +93,7 @@ async function fetchJson<T>(path: string): Promise<T> {
 
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status} ${response.statusText} (${path})`);
+const publicApiBaseUrl = process.env.SPORTS_CALENDAR_PUBLIC_API_BASE_URL ?? apiBaseUrl;
   }
 
   return (await response.json()) as T;
@@ -94,14 +115,33 @@ async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | n
   return (await response.json()) as SeasonDetailResponse;
 }
 
-type CatalogResponse = {
-  years: number[];
+async function fetchJsonOrNull<T>(path: string): Promise<T | null> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    next: { revalidate: REVALIDATE_SECONDS },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status} ${response.statusText} (${path})`);
+  }
+
+  return (await response.json()) as T;
+}
+
+type LeaguesResponse = {
+  items: LeagueDirectorySport[];
   updatedAt: string;
 };
 
-type LeaguesByYearResponse = {
-  year: number;
-  items: YearDirectorySport[];
+type LeagueSeasonsResponse = {
+  sportSlug: string;
+  sportName: string;
+  leagueSlug: string;
+  leagueName: string;
+  seasons: SeasonReference[];
   updatedAt: string;
 };
 
@@ -113,23 +153,41 @@ type SeasonDetailResponse = {
   seasonSlug: string;
   seasonLabel: string;
   defaultMatchDurationMinutes: number;
-  availableSeasons: SeasonReference[];
   calendarDescription: string;
   dataSourceNote: string;
   notes: string;
-  matches: Match[];
+  groups: MatchGroup[];
   updatedAt: string;
 };
 
-export async function getAvailableYears(): Promise<number[]> {
-  const payload = await fetchJson<CatalogResponse>("/api/years");
-  return payload.years;
+export async function getLeagues(locale: Locale): Promise<LeaguesDirectory> {
+  return fetchJson<LeaguesResponse>(`/api/leagues?lang=${encodeURIComponent(locale)}`);
 }
 
-export async function getLeaguesByYear(year: number, locale: Locale): Promise<YearDirectory> {
-  return fetchJson<LeaguesByYearResponse>(
-    `/api/leagues?year=${encodeURIComponent(String(year))}&lang=${encodeURIComponent(locale)}`,
+export async function getLeagueSeasons(
+  sportSlug: string,
+  leagueSlug: string,
+  locale: Locale,
+): Promise<LeagueSeasonsData | null> {
+  const payload = await fetchJsonOrNull<LeagueSeasonsResponse>(
+    `/api/${encodeURIComponent(sportSlug)}/${encodeURIComponent(leagueSlug)}/seasons?lang=${encodeURIComponent(locale)}`,
   );
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    updatedAt: payload.updatedAt,
+    sport: {
+      slug: payload.sportSlug,
+      name: payload.sportName,
+    },
+    league: {
+      slug: payload.leagueSlug,
+      name: payload.leagueName,
+    },
+    seasons: payload.seasons,
+  };
 }
 
 export async function getSeasonPageData(
@@ -139,7 +197,7 @@ export async function getSeasonPageData(
   locale: Locale,
 ): Promise<SeasonPageData | null> {
   const payload = await fetchSeasonDetail(
-    `/api/sports/${encodeURIComponent(leagueSlug)}/${encodeURIComponent(seasonSlug)}?lang=${encodeURIComponent(locale)}`,
+    `/api/${encodeURIComponent(sportSlug)}/${encodeURIComponent(leagueSlug)}/${encodeURIComponent(seasonSlug)}?lang=${encodeURIComponent(locale)}`,
   );
   if (!payload) {
     return null;
@@ -148,6 +206,8 @@ export async function getSeasonPageData(
   if (payload.sportSlug !== sportSlug || payload.leagueSlug !== leagueSlug || payload.seasonSlug !== seasonSlug) {
     return null;
   }
+
+  const matches = payload.groups.flatMap((group) => group.matches);
 
   return {
     updatedAt: payload.updatedAt,
@@ -166,33 +226,27 @@ export async function getSeasonPageData(
       calendarDescription: payload.calendarDescription,
       dataSourceNote: payload.dataSourceNote,
       notes: payload.notes,
-      matches: payload.matches,
+      groups: payload.groups,
+      matches,
     },
   };
 }
 
 export async function getAllSeasonRoutes() {
   try {
-    const years = await getAvailableYears();
-    const directories = await Promise.all(years.map((year) => getLeaguesByYear(year, "en")));
-    const seen = new Set<string>();
+    const directory = await getLeagues("en");
     const routes: Array<{ sport: string; league: string; season: string }> = [];
 
-    for (const directory of directories) {
-      for (const sport of directory.items) {
-        for (const league of sport.leagues) {
-          for (const season of league.seasons) {
-            const key = `${sport.sportSlug}/${league.leagueSlug}/${season.slug}`;
-            if (seen.has(key)) {
-              continue;
-            }
-            seen.add(key);
-            routes.push({
-              sport: sport.sportSlug,
-              league: league.leagueSlug,
-              season: season.slug,
-            });
-          }
+    for (const sport of directory.items) {
+      for (const league of sport.leagues) {
+        const seasonsPayload = await getLeagueSeasons(sport.sportSlug, league.leagueSlug, "en");
+        const seasons = seasonsPayload?.seasons.length ? seasonsPayload.seasons : [league.defaultSeason];
+        for (const season of seasons) {
+          routes.push({
+            sport: sport.sportSlug,
+            league: league.leagueSlug,
+            season: season.slug,
+          });
         }
       }
     }
@@ -211,4 +265,9 @@ export function matchLabel(match: Match) {
     return `${match.homeTeam.name} vs ${match.awayTeam.name}`;
   }
   return match.id;
+}
+
+export function getSeasonSubscriptionUrl(sportSlug: string, leagueSlug: string, seasonSlug: string) {
+  const icsUrl = `${publicApiBaseUrl}/ics/${encodeURIComponent(sportSlug)}/${encodeURIComponent(leagueSlug)}/${encodeURIComponent(seasonSlug)}/matches.ics`;
+  return icsUrl.replace(/^https?:\/\//, "webcal://");
 }

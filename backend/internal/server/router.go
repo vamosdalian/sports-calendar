@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	ical "github.com/emersion/go-ical"
@@ -20,70 +19,54 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(logger))
 	router.Use(rateLimitMiddleware(limiter))
+	handler := &Handler{service: svc}
 
-	router.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
+	router.GET("/healthz", handler.healthz)
 
-	router.GET("/api/years", func(c *gin.Context) {
-		payload, err := svc.ListYears(c.Request.Context())
-		if err != nil {
-			httputil.JSONError(c, http.StatusInternalServerError, "years_failed", err.Error())
-			return
-		}
-		c.JSON(http.StatusOK, payload)
-	})
+	api := router.Group("/api")
+	api.GET("/leagues", handler.listLeagues)
+	api.GET("/:sport/:league/seasons", handler.listLeagueSeasons)
+	api.GET("/:sport/:league/:season", handler.getLeagueSeason)
 
-	listLeaguesByYear := func(c *gin.Context) {
-		yearText := c.DefaultQuery("year", strconv.Itoa(time.Now().Year()))
-		lang := normalizeLocale(c.Query("lang"))
-		year, err := strconv.Atoi(yearText)
-		if err != nil {
-			httputil.JSONError(c, http.StatusBadRequest, "invalid_year", "year must be numeric")
-			return
-		}
-
-		payload, err := svc.ListSportsByYear(c.Request.Context(), year)
-		if err != nil {
-			httputil.JSONError(c, http.StatusInternalServerError, "list_failed", err.Error())
-			return
-		}
-
-		c.JSON(http.StatusOK, localizeSportsYearResponse(payload, lang))
-	}
-
-	router.GET("/api/leagues", listLeaguesByYear)
-
-	router.GET("/api/sports/:league", func(c *gin.Context) {
-		handleLeagueDetail(c, svc, c.Param("league"), "", normalizeLocale(c.Query("lang")))
-	})
-
-	router.GET("/api/sports/:league/:season", func(c *gin.Context) {
-		handleLeagueDetail(c, svc, c.Param("league"), c.Param("season"), normalizeLocale(c.Query("lang")))
-	})
-
-	router.GET("/ics/:sport/:league/:season/matches.ics", func(c *gin.Context) {
-		content, err := svc.BuildSeasonICS(c.Request.Context(), c.Param("sport"), c.Param("league"), c.Param("season"))
-		if err != nil {
-			if err == service.ErrNotFound {
-				httputil.JSONError(c, http.StatusNotFound, "not_found", "season feed not found")
-				return
-			}
-			httputil.JSONError(c, http.StatusInternalServerError, "ics_failed", err.Error())
-			return
-		}
-
-		c.Header("Content-Type", ical.MIMEType+"; charset=utf-8")
-		c.Header("Cache-Control", "public, s-maxage=900, stale-while-revalidate=3600")
-		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s-%s.ics", c.Param("league"), c.Param("season")))
-		c.Data(http.StatusOK, ical.MIMEType+"; charset=utf-8", content)
-	})
+	router.GET("/ics/:sport/:league/:season/matches.ics", handler.getSeasonICS)
 
 	return router
 }
 
-func handleLeagueDetail(c *gin.Context, svc *service.Service, league, season, lang string) {
-	payload, err := svc.GetLeagueSeason(c.Request.Context(), league, season)
+type Handler struct {
+	service *service.Service
+}
+
+func (h *Handler) healthz(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *Handler) listLeagues(c *gin.Context) {
+	payload, err := h.service.ListLeagues(c.Request.Context())
+	if err != nil {
+		httputil.JSONError(c, http.StatusInternalServerError, "list_failed", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, localizeLeaguesResponse(payload, normalizeLocale(c.Query("lang"))))
+}
+
+func (h *Handler) listLeagueSeasons(c *gin.Context) {
+	payload, err := h.service.ListLeagueSeasons(c.Request.Context(), c.Param("sport"), c.Param("league"))
+	if err != nil {
+		if err == service.ErrNotFound {
+			httputil.JSONError(c, http.StatusNotFound, "not_found", "league seasons not found")
+			return
+		}
+		httputil.JSONError(c, http.StatusInternalServerError, "seasons_failed", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, localizeLeagueSeasons(payload, normalizeLocale(c.Query("lang"))))
+}
+
+func (h *Handler) getLeagueSeason(c *gin.Context) {
+	payload, err := h.service.GetLeagueSeason(c.Request.Context(), c.Param("sport"), c.Param("league"), c.Param("season"))
 	if err != nil {
 		if err == service.ErrNotFound {
 			httputil.JSONError(c, http.StatusNotFound, "not_found", "league season not found")
@@ -93,7 +76,24 @@ func handleLeagueDetail(c *gin.Context, svc *service.Service, league, season, la
 		return
 	}
 
-	c.JSON(http.StatusOK, localizeSeasonDetail(payload, lang))
+	c.JSON(http.StatusOK, localizeSeasonDetail(payload, normalizeLocale(c.Query("lang"))))
+}
+
+func (h *Handler) getSeasonICS(c *gin.Context) {
+	content, err := h.service.BuildSeasonICS(c.Request.Context(), c.Param("sport"), c.Param("league"), c.Param("season"))
+	if err != nil {
+		if err == service.ErrNotFound {
+			httputil.JSONError(c, http.StatusNotFound, "not_found", "season feed not found")
+			return
+		}
+		httputil.JSONError(c, http.StatusInternalServerError, "ics_failed", err.Error())
+		return
+	}
+
+	c.Header("Content-Type", ical.MIMEType+"; charset=utf-8")
+	c.Header("Cache-Control", "public, s-maxage=900, stale-while-revalidate=3600")
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s-%s.ics", c.Param("league"), c.Param("season")))
+	c.Data(http.StatusOK, ical.MIMEType+"; charset=utf-8", content)
 }
 
 func normalizeLocale(value string) string {

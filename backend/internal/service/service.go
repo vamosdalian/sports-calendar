@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -12,56 +13,49 @@ import (
 var ErrNotFound = domain.ErrNotFound
 
 type readRepository interface {
-	ListYears(ctx context.Context) ([]int, string, error)
-	ListSportsByYear(ctx context.Context, year int) ([]domain.SportsYearItem, string, error)
-	GetLeagueSeason(ctx context.Context, leagueSlug, seasonSlug string) (domain.SeasonDetail, error)
+	ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error)
+	ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error)
+	GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error)
 }
 
 type Service struct {
 	repo readRepository
 }
 
-type YearsResponse struct {
-	Years     []int  `json:"years"`
-	UpdatedAt string `json:"updatedAt"`
-}
-
-type SportsYearItem = domain.SportsYearItem
-type LeagueSeasonReference = domain.LeagueSeasonReference
+type SportDirectoryItem = domain.SportDirectoryItem
+type LeagueReference = domain.LeagueReference
 type SeasonReference = domain.SeasonReference
+type LeagueSeasons = domain.LeagueSeasons
+type MatchGroup = domain.MatchGroup
 type SeasonDetail = domain.SeasonDetail
 
-type SportsYearResponse struct {
-	Year      int                     `json:"year"`
-	Items     []domain.SportsYearItem `json:"items"`
-	UpdatedAt string                  `json:"updatedAt"`
+type LeaguesResponse struct {
+	Items     []domain.SportDirectoryItem `json:"items"`
+	UpdatedAt string                      `json:"updatedAt"`
 }
 
 func New(repo readRepository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) ListYears(ctx context.Context) (YearsResponse, error) {
-	years, updatedAt, err := s.repo.ListYears(ctx)
+func (s *Service) ListLeagues(ctx context.Context) (LeaguesResponse, error) {
+	items, updatedAt, err := s.repo.ListLeagues(ctx)
 	if err != nil {
-		return YearsResponse{}, err
+		return LeaguesResponse{}, err
 	}
-	sort.Slice(years, func(i, j int) bool {
-		return years[i] > years[j]
-	})
-	return YearsResponse{Years: years, UpdatedAt: updatedAt}, nil
+	return LeaguesResponse{Items: items, UpdatedAt: updatedAt}, nil
 }
 
-func (s *Service) ListSportsByYear(ctx context.Context, year int) (SportsYearResponse, error) {
-	items, updatedAt, err := s.repo.ListSportsByYear(ctx, year)
+func (s *Service) ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (LeagueSeasons, error) {
+	payload, err := s.repo.ListLeagueSeasons(ctx, sportSlug, leagueSlug)
 	if err != nil {
-		return SportsYearResponse{}, err
+		return LeagueSeasons{}, err
 	}
-	return SportsYearResponse{Year: year, Items: items, UpdatedAt: updatedAt}, nil
+	return payload, nil
 }
 
-func (s *Service) GetLeagueSeason(ctx context.Context, leagueSlug, seasonSlug string) (SeasonDetail, error) {
-	detail, err := s.repo.GetLeagueSeason(ctx, leagueSlug, seasonSlug)
+func (s *Service) GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (SeasonDetail, error) {
+	detail, err := s.repo.GetLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug)
 	if err != nil {
 		return SeasonDetail{}, err
 	}
@@ -72,16 +66,14 @@ func (s *Service) GetLeagueSeason(ctx context.Context, leagueSlug, seasonSlug st
 		return left.Before(right)
 	})
 	detail.Matches = matches
+	detail.Groups = groupMatches(matches)
 	return detail, nil
 }
 
 func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) ([]byte, error) {
-	detail, err := s.GetLeagueSeason(ctx, leagueSlug, seasonSlug)
+	detail, err := s.GetLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug)
 	if err != nil {
 		return nil, err
-	}
-	if detail.SportSlug != sportSlug {
-		return nil, ErrNotFound
 	}
 	return ics.BuildCalendar(ics.CalendarPayload{
 		SportSlug:                   detail.SportSlug,
@@ -91,4 +83,65 @@ func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, sea
 		DefaultMatchDurationMinutes: detail.DefaultMatchDurationMinutes,
 		Matches:                     detail.Matches,
 	}, time.Now().UTC())
+}
+
+func groupMatches(matches []domain.Match) []domain.MatchGroup {
+	if len(matches) == 0 {
+		return nil
+	}
+
+	type groupState struct {
+		key   string
+		label domain.LocalizedText
+		items []domain.Match
+	}
+
+	ordered := make([]groupState, 0)
+	indexByKey := make(map[string]int)
+
+	for _, match := range matches {
+		key := groupKey(match)
+		index, exists := indexByKey[key]
+		if !exists {
+			ordered = append(ordered, groupState{
+				key:   key,
+				label: groupLabel(match, key),
+				items: make([]domain.Match, 0, 1),
+			})
+			index = len(ordered) - 1
+			indexByKey[key] = index
+		}
+		ordered[index].items = append(ordered[index].items, match)
+	}
+
+	groups := make([]domain.MatchGroup, 0, len(ordered))
+	for _, state := range ordered {
+		groups = append(groups, domain.MatchGroup{
+			Key:     state.key,
+			Label:   state.label,
+			Matches: state.items,
+		})
+	}
+	return groups
+}
+
+func groupKey(match domain.Match) string {
+	if len(match.Round) > 0 {
+		if text := domain.PickLocalized(match.Round, "en"); text != "" {
+			return text
+		}
+		for _, text := range match.Round {
+			if text != "" {
+				return text
+			}
+		}
+	}
+	return fmt.Sprintf("match-%s", match.ID)
+}
+
+func groupLabel(match domain.Match, key string) domain.LocalizedText {
+	if len(match.Round) > 0 {
+		return match.Round
+	}
+	return domain.LocalizedText{"en": key}
 }

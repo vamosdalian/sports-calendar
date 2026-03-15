@@ -15,32 +15,47 @@ type SeasonReference struct {
 	Label string `json:"label"`
 }
 
-type LeagueSeasonReference struct {
+type LeagueReference struct {
+	LeagueSlug    string          `json:"leagueSlug"`
+	LeagueNames   LocalizedText   `json:"leagueNames"`
+	DefaultSeason SeasonReference `json:"defaultSeason"`
+}
+
+type SportDirectoryItem struct {
+	SportSlug  string            `json:"sportSlug"`
+	SportNames LocalizedText     `json:"sportNames"`
+	Leagues    []LeagueReference `json:"leagues"`
+}
+
+type LeagueSeasons struct {
+	SportSlug   string            `json:"sportSlug"`
+	SportNames  LocalizedText     `json:"sportNames"`
 	LeagueSlug  string            `json:"leagueSlug"`
 	LeagueNames LocalizedText     `json:"leagueNames"`
 	Seasons     []SeasonReference `json:"seasons"`
+	UpdatedAt   string            `json:"updatedAt"`
 }
 
-type SportsYearItem struct {
-	SportSlug  string                  `json:"sportSlug"`
-	SportNames LocalizedText           `json:"sportNames"`
-	Leagues    []LeagueSeasonReference `json:"leagues"`
+type MatchGroup struct {
+	Key     string        `json:"key"`
+	Label   LocalizedText `json:"label"`
+	Matches []Match       `json:"matches"`
 }
 
 type SeasonDetail struct {
-	SportSlug                   string            `json:"sportSlug"`
-	SportNames                  LocalizedText     `json:"sportNames"`
-	LeagueSlug                  string            `json:"leagueSlug"`
-	LeagueNames                 LocalizedText     `json:"leagueNames"`
-	SeasonSlug                  string            `json:"seasonSlug"`
-	SeasonLabel                 string            `json:"seasonLabel"`
-	DefaultMatchDurationMinutes int               `json:"defaultMatchDurationMinutes"`
-	AvailableSeasons            []SeasonReference `json:"availableSeasons"`
-	CalendarDescription         LocalizedText     `json:"calendarDescription"`
-	DataSourceNote              LocalizedText     `json:"dataSourceNote"`
-	Notes                       LocalizedText     `json:"notes"`
-	Matches                     []Match           `json:"matches"`
-	UpdatedAt                   string            `json:"updatedAt"`
+	SportSlug                   string        `json:"sportSlug"`
+	SportNames                  LocalizedText `json:"sportNames"`
+	LeagueSlug                  string        `json:"leagueSlug"`
+	LeagueNames                 LocalizedText `json:"leagueNames"`
+	SeasonSlug                  string        `json:"seasonSlug"`
+	SeasonLabel                 string        `json:"seasonLabel"`
+	DefaultMatchDurationMinutes int           `json:"defaultMatchDurationMinutes"`
+	CalendarDescription         LocalizedText `json:"calendarDescription"`
+	DataSourceNote              LocalizedText `json:"dataSourceNote"`
+	Notes                       LocalizedText `json:"notes"`
+	Groups                      []MatchGroup  `json:"groups"`
+	Matches                     []Match       `json:"matches"`
+	UpdatedAt                   string        `json:"updatedAt"`
 }
 
 type Match struct {
