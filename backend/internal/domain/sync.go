@@ -5,7 +5,6 @@ import "time"
 type LeagueSyncTarget struct {
 	LeagueID     int64
 	LeagueSlug   string
-	Provider     string
 	SyncInterval string
 	SeasonID     int64
 	SeasonSlug   string

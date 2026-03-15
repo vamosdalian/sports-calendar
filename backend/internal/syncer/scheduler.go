@@ -73,9 +73,8 @@ func runTarget(logger *logrus.Logger, runner Runner, target domain.LeagueSyncTar
 	defer cancel()
 
 	logger.WithFields(logrus.Fields{
-		"league":   target.LeagueSlug,
-		"season":   target.SeasonSlug,
-		"provider": target.Provider,
+		"league": target.LeagueSlug,
+		"season": target.SeasonSlug,
 	}).Info("league sync started")
 
 	if err := runner.SyncLeague(ctx, target); err != nil {

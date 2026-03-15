@@ -10,7 +10,6 @@ CREATE TABLE leagues (
     id BIGINT PRIMARY KEY,
     sport_id BIGINT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
-    provider TEXT NOT NULL DEFAULT 'thesportsdb',
     name JSONB NOT NULL,
     sync_interval TEXT NOT NULL DEFAULT '@daily',
     calendar_description JSONB NOT NULL DEFAULT '{}'::JSONB,
@@ -60,7 +59,6 @@ CREATE TABLE matches (
 );
 
 CREATE INDEX idx_leagues_sport_id ON leagues (sport_id);
-CREATE INDEX idx_leagues_provider ON leagues (provider);
 CREATE INDEX idx_seasons_league_id ON seasons (league_id);
 CREATE INDEX idx_seasons_year_range ON seasons (start_year, end_year);
 CREATE INDEX idx_teams_league_id ON teams (league_id);

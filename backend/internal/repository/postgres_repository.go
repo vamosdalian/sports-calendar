@@ -325,7 +325,7 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 
 func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.LeagueSyncTarget, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT l.id, l.slug, l.provider, l.sync_interval, se.id, se.slug, se.label
+		SELECT l.id, l.slug, l.sync_interval, se.id, se.slug, se.label
 		FROM leagues l
 		JOIN LATERAL (
 			SELECT id, slug, label
@@ -334,7 +334,6 @@ func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.Leag
 			ORDER BY start_year DESC, end_year DESC, slug DESC
 			LIMIT 1
 		) se ON TRUE
-		WHERE l.provider = 'thesportsdb'
 		ORDER BY l.slug ASC
 	`)
 	if err != nil {
@@ -348,7 +347,6 @@ func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.Leag
 		if scanErr := rows.Scan(
 			&target.LeagueID,
 			&target.LeagueSlug,
-			&target.Provider,
 			&target.SyncInterval,
 			&target.SeasonID,
 			&target.SeasonSlug,

@@ -76,7 +76,6 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 	snapshot, err := client.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{
 		LeagueID:     4328,
 		LeagueSlug:   "pl",
-		Provider:     "thesportsdb",
 		SyncInterval: "@daily",
 		SeasonID:     2,
 		SeasonSlug:   "2025-2026",
