@@ -10,3 +10,7 @@ database:
   user: sports_calendar
   password: sports_calendar
   sslmode: disable
+theSportsDB:
+  baseURL: https://www.thesportsdb.com
+  apiKey: 125954
+  timeoutSeconds: 15

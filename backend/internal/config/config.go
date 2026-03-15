@@ -9,9 +9,10 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	RateLimit RateLimitConfig `yaml:"rateLimit"`
-	Database  DatabaseConfig  `yaml:"database"`
+	Server      ServerConfig      `yaml:"server"`
+	RateLimit   RateLimitConfig   `yaml:"rateLimit"`
+	Database    DatabaseConfig    `yaml:"database"`
+	TheSportsDB TheSportsDBConfig `yaml:"theSportsDB"`
 }
 
 type ServerConfig struct {
@@ -30,6 +31,12 @@ type DatabaseConfig struct {
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	SSLMode  string `yaml:"sslmode"`
+}
+
+type TheSportsDBConfig struct {
+	BaseURL        string `yaml:"baseURL"`
+	APIKey         string `yaml:"apiKey"`
+	TimeoutSeconds int    `yaml:"timeoutSeconds"`
 }
 
 func Load(path string) (Config, error) {
@@ -61,6 +68,16 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.Database.Host == "" || cfg.Database.DBName == "" || cfg.Database.User == "" {
 		return Config{}, fmt.Errorf("database host, dbname, and user are required")
+	}
+
+	if cfg.TheSportsDB.BaseURL == "" {
+		cfg.TheSportsDB.BaseURL = "https://www.thesportsdb.com"
+	}
+	if cfg.TheSportsDB.TimeoutSeconds <= 0 {
+		cfg.TheSportsDB.TimeoutSeconds = 15
+	}
+	if cfg.TheSportsDB.APIKey == "" {
+		return Config{}, fmt.Errorf("theSportsDB apiKey is required")
 	}
 
 	return cfg, nil

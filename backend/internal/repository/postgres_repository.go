@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -220,12 +221,35 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 		}
 	}
 
+	teamRows, err := r.pool.Query(ctx, `
+		SELECT id, slug, name
+		FROM teams
+		WHERE league_id = $1
+	`, leagueID)
+	if err != nil {
+		return domain.SeasonDetail{}, fmt.Errorf("list teams: %w", err)
+	}
+	defer teamRows.Close()
+
+	teamMap := make(map[int64]domain.Team)
+	for teamRows.Next() {
+		var (
+			teamID   int64
+			teamSlug string
+			nameRaw  []byte
+		)
+		if scanErr := teamRows.Scan(&teamID, &teamSlug, &nameRaw); scanErr != nil {
+			return domain.SeasonDetail{}, fmt.Errorf("scan team row: %w", scanErr)
+		}
+		teamMap[teamID] = domain.Team{Slug: teamSlug, Names: decodeLocalizedText(nameRaw)}
+	}
+	if err := teamRows.Err(); err != nil {
+		return domain.SeasonDetail{}, fmt.Errorf("iterate teams: %w", err)
+	}
+
 	matchRows, err := r.pool.Query(ctx, `
-		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.venue, m.city,
-		       ht.slug, ht.name, at.slug, at.name, m.updated_at
+		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.venue, m.city, m.teams, m.updated_at
 		FROM matches m
-		LEFT JOIN teams ht ON ht.id = m.home_team_id
-		LEFT JOIN teams at ON at.id = m.away_team_id
 		WHERE m.season_id = $1
 		ORDER BY m.starts_at ASC, m.id ASC
 	`, selected.id)
@@ -238,16 +262,13 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 	lastUpdatedAt := maxTime(leagueUpdatedAt, selected.updatedAt)
 	for matchRows.Next() {
 		var (
-			match            domain.Match
-			roundRaw         []byte
-			startsAt         time.Time
-			venueRaw         []byte
-			cityRaw          []byte
-			homeTeamSlug     *string
-			homeTeamNamesRaw []byte
-			awayTeamSlug     *string
-			awayTeamNamesRaw []byte
-			matchUpdatedAt   time.Time
+			match          domain.Match
+			roundRaw       []byte
+			startsAt       time.Time
+			venueRaw       []byte
+			cityRaw        []byte
+			teamIDs        []int64
+			matchUpdatedAt time.Time
 		)
 		if scanErr := matchRows.Scan(
 			&match.ID,
@@ -256,10 +277,7 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 			&match.Status,
 			&venueRaw,
 			&cityRaw,
-			&homeTeamSlug,
-			&homeTeamNamesRaw,
-			&awayTeamSlug,
-			&awayTeamNamesRaw,
+			&teamIDs,
 			&matchUpdatedAt,
 		); scanErr != nil {
 			return domain.SeasonDetail{}, fmt.Errorf("scan match row: %w", scanErr)
@@ -269,11 +287,17 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 		match.StartsAt = startsAt.UTC().Format(time.RFC3339)
 		match.Venue = decodeLocalizedText(venueRaw)
 		match.City = decodeLocalizedText(cityRaw)
-		if homeTeamSlug != nil {
-			match.HomeTeam = &domain.Team{Slug: *homeTeamSlug, Names: decodeLocalizedText(homeTeamNamesRaw)}
+		if len(teamIDs) > 0 {
+			if team, ok := teamMap[teamIDs[0]]; ok {
+				teamCopy := team
+				match.HomeTeam = &teamCopy
+			}
 		}
-		if awayTeamSlug != nil {
-			match.AwayTeam = &domain.Team{Slug: *awayTeamSlug, Names: decodeLocalizedText(awayTeamNamesRaw)}
+		if len(teamIDs) > 1 {
+			if team, ok := teamMap[teamIDs[1]]; ok {
+				teamCopy := team
+				match.AwayTeam = &teamCopy
+			}
 		}
 		matches = append(matches, match)
 		lastUpdatedAt = maxTime(lastUpdatedAt, matchUpdatedAt)
@@ -297,6 +321,180 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, leagueSlug, se
 		Matches:                     matches,
 		UpdatedAt:                   lastUpdatedAt.UTC().Format(time.RFC3339),
 	}, nil
+}
+
+func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.LeagueSyncTarget, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT l.id, l.slug, l.provider, l.sync_interval, se.id, se.slug, se.label
+		FROM leagues l
+		JOIN LATERAL (
+			SELECT id, slug, label
+			FROM seasons
+			WHERE league_id = l.id
+			ORDER BY start_year DESC, end_year DESC, slug DESC
+			LIMIT 1
+		) se ON TRUE
+		WHERE l.provider = 'thesportsdb'
+		ORDER BY l.slug ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list sync targets: %w", err)
+	}
+	defer rows.Close()
+
+	targets := make([]domain.LeagueSyncTarget, 0)
+	for rows.Next() {
+		var target domain.LeagueSyncTarget
+		if scanErr := rows.Scan(
+			&target.LeagueID,
+			&target.LeagueSlug,
+			&target.Provider,
+			&target.SyncInterval,
+			&target.SeasonID,
+			&target.SeasonSlug,
+			&target.SeasonLabel,
+		); scanErr != nil {
+			return nil, fmt.Errorf("scan sync target: %w", scanErr)
+		}
+		targets = append(targets, target)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sync targets: %w", err)
+	}
+
+	return targets, nil
+}
+
+func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot domain.LeagueSnapshot) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin snapshot transaction: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE leagues
+		SET name = name || $2::jsonb,
+		    calendar_description = calendar_description || $3::jsonb,
+		    data_source_note = data_source_note || $4::jsonb,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND (
+		    name IS DISTINCT FROM name || $2::jsonb OR
+		    calendar_description IS DISTINCT FROM calendar_description || $3::jsonb OR
+		    data_source_note IS DISTINCT FROM data_source_note || $4::jsonb
+		  )
+	`, snapshot.Target.LeagueID, encodeLocalizedText(snapshot.LeagueNames), encodeLocalizedText(snapshot.CalendarDescription), encodeLocalizedText(snapshot.DataSourceNote)); err != nil {
+		return fmt.Errorf("update league metadata: %w", err)
+	}
+
+	teamIDs := make(map[int64]int64, len(snapshot.Teams))
+	teams := append([]domain.TeamSyncRecord(nil), snapshot.Teams...)
+	sort.Slice(teams, func(i, j int) bool {
+		return teams[i].ID < teams[j].ID
+	})
+	for _, team := range teams {
+		var teamID int64
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO teams (id, league_id, slug, name, short_name)
+			VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
+			ON CONFLICT (id) DO UPDATE
+			SET league_id = EXCLUDED.league_id,
+			    slug = EXCLUDED.slug,
+			    name = teams.name || EXCLUDED.name,
+			    short_name = teams.short_name || EXCLUDED.short_name,
+			    updated_at = NOW()
+			WHERE teams.league_id IS DISTINCT FROM EXCLUDED.league_id
+			   OR teams.slug IS DISTINCT FROM EXCLUDED.slug
+			   OR teams.name IS DISTINCT FROM teams.name || EXCLUDED.name
+			   OR teams.short_name IS DISTINCT FROM teams.short_name || EXCLUDED.short_name
+			RETURNING id
+		`, team.ID, snapshot.Target.LeagueID, team.Slug, encodeLocalizedText(team.Names), encodeLocalizedText(team.ShortName)).Scan(&teamID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				if lookupErr := tx.QueryRow(ctx, `
+					SELECT id
+					FROM teams
+					WHERE id = $1
+				`, team.ID).Scan(&teamID); lookupErr != nil {
+					return fmt.Errorf("load unchanged team id %d: %w", team.ID, lookupErr)
+				}
+			} else {
+				return fmt.Errorf("upsert team %d: %w", team.ID, err)
+			}
+		}
+		teamIDs[team.ID] = teamID
+	}
+
+	matchExternalIDs := make([]string, 0, len(snapshot.Matches))
+	for _, match := range snapshot.Matches {
+		storedTeamIDs := make([]int64, 0, len(match.Teams))
+		for _, teamID := range match.Teams {
+			storedTeamID, ok := teamIDs[teamID]
+			if !ok {
+				return fmt.Errorf("match %s references missing team %d", match.ExternalID, teamID)
+			}
+			storedTeamIDs = append(storedTeamIDs, storedTeamID)
+		}
+
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO matches (
+				season_id,
+				external_id,
+				teams,
+				round_name,
+				venue,
+				city,
+				country,
+				starts_at,
+				status
+			) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9)
+			ON CONFLICT (external_id) DO UPDATE
+			SET season_id = EXCLUDED.season_id,
+			    teams = EXCLUDED.teams,
+			    round_name = matches.round_name || EXCLUDED.round_name,
+			    venue = matches.venue || EXCLUDED.venue,
+			    city = matches.city || EXCLUDED.city,
+			    country = matches.country || EXCLUDED.country,
+			    starts_at = EXCLUDED.starts_at,
+			    status = EXCLUDED.status,
+			    updated_at = NOW()
+			WHERE matches.season_id IS DISTINCT FROM EXCLUDED.season_id
+			   OR matches.teams IS DISTINCT FROM EXCLUDED.teams
+			   OR matches.round_name IS DISTINCT FROM matches.round_name || EXCLUDED.round_name
+			   OR matches.venue IS DISTINCT FROM matches.venue || EXCLUDED.venue
+			   OR matches.city IS DISTINCT FROM matches.city || EXCLUDED.city
+			   OR matches.country IS DISTINCT FROM matches.country || EXCLUDED.country
+			   OR matches.starts_at IS DISTINCT FROM EXCLUDED.starts_at
+			   OR matches.status IS DISTINCT FROM EXCLUDED.status
+		`, snapshot.Target.SeasonID, match.ExternalID, storedTeamIDs, encodeLocalizedText(match.Round), encodeLocalizedText(match.Venue), encodeLocalizedText(match.City), encodeLocalizedText(match.Country), match.StartsAt.UTC(), match.Status); err != nil {
+			return fmt.Errorf("upsert match %s: %w", match.ExternalID, err)
+		}
+		matchExternalIDs = append(matchExternalIDs, match.ExternalID)
+	}
+
+	if len(matchExternalIDs) == 0 {
+		if _, err := tx.Exec(ctx, `DELETE FROM matches WHERE season_id = $1`, snapshot.Target.SeasonID); err != nil {
+			return fmt.Errorf("delete season matches: %w", err)
+		}
+	} else {
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM matches
+			WHERE season_id = $1
+			  AND NOT (external_id = ANY($2))
+		`, snapshot.Target.SeasonID, matchExternalIDs); err != nil {
+			return fmt.Errorf("delete stale matches: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit snapshot transaction: %w", err)
+	}
+	tx = nil
+	return nil
 }
 
 func (r *PostgresRepository) latestUpdatedAt(ctx context.Context) (string, error) {
@@ -335,4 +533,15 @@ func maxTime(left, right time.Time) time.Time {
 		return right
 	}
 	return left
+}
+
+func encodeLocalizedText(value domain.LocalizedText) []byte {
+	if len(value) == 0 {
+		return []byte("{}")
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return []byte("{}")
+	}
+	return raw
 }

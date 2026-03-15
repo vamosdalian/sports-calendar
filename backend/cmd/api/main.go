@@ -50,7 +50,21 @@ func main() {
 	}
 
 	svc := service.New(repo)
-	scheduler, err := syncer.NewScheduler(logger)
+	client, err := syncer.NewTheSportsDBClient(
+		cfg.TheSportsDB.BaseURL,
+		cfg.TheSportsDB.APIKey,
+		time.Duration(cfg.TheSportsDB.TimeoutSeconds)*time.Second,
+	)
+	if err != nil {
+		logger.WithError(err).Fatal("create TheSportsDB client")
+	}
+
+	leagueSyncer, err := syncer.NewLeagueSyncer(logger, repo, client)
+	if err != nil {
+		logger.WithError(err).Fatal("create league syncer")
+	}
+
+	scheduler, err := syncer.NewScheduler(logger, leagueSyncer)
 	if err != nil {
 		logger.WithError(err).Fatal("create sync scheduler")
 	}
