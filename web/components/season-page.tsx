@@ -42,7 +42,12 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
     sport.leagues.map((league) => ({
       key: `${sport.sportSlug}-${league.leagueSlug}`,
       name: league.leagueName,
-      href: toPath(locale, sport.sportSlug, league.leagueSlug, league.defaultSeason.slug),
+      href: toPath(
+        locale,
+        sport.sportSlug,
+        league.leagueSlug,
+        league.defaultSeason?.slug ?? seasonSlug,
+      ),
       active: sport.sportSlug === sportSlug && league.leagueSlug === leagueSlug,
     })),
   );

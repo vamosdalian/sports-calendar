@@ -36,12 +36,16 @@ export async function HomeDirectory({ locale }: HomeDirectoryProps) {
               <div className="space-y-3 px-5 pt-4">
                 {sport.leagues.map((league) => (
                   <div key={league.leagueSlug}>
-                    <Link
-                      className="text-sm text-blue-700 underline underline-offset-2 transition hover:text-blue-800"
-                      href={toPath(locale, sport.sportSlug, league.leagueSlug, league.defaultSeason.slug)}
-                    >
-                      {league.leagueName}
-                    </Link>
+                    {league.defaultSeason ? (
+                      <Link
+                        className="text-sm text-blue-700 underline underline-offset-2 transition hover:text-blue-800"
+                        href={toPath(locale, sport.sportSlug, league.leagueSlug, league.defaultSeason.slug)}
+                      >
+                        {league.leagueName}
+                      </Link>
+                    ) : (
+                      <span className="text-sm text-ink/70">{league.leagueName}</span>
+                    )}
                   </div>
                 ))}
               </div>

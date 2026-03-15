@@ -60,6 +60,9 @@ async function resolveLegacyLeagueRoute(leagueSlug: string, locale: Locale): Pro
       if (league.leagueSlug !== leagueSlug) {
         continue;
       }
+      if (!league.defaultSeason) {
+        return null;
+      }
       return toPath(locale, sport.sportSlug, league.leagueSlug, league.defaultSeason.slug);
     }
   }

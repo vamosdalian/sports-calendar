@@ -115,6 +115,21 @@ func TestLeaguesDefaultLocale(t *testing.T) {
 	if _, exists := firstItem["sportName"]; !exists {
 		t.Fatalf("expected sportName in default response")
 	}
+	leagues, ok := firstItem["leagues"].([]any)
+	if !ok || len(leagues) == 0 {
+		t.Fatalf("expected leagues in default response")
+	}
+	firstLeague, ok := leagues[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first league object")
+	}
+	defaultSeason, ok := firstLeague["defaultSeason"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected defaultSeason in league response")
+	}
+	if defaultSeason["slug"] != "2026" {
+		t.Fatalf("expected defaultSeason.slug=2026, got %#v", defaultSeason["slug"])
+	}
 }
 
 func TestLeaguesLocalized(t *testing.T) {

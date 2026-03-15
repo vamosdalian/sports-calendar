@@ -43,7 +43,22 @@ func (s *Service) ListLeagues(ctx context.Context) (LeaguesResponse, error) {
 	if err != nil {
 		return LeaguesResponse{}, err
 	}
-	return LeaguesResponse{Items: items, UpdatedAt: updatedAt}, nil
+	filteredItems := make([]domain.SportDirectoryItem, 0, len(items))
+	for _, item := range items {
+		leagues := make([]domain.LeagueReference, 0, len(item.Leagues))
+		for _, league := range item.Leagues {
+			if league.DefaultSeason.Slug == "" {
+				continue
+			}
+			leagues = append(leagues, league)
+		}
+		if len(leagues) == 0 {
+			continue
+		}
+		item.Leagues = leagues
+		filteredItems = append(filteredItems, item)
+	}
+	return LeaguesResponse{Items: filteredItems, UpdatedAt: updatedAt}, nil
 }
 
 func (s *Service) ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (LeagueSeasons, error) {

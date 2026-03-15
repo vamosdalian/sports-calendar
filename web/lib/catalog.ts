@@ -42,7 +42,7 @@ export type SeasonReference = {
 export type LeagueDirectoryLeague = {
   leagueSlug: string;
   leagueName: string;
-  defaultSeason: SeasonReference;
+  defaultSeason?: SeasonReference;
 };
 
 export type LeagueDirectorySport = {
@@ -93,7 +93,6 @@ async function fetchJson<T>(path: string): Promise<T> {
 
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status} ${response.statusText} (${path})`);
-const publicApiBaseUrl = process.env.SPORTS_CALENDAR_PUBLIC_API_BASE_URL ?? apiBaseUrl;
   }
 
   return (await response.json()) as T;
@@ -132,7 +131,16 @@ async function fetchJsonOrNull<T>(path: string): Promise<T | null> {
 }
 
 type LeaguesResponse = {
-  items: LeagueDirectorySport[];
+  items: Array<{
+    sportSlug: string;
+    sportName: string;
+    leagues: Array<{
+      leagueSlug: string;
+      leagueName: string;
+      defaultSeason?: SeasonReference;
+      seasons?: SeasonReference[];
+    }>;
+  }>;
   updatedAt: string;
 };
 
@@ -161,7 +169,20 @@ type SeasonDetailResponse = {
 };
 
 export async function getLeagues(locale: Locale): Promise<LeaguesDirectory> {
-  return fetchJson<LeaguesResponse>(`/api/leagues?lang=${encodeURIComponent(locale)}`);
+  const payload = await fetchJson<LeaguesResponse>(`/api/leagues?lang=${encodeURIComponent(locale)}`);
+
+  return {
+    updatedAt: payload.updatedAt,
+    items: payload.items.map((sport) => ({
+      sportSlug: sport.sportSlug,
+      sportName: sport.sportName,
+      leagues: sport.leagues.map((league) => ({
+        leagueSlug: league.leagueSlug,
+        leagueName: league.leagueName,
+        defaultSeason: resolveDefaultSeason(league.defaultSeason, league.seasons),
+      })),
+    })),
+  };
 }
 
 export async function getLeagueSeasons(
@@ -240,7 +261,11 @@ export async function getAllSeasonRoutes() {
     for (const sport of directory.items) {
       for (const league of sport.leagues) {
         const seasonsPayload = await getLeagueSeasons(sport.sportSlug, league.leagueSlug, "en");
-        const seasons = seasonsPayload?.seasons.length ? seasonsPayload.seasons : [league.defaultSeason];
+        const seasons = seasonsPayload?.seasons.length
+          ? seasonsPayload.seasons
+          : league.defaultSeason
+            ? [league.defaultSeason]
+            : [];
         for (const season of seasons) {
           routes.push({
             sport: sport.sportSlug,
@@ -270,4 +295,20 @@ export function matchLabel(match: Match) {
 export function getSeasonSubscriptionUrl(sportSlug: string, leagueSlug: string, seasonSlug: string) {
   const icsUrl = `${publicApiBaseUrl}/ics/${encodeURIComponent(sportSlug)}/${encodeURIComponent(leagueSlug)}/${encodeURIComponent(seasonSlug)}/matches.ics`;
   return icsUrl.replace(/^https?:\/\//, "webcal://");
+}
+
+function resolveDefaultSeason(
+  defaultSeason: SeasonReference | undefined,
+  seasons: SeasonReference[] | undefined,
+): SeasonReference | undefined {
+  if (defaultSeason?.slug) {
+    return defaultSeason;
+  }
+
+  const firstSeason = seasons?.find((season) => season?.slug);
+  if (firstSeason) {
+    return firstSeason;
+  }
+
+  return undefined;
 }
