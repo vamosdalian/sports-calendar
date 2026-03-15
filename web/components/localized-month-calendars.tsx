@@ -115,12 +115,21 @@ function buildMonthSpecs(seasonSlug: string, matches: Match[], timeZone: string)
     return Array.from({ length: 12 }, (_, index) => ({ year, monthIndex: index }));
   }
 
+  const startYear = Number(range[0]);
+  const endYear = Number(range[1]);
+  if (Number.isFinite(startYear) && Number.isFinite(endYear)) {
+    return Array.from({ length: 12 }, (_, index) => {
+      const current = new Date(Date.UTC(startYear, 6 + index, 1));
+      return { year: current.getUTCFullYear(), monthIndex: current.getUTCMonth() };
+    });
+  }
+
   const firstMatch = matches[0] ? getDateParts(matches[0].startsAt, timeZone) : null;
-  const startYear = firstMatch?.year ?? Number(range[0]);
-  const startMonth = firstMatch?.monthIndex ?? 7;
+  const fallbackStartYear = firstMatch?.year ?? new Date().getUTCFullYear();
+  const fallbackStartMonth = firstMatch?.monthIndex ?? 6;
 
   return Array.from({ length: 12 }, (_, index) => {
-    const current = new Date(Date.UTC(startYear, startMonth + index, 1));
+    const current = new Date(Date.UTC(fallbackStartYear, fallbackStartMonth + index, 1));
     return { year: current.getUTCFullYear(), monthIndex: current.getUTCMonth() };
   });
 }
