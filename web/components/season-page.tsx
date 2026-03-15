@@ -24,7 +24,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
     notFound();
   }
 
-  const t = await getTranslations();
+  const t = await getTranslations({ locale });
   const localePaths = Object.fromEntries(
     locales.map((entry) => [entry, toPath(entry, sportSlug, leagueSlug, seasonSlug)]),
   ) as Record<Locale, string>;
@@ -108,10 +108,10 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
               {data.season.groups.map((group, index) => (
                 <details
                   key={group.key}
-                  className="group rounded-3xl bg-white/25 px-4 py-4"
+                  className="group w-full rounded-3xl bg-white/25 px-4 py-4"
                   open={index === 0}
                 >
-                  <summary className="flex cursor-pointer list-none items-center text-sm font-medium text-ink">
+                  <summary className="flex w-full cursor-pointer list-none items-center text-sm font-medium text-ink">
                     <span className="flex items-center gap-3">
                       <svg
                         aria-hidden="true"
@@ -128,7 +128,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
                       <span>{group.label}</span>
                     </span>
                   </summary>
-                  <ul className="mt-3 space-y-2">
+                  <ul className="mt-3 w-full space-y-2">
                     {group.matches.map((match) => (
                       <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
                         <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
