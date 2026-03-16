@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
@@ -23,6 +24,162 @@ func NewPostgresRepository(pool *pgxpool.Pool) (*PostgresRepository, error) {
 		return nil, fmt.Errorf("postgres pool is required")
 	}
 	return &PostgresRepository{pool: pool}, nil
+}
+
+func (r *PostgresRepository) CreateSport(ctx context.Context, input domain.CreateSportInput) (domain.SportRecord, error) {
+	var (
+		record  domain.SportRecord
+		nameRaw []byte
+		created time.Time
+		updated time.Time
+	)
+	err := r.pool.QueryRow(ctx, `
+		INSERT INTO sports (id, slug, name)
+		VALUES ($1, $2, $3::jsonb)
+		RETURNING id, slug, name, created_at, updated_at
+	`, input.ID, input.Slug, encodeLocalizedText(input.Name)).Scan(
+		&record.ID,
+		&record.Slug,
+		&nameRaw,
+		&created,
+		&updated,
+	)
+	if err != nil {
+		return domain.SportRecord{}, mapWriteError("create sport", err)
+	}
+	record.Name = decodeLocalizedText(nameRaw)
+	record.CreatedAt = created.UTC().Format(time.RFC3339)
+	record.UpdatedAt = updated.UTC().Format(time.RFC3339)
+	return record, nil
+}
+
+func (r *PostgresRepository) CreateLeague(ctx context.Context, input domain.CreateLeagueInput) (domain.LeagueRecord, error) {
+	sportID, err := r.lookupSportID(ctx, input.SportSlug)
+	if err != nil {
+		return domain.LeagueRecord{}, err
+	}
+
+	var (
+		record                 domain.LeagueRecord
+		nameRaw                []byte
+		calendarDescriptionRaw []byte
+		dataSourceNoteRaw      []byte
+		notesRaw               []byte
+		created                time.Time
+		updated                time.Time
+	)
+	err = r.pool.QueryRow(ctx, `
+		INSERT INTO leagues (
+			id,
+			sport_id,
+			slug,
+			name,
+			sync_interval,
+			calendar_description,
+			data_source_note,
+			notes
+		)
+		VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, $7::jsonb, $8::jsonb)
+		RETURNING id, slug, name, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
+	`, input.ID, sportID, input.Slug, encodeLocalizedText(input.Name), input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
+		&record.ID,
+		&record.Slug,
+		&nameRaw,
+		&record.SyncInterval,
+		&calendarDescriptionRaw,
+		&dataSourceNoteRaw,
+		&notesRaw,
+		&created,
+		&updated,
+	)
+	if err != nil {
+		return domain.LeagueRecord{}, mapWriteError("create league", err)
+	}
+	record.SportSlug = input.SportSlug
+	record.Name = decodeLocalizedText(nameRaw)
+	record.CalendarDescription = decodeLocalizedText(calendarDescriptionRaw)
+	record.DataSourceNote = decodeLocalizedText(dataSourceNoteRaw)
+	record.Notes = decodeLocalizedText(notesRaw)
+	record.CreatedAt = created.UTC().Format(time.RFC3339)
+	record.UpdatedAt = updated.UTC().Format(time.RFC3339)
+	return record, nil
+}
+
+func (r *PostgresRepository) CreateSeason(ctx context.Context, input domain.CreateSeasonInput) (domain.SeasonRecord, error) {
+	leagueID, err := r.lookupLeagueID(ctx, input.SportSlug, input.LeagueSlug)
+	if err != nil {
+		return domain.SeasonRecord{}, err
+	}
+
+	var (
+		record  domain.SeasonRecord
+		created time.Time
+		updated time.Time
+	)
+	err = r.pool.QueryRow(ctx, `
+		INSERT INTO seasons (
+			league_id,
+			slug,
+			label,
+			start_year,
+			end_year,
+			default_match_duration_minutes
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, slug, label, start_year, end_year, default_match_duration_minutes, created_at, updated_at
+	`, leagueID, input.Slug, input.Label, input.StartYear, input.EndYear, input.DefaultMatchDurationMinutes).Scan(
+		&record.ID,
+		&record.Slug,
+		&record.Label,
+		&record.StartYear,
+		&record.EndYear,
+		&record.DefaultMatchDurationMinutes,
+		&created,
+		&updated,
+	)
+	if err != nil {
+		return domain.SeasonRecord{}, mapWriteError("create season", err)
+	}
+	record.SportSlug = input.SportSlug
+	record.LeagueSlug = input.LeagueSlug
+	record.CreatedAt = created.UTC().Format(time.RFC3339)
+	record.UpdatedAt = updated.UTC().Format(time.RFC3339)
+	return record, nil
+}
+
+func (r *PostgresRepository) DeleteSeason(ctx context.Context, input domain.DeleteSeasonInput) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin delete season transaction: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	seasonID, err := lookupSeasonID(ctx, tx, input)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM matches WHERE season_id = $1`, seasonID); err != nil {
+		return fmt.Errorf("delete season matches: %w", err)
+	}
+
+	result, err := tx.Exec(ctx, `DELETE FROM seasons WHERE id = $1`, seasonID)
+	if err != nil {
+		return fmt.Errorf("delete season: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete season transaction: %w", err)
+	}
+	tx = nil
+	return nil
 }
 
 func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error) {
@@ -538,4 +695,70 @@ func encodeLocalizedText(value domain.LocalizedText) []byte {
 		return []byte("{}")
 	}
 	return raw
+}
+
+func (r *PostgresRepository) lookupSportID(ctx context.Context, sportSlug string) (int64, error) {
+	var sportID int64
+	err := r.pool.QueryRow(ctx, `
+		SELECT id
+		FROM sports
+		WHERE slug = $1
+	`, sportSlug).Scan(&sportID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, domain.ErrNotFound
+		}
+		return 0, fmt.Errorf("lookup sport %s: %w", sportSlug, err)
+	}
+	return sportID, nil
+}
+
+func (r *PostgresRepository) lookupLeagueID(ctx context.Context, sportSlug, leagueSlug string) (int64, error) {
+	var leagueID int64
+	err := r.pool.QueryRow(ctx, `
+		SELECT l.id
+		FROM leagues l
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2
+	`, sportSlug, leagueSlug).Scan(&leagueID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, domain.ErrNotFound
+		}
+		return 0, fmt.Errorf("lookup league %s/%s: %w", sportSlug, leagueSlug, err)
+	}
+	return leagueID, nil
+}
+
+func lookupSeasonID(ctx context.Context, tx pgx.Tx, input domain.DeleteSeasonInput) (int64, error) {
+	var seasonID int64
+	err := tx.QueryRow(ctx, `
+		SELECT se.id
+		FROM seasons se
+		JOIN leagues l ON l.id = se.league_id
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2 AND se.slug = $3
+		FOR UPDATE
+	`, input.SportSlug, input.LeagueSlug, input.SeasonSlug).Scan(&seasonID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, domain.ErrNotFound
+		}
+		return 0, fmt.Errorf("lookup season %s/%s/%s: %w", input.SportSlug, input.LeagueSlug, input.SeasonSlug, err)
+	}
+	return seasonID, nil
+}
+
+func mapWriteError(action string, err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return fmt.Errorf("%w: %s", domain.ErrConflict, action)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrNotFound
+	}
+	return fmt.Errorf("%s: %w", action, err)
 }

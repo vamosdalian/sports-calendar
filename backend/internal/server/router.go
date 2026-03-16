@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
+	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 	"github.com/vamosdalian/sports-calendar/backend/internal/httputil"
 	"github.com/vamosdalian/sports-calendar/backend/internal/service"
 )
@@ -27,6 +29,11 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	api.GET("/leagues", handler.listLeagues)
 	api.GET("/:sport/:league/seasons", handler.listLeagueSeasons)
 	api.GET("/:sport/:league/:season", handler.getLeagueSeason)
+	admin := api.Group("/admin")
+	admin.POST("/sports", handler.createSport)
+	admin.POST("/leagues", handler.createLeague)
+	admin.POST("/seasons", handler.createSeason)
+	admin.DELETE("/:sport/:league/seasons/:season", handler.deleteSeason)
 
 	router.GET("/ics/:sport/:league/:season/matches.ics", handler.getSeasonICS)
 
@@ -96,6 +103,68 @@ func (h *Handler) getSeasonICS(c *gin.Context) {
 	c.Data(http.StatusOK, ical.MIMEType+"; charset=utf-8", content)
 }
 
+func (h *Handler) createSport(c *gin.Context) {
+	var input domain.CreateSportInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+
+	payload, err := h.service.CreateSport(c.Request.Context(), input)
+	if err != nil {
+		handleServiceError(c, err, "create_sport_failed", "create sport failed")
+		return
+	}
+
+	c.JSON(http.StatusCreated, payload)
+}
+
+func (h *Handler) createLeague(c *gin.Context) {
+	var input domain.CreateLeagueInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+
+	payload, err := h.service.CreateLeague(c.Request.Context(), input)
+	if err != nil {
+		handleServiceError(c, err, "create_league_failed", "create league failed")
+		return
+	}
+
+	c.JSON(http.StatusCreated, payload)
+}
+
+func (h *Handler) createSeason(c *gin.Context) {
+	var input domain.CreateSeasonInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+
+	payload, err := h.service.CreateSeason(c.Request.Context(), input)
+	if err != nil {
+		handleServiceError(c, err, "create_season_failed", "create season failed")
+		return
+	}
+
+	c.JSON(http.StatusCreated, payload)
+}
+
+func (h *Handler) deleteSeason(c *gin.Context) {
+	err := h.service.DeleteSeason(c.Request.Context(), domain.DeleteSeasonInput{
+		SportSlug:  c.Param("sport"),
+		LeagueSlug: c.Param("league"),
+		SeasonSlug: c.Param("season"),
+	})
+	if err != nil {
+		handleServiceError(c, err, "delete_season_failed", "delete season failed")
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 func normalizeLocale(value string) string {
 	if value == "" {
 		return "en"
@@ -127,5 +196,18 @@ func rateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
 			return
 		}
 		httputil.JSONError(c, http.StatusTooManyRequests, "rate_limited", "too many requests")
+	}
+}
+
+func handleServiceError(c *gin.Context, err error, internalCode, defaultMessage string) {
+	switch {
+	case errors.Is(err, service.ErrInvalidArgument):
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_argument", err.Error())
+	case errors.Is(err, service.ErrConflict):
+		httputil.JSONError(c, http.StatusConflict, "conflict", err.Error())
+	case errors.Is(err, service.ErrNotFound):
+		httputil.JSONError(c, http.StatusNotFound, "not_found", err.Error())
+	default:
+		httputil.JSONError(c, http.StatusInternalServerError, internalCode, defaultMessage)
 	}
 }
