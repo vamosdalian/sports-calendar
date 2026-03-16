@@ -14,3 +14,6 @@ theSportsDB:
   baseURL: https://www.thesportsdb.com
   apiKey: 125954
   timeoutSeconds: 15
+adminAuth:
+  secret: abcdef
+  tokenTTLMinutes: 30

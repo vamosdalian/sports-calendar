@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
+	"github.com/vamosdalian/sports-calendar/backend/internal/auth"
 	"github.com/vamosdalian/sports-calendar/backend/internal/config"
 	"github.com/vamosdalian/sports-calendar/backend/internal/repository"
 	"github.com/vamosdalian/sports-calendar/backend/internal/server"
@@ -50,6 +51,11 @@ func main() {
 	}
 
 	svc := service.New(repo)
+	tokenManager, err := auth.NewManager(cfg.AdminAuth.Secret, time.Duration(cfg.AdminAuth.TokenTTLMinute)*time.Minute)
+	if err != nil {
+		logger.WithError(err).Fatal("create auth token manager")
+	}
+	svc.SetTokenManager(tokenManager)
 	client, err := syncer.NewTheSportsDBClient(
 		cfg.TheSportsDB.BaseURL,
 		cfg.TheSportsDB.APIKey,

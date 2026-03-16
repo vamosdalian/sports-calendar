@@ -13,8 +13,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/time/rate"
 
+	"github.com/vamosdalian/sports-calendar/backend/internal/auth"
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 	"github.com/vamosdalian/sports-calendar/backend/internal/service"
 )
@@ -22,16 +24,24 @@ import (
 type fakeRepository struct {
 	mu            sync.Mutex
 	nextSeasonID  int64
+	nextUserID    int64
 	sportsBySlug  map[string]domain.SportRecord
 	leaguesBySlug map[string]domain.LeagueRecord
 	seasonsByKey  map[string]domain.SeasonRecord
 	seasonMatches map[string]int
+	usersByEmail  map[string]fakeUser
+}
+
+type fakeUser struct {
+	record       domain.UserRecord
+	passwordHash string
 }
 
 func newFakeRepository() *fakeRepository {
 	now := "2026-03-10T00:00:00Z"
 	return &fakeRepository{
 		nextSeasonID: 2,
+		nextUserID:   1,
 		sportsBySlug: map[string]domain.SportRecord{
 			"football": {
 				ID:        1,
@@ -69,15 +79,22 @@ func newFakeRepository() *fakeRepository {
 		seasonMatches: map[string]int{
 			"football/csl/2026": 1,
 		},
+		usersByEmail: map[string]fakeUser{},
 	}
 }
 
-func testRouter(t *testing.T) (*gin.Engine, *fakeRepository) {
+func testRouter(t *testing.T) (*gin.Engine, *fakeRepository, *auth.Manager) {
 	t.Helper()
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
 	repo := newFakeRepository()
-	return NewRouter(logger, service.New(repo), rate.NewLimiter(rate.Limit(100), 100)), repo
+	svc := service.New(repo)
+	manager, err := auth.NewManager("test-secret", 30*time.Minute)
+	if err != nil {
+		t.Fatalf("create test token manager: %v", err)
+	}
+	svc.SetTokenManager(manager)
+	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100)), repo, manager
 }
 
 func (r *fakeRepository) ListLeagues(_ context.Context) ([]domain.SportDirectoryItem, string, error) {
@@ -164,6 +181,78 @@ func (r *fakeRepository) CreateSport(_ context.Context, input domain.CreateSport
 	return record, nil
 }
 
+func (r *fakeRepository) ListAdminSports(_ context.Context) (domain.AdminSportsResponse, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	items := make([]domain.AdminSportItem, 0, len(r.sportsBySlug))
+	for _, sport := range r.sportsBySlug {
+		items = append(items, domain.AdminSportItem{
+			ID:        sport.ID,
+			Slug:      sport.Slug,
+			Name:      sport.Name,
+			CreatedAt: sport.CreatedAt,
+			UpdatedAt: sport.UpdatedAt,
+		})
+	}
+	return domain.AdminSportsResponse{Items: items, UpdatedAt: "2026-03-10T00:00:00Z"}, nil
+}
+
+func (r *fakeRepository) ListAdminLeagues(_ context.Context, sportSlug string) (domain.AdminLeaguesResponse, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.sportsBySlug[sportSlug]; !exists {
+		return domain.AdminLeaguesResponse{}, domain.ErrNotFound
+	}
+	items := make([]domain.AdminLeagueItem, 0)
+	for _, league := range r.leaguesBySlug {
+		if league.SportSlug != sportSlug {
+			continue
+		}
+		items = append(items, domain.AdminLeagueItem{
+			ID:                  league.ID,
+			SportSlug:           league.SportSlug,
+			Slug:                league.Slug,
+			Name:                league.Name,
+			SyncInterval:        league.SyncInterval,
+			CalendarDescription: league.CalendarDescription,
+			DataSourceNote:      league.DataSourceNote,
+			Notes:               league.Notes,
+			CreatedAt:           league.CreatedAt,
+			UpdatedAt:           league.UpdatedAt,
+		})
+	}
+	return domain.AdminLeaguesResponse{SportSlug: sportSlug, Items: items, UpdatedAt: "2026-03-10T00:00:00Z"}, nil
+}
+
+func (r *fakeRepository) CountUsers(_ context.Context) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return int64(len(r.usersByEmail)), nil
+}
+
+func (r *fakeRepository) CreateUser(_ context.Context, email, passwordHash string) (domain.UserRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.usersByEmail[email]; exists {
+		return domain.UserRecord{}, domain.ErrConflict
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	record := domain.UserRecord{ID: r.nextUserID, Email: email, CreatedAt: now, UpdatedAt: now}
+	r.nextUserID++
+	r.usersByEmail[email] = fakeUser{record: record, passwordHash: passwordHash}
+	return record, nil
+}
+
+func (r *fakeRepository) GetUserByEmail(_ context.Context, email string) (domain.UserRecord, string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	user, exists := r.usersByEmail[email]
+	if !exists {
+		return domain.UserRecord{}, "", domain.ErrNotFound
+	}
+	return user.record, user.passwordHash, nil
+}
+
 func (r *fakeRepository) CreateLeague(_ context.Context, input domain.CreateLeagueInput) (domain.LeagueRecord, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -237,7 +326,7 @@ func (r *fakeRepository) DeleteSeason(_ context.Context, input domain.DeleteSeas
 }
 
 func TestLeaguesDefaultLocale(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, _ := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/leagues", nil)
 
@@ -283,7 +372,7 @@ func TestLeaguesDefaultLocale(t *testing.T) {
 }
 
 func TestLeaguesLocalized(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, _ := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/leagues?lang=zh", nil)
 
@@ -314,7 +403,7 @@ func TestLeaguesLocalized(t *testing.T) {
 }
 
 func TestLeagueSeasonsLocalized(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, _ := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/football/csl/seasons?lang=zh", nil)
 
@@ -338,7 +427,7 @@ func TestLeagueSeasonsLocalized(t *testing.T) {
 }
 
 func TestSeasonDetailLocalized(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, _ := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/football/csl/2026?lang=zh", nil)
 
@@ -365,7 +454,7 @@ func TestSeasonDetailLocalized(t *testing.T) {
 }
 
 func TestICSFeed(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, _ := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics", nil)
 
@@ -383,10 +472,11 @@ func TestICSFeed(t *testing.T) {
 }
 
 func TestCreateSport(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, manager := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/sports", bytes.NewBufferString(`{"id":2,"slug":"basketball","name":{"en":"Basketball","zh":"篮球"}}`))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
 
 	router.ServeHTTP(recorder, request)
 
@@ -407,10 +497,11 @@ func TestCreateSport(t *testing.T) {
 }
 
 func TestCreateLeagueRequiresExistingSport(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, manager := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/leagues", bytes.NewBufferString(`{"id":4328,"sportSlug":"basketball","slug":"nba","name":{"en":"NBA"}}`))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
 
 	router.ServeHTTP(recorder, request)
 
@@ -420,10 +511,11 @@ func TestCreateLeagueRequiresExistingSport(t *testing.T) {
 }
 
 func TestCreateSeasonConflict(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, manager := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/seasons", bytes.NewBufferString(`{"sportSlug":"football","leagueSlug":"csl","slug":"2026","label":"2026","startYear":2026,"endYear":2026}`))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
 
 	router.ServeHTTP(recorder, request)
 
@@ -433,9 +525,10 @@ func TestCreateSeasonConflict(t *testing.T) {
 }
 
 func TestDeleteSeason(t *testing.T) {
-	router, repo := testRouter(t)
+	router, repo, manager := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodDelete, "/api/admin/football/csl/seasons/2026", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
 
 	router.ServeHTTP(recorder, request)
 
@@ -454,10 +547,11 @@ func TestDeleteSeason(t *testing.T) {
 }
 
 func TestCreateSeasonInvalidYears(t *testing.T) {
-	router, _ := testRouter(t)
+	router, _, manager := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/seasons", bytes.NewBufferString(`{"sportSlug":"football","leagueSlug":"csl","slug":"2027","label":"2027","startYear":2028,"endYear":2027}`))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
 
 	router.ServeHTTP(recorder, request)
 
@@ -468,4 +562,92 @@ func TestCreateSeasonInvalidYears(t *testing.T) {
 
 func seasonKey(sportSlug, leagueSlug, seasonSlug string) string {
 	return sportSlug + "/" + leagueSlug + "/" + seasonSlug
+}
+
+func adminAuthorization(t *testing.T, manager *auth.Manager, email string) string {
+	t.Helper()
+	token, err := manager.Sign(email, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("sign admin token: %v", err)
+	}
+	return "Bearer " + token.Token
+}
+
+func TestRegisterLoginAndRefresh(t *testing.T) {
+	router, repo, _ := testRouter(t)
+	registerRecorder := httptest.NewRecorder()
+	registerRequest := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(`{"email":"admin@example.com","password":"secret123"}`))
+	registerRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(registerRecorder, registerRequest)
+	if registerRecorder.Code != http.StatusCreated {
+		t.Fatalf("unexpected register status: %d body=%s", registerRecorder.Code, registerRecorder.Body.String())
+	}
+
+	repo.mu.Lock()
+	createdUser, exists := repo.usersByEmail["admin@example.com"]
+	repo.mu.Unlock()
+	if !exists {
+		t.Fatalf("expected registered user to exist")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(createdUser.passwordHash), []byte("secret123")); err != nil {
+		t.Fatalf("expected stored password hash to match")
+	}
+
+	loginRecorder := httptest.NewRecorder()
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"admin@example.com","password":"secret123"}`))
+	loginRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(loginRecorder, loginRequest)
+	if loginRecorder.Code != http.StatusOK {
+		t.Fatalf("unexpected login status: %d body=%s", loginRecorder.Code, loginRecorder.Body.String())
+	}
+	var loginPayload map[string]any
+	if err := json.Unmarshal(loginRecorder.Body.Bytes(), &loginPayload); err != nil {
+		t.Fatalf("decode login payload: %v", err)
+	}
+	token, _ := loginPayload["token"].(string)
+	if token == "" {
+		t.Fatalf("expected login token")
+	}
+
+	refreshRecorder := httptest.NewRecorder()
+	refreshRequest := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
+	refreshRequest.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(refreshRecorder, refreshRequest)
+	if refreshRecorder.Code != http.StatusOK {
+		t.Fatalf("unexpected refresh status: %d body=%s", refreshRecorder.Code, refreshRecorder.Body.String())
+	}
+}
+
+func TestAdminRouteRequiresToken(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/sports", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestAuthRegisterOptionsPreflight(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodOptions, "/api/auth/register", nil)
+	request.Header.Set("Origin", "http://localhost:5174")
+	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	request.Header.Set("Access-Control-Request-Headers", "authorization, content-type")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5174" {
+		t.Fatalf("unexpected allow origin: %q", got)
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Methods"); got == "" {
+		t.Fatalf("expected allow methods header")
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Headers"); got == "" {
+		t.Fatalf("expected allow headers header")
+	}
 }

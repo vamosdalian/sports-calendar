@@ -19,6 +19,7 @@ import (
 func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limiter) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
+	router.Use(corsMiddleware())
 	router.Use(requestLogger(logger))
 	router.Use(rateLimitMiddleware(limiter))
 	handler := &Handler{service: svc}
@@ -26,10 +27,17 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	router.GET("/healthz", handler.healthz)
 
 	api := router.Group("/api")
+	auth := api.Group("/auth")
+	auth.POST("/register", handler.registerAdmin)
+	auth.POST("/login", handler.loginAdmin)
+	auth.POST("/refresh", handler.refreshAdminToken)
 	api.GET("/leagues", handler.listLeagues)
 	api.GET("/:sport/:league/seasons", handler.listLeagueSeasons)
 	api.GET("/:sport/:league/:season", handler.getLeagueSeason)
 	admin := api.Group("/admin")
+	admin.Use(adminAuthMiddleware(svc))
+	admin.GET("/sports", handler.listAdminSports)
+	admin.GET("/:sport/leagues", handler.listAdminLeagues)
 	admin.POST("/sports", handler.createSport)
 	admin.POST("/leagues", handler.createLeague)
 	admin.POST("/seasons", handler.createSeason)
@@ -185,6 +193,29 @@ func requestLogger(logger *logrus.Logger) gin.HandlerFunc {
 	}
 }
 
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin == "" {
+			c.Header("Access-Control-Allow-Origin", "*")
+		} else {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+		}
+		c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		c.Header("Access-Control-Max-Age", "600")
+
+		if c.Request.Method == http.MethodOptions {
+			c.Status(http.StatusNoContent)
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
 var timeNow = func() time.Time {
 	return time.Now()
 }
@@ -207,6 +238,8 @@ func handleServiceError(c *gin.Context, err error, internalCode, defaultMessage 
 		httputil.JSONError(c, http.StatusConflict, "conflict", err.Error())
 	case errors.Is(err, service.ErrNotFound):
 		httputil.JSONError(c, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, service.ErrUnauthorized):
+		httputil.JSONError(c, http.StatusUnauthorized, "unauthorized", err.Error())
 	default:
 		httputil.JSONError(c, http.StatusInternalServerError, internalCode, defaultMessage)
 	}

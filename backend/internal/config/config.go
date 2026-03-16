@@ -13,6 +13,7 @@ type Config struct {
 	RateLimit   RateLimitConfig   `yaml:"rateLimit"`
 	Database    DatabaseConfig    `yaml:"database"`
 	TheSportsDB TheSportsDBConfig `yaml:"theSportsDB"`
+	AdminAuth   AdminAuthConfig   `yaml:"adminAuth"`
 }
 
 type ServerConfig struct {
@@ -37,6 +38,11 @@ type TheSportsDBConfig struct {
 	BaseURL        string `yaml:"baseURL"`
 	APIKey         string `yaml:"apiKey"`
 	TimeoutSeconds int    `yaml:"timeoutSeconds"`
+}
+
+type AdminAuthConfig struct {
+	Secret         string `yaml:"secret"`
+	TokenTTLMinute int    `yaml:"tokenTTLMinutes"`
 }
 
 func Load(path string) (Config, error) {
@@ -78,6 +84,12 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.TheSportsDB.APIKey == "" {
 		return Config{}, fmt.Errorf("theSportsDB apiKey is required")
+	}
+	if cfg.AdminAuth.Secret == "" {
+		return Config{}, fmt.Errorf("adminAuth secret is required")
+	}
+	if cfg.AdminAuth.TokenTTLMinute <= 0 {
+		cfg.AdminAuth.TokenTTLMinute = 30
 	}
 
 	return cfg, nil

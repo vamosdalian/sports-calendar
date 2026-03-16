@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	:root {
+		font-family: 'IBM Plex Sans', 'Noto Sans SC', sans-serif;
+		color: #102132;
+		background:
+			radial-gradient(circle at top left, rgba(217, 107, 43, 0.12), transparent 28%),
+			linear-gradient(180deg, #f4f5ed 0%, #eef2f6 100%);
+		font-synthesis: none;
+		text-rendering: optimizeLegibility;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	* {
+		@apply border-line;
+	}
+
+	body {
+		@apply min-h-screen bg-shell bg-grid bg-[size:32px_32px] text-ink;
+		margin: 0;
+	}
+
+	a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	button,
+	input,
+	select,
+	textarea {
+		font: inherit;
+	}
+
+	#root {
+		@apply min-h-screen;
+	}
+}
+
+@layer components {
+	.panel-surface {
+		@apply rounded-panel border border-line/80 bg-panel shadow-panel;
+	}
+}

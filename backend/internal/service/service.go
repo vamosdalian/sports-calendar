@@ -15,11 +15,17 @@ import (
 var ErrNotFound = domain.ErrNotFound
 var ErrConflict = domain.ErrConflict
 var ErrInvalidArgument = domain.ErrInvalidArgument
+var ErrUnauthorized = domain.ErrUnauthorized
 
 type repository interface {
 	ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error)
 	ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error)
 	GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error)
+	ListAdminSports(ctx context.Context) (domain.AdminSportsResponse, error)
+	ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error)
+	CountUsers(ctx context.Context) (int64, error)
+	CreateUser(ctx context.Context, email, passwordHash string) (domain.UserRecord, error)
+	GetUserByEmail(ctx context.Context, email string) (domain.UserRecord, string, error)
 	CreateSport(ctx context.Context, input domain.CreateSportInput) (domain.SportRecord, error)
 	CreateLeague(ctx context.Context, input domain.CreateLeagueInput) (domain.LeagueRecord, error)
 	CreateSeason(ctx context.Context, input domain.CreateSeasonInput) (domain.SeasonRecord, error)
@@ -27,7 +33,8 @@ type repository interface {
 }
 
 type Service struct {
-	repo repository
+	repo         repository
+	tokenManager tokenManager
 }
 
 type SportDirectoryItem = domain.SportDirectoryItem
