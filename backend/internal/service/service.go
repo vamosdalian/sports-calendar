@@ -23,18 +23,37 @@ type repository interface {
 	GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error)
 	ListAdminSports(ctx context.Context) (domain.AdminSportsResponse, error)
 	ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error)
+	ListAdminSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateUser(ctx context.Context, email, passwordHash string) (domain.UserRecord, error)
 	GetUserByEmail(ctx context.Context, email string) (domain.UserRecord, string, error)
 	CreateSport(ctx context.Context, input domain.CreateSportInput) (domain.SportRecord, error)
+	UpdateSport(ctx context.Context, input domain.UpdateSportInput) (domain.SportRecord, error)
+	DeleteSport(ctx context.Context, input domain.DeleteSportInput) error
 	CreateLeague(ctx context.Context, input domain.CreateLeagueInput) (domain.LeagueRecord, error)
+	UpdateLeague(ctx context.Context, input domain.UpdateLeagueInput) (domain.LeagueRecord, error)
+	DeleteLeague(ctx context.Context, input domain.DeleteLeagueInput) error
 	CreateSeason(ctx context.Context, input domain.CreateSeasonInput) (domain.SeasonRecord, error)
+	UpdateSeason(ctx context.Context, input domain.UpdateSeasonInput) (domain.SeasonRecord, error)
 	DeleteSeason(ctx context.Context, input domain.DeleteSeasonInput) error
+}
+
+type sportsDataProvider interface {
+	ListSports(ctx context.Context) ([]domain.AdminExternalSportOption, error)
+	ListLeaguesBySport(ctx context.Context, sportName string) ([]domain.AdminExternalLeagueOption, error)
+	LookupLeague(ctx context.Context, leagueID int64) (domain.AdminExternalLeagueLookup, error)
+	ListSeasons(ctx context.Context, leagueID int64) ([]domain.AdminExternalSeasonOption, error)
+}
+
+type syncScheduleRefresher interface {
+	Refresh(ctx context.Context) error
 }
 
 type Service struct {
 	repo         repository
 	tokenManager tokenManager
+	provider     sportsDataProvider
+	refresher    syncScheduleRefresher
 }
 
 type SportDirectoryItem = domain.SportDirectoryItem
@@ -54,6 +73,27 @@ type LeaguesResponse struct {
 
 func New(repo repository) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetSyncScheduleRefresher(refresher syncScheduleRefresher) {
+	s.refresher = refresher
+	if refresher == nil {
+		return
+	}
+	refreshCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = refresher.Refresh(refreshCtx)
+}
+
+func (s *Service) refreshSyncSchedule() {
+	if s.refresher == nil {
+		return
+	}
+	go func(refresher syncScheduleRefresher) {
+		refreshCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = refresher.Refresh(refreshCtx)
+	}(s.refresher)
 }
 
 func (s *Service) CreateSport(ctx context.Context, input domain.CreateSportInput) (SportRecord, error) {
@@ -95,7 +135,12 @@ func (s *Service) CreateLeague(ctx context.Context, input domain.CreateLeagueInp
 	if input.SyncInterval == "" {
 		input.SyncInterval = "@daily"
 	}
-	return s.repo.CreateLeague(ctx, input)
+	record, err := s.repo.CreateLeague(ctx, input)
+	if err != nil {
+		return LeagueRecord{}, err
+	}
+	s.refreshSyncSchedule()
+	return record, nil
 }
 
 func (s *Service) CreateSeason(ctx context.Context, input domain.CreateSeasonInput) (SeasonRecord, error) {
@@ -125,7 +170,12 @@ func (s *Service) CreateSeason(ctx context.Context, input domain.CreateSeasonInp
 	if input.DefaultMatchDurationMinutes <= 0 {
 		input.DefaultMatchDurationMinutes = 120
 	}
-	return s.repo.CreateSeason(ctx, input)
+	record, err := s.repo.CreateSeason(ctx, input)
+	if err != nil {
+		return SeasonRecord{}, err
+	}
+	s.refreshSyncSchedule()
+	return record, nil
 }
 
 func (s *Service) DeleteSeason(ctx context.Context, input domain.DeleteSeasonInput) error {
@@ -142,7 +192,39 @@ func (s *Service) DeleteSeason(ctx context.Context, input domain.DeleteSeasonInp
 	if input.SeasonSlug == "" {
 		return invalidArgument("season slug is required")
 	}
-	return s.repo.DeleteSeason(ctx, input)
+	if err := s.repo.DeleteSeason(ctx, input); err != nil {
+		return err
+	}
+	s.refreshSyncSchedule()
+	return nil
+}
+
+func (s *Service) DeleteSport(ctx context.Context, input domain.DeleteSportInput) error {
+	input.SportSlug = normalizeSlug(input.SportSlug)
+	if input.SportSlug == "" {
+		return invalidArgument("sport slug is required")
+	}
+	if err := s.repo.DeleteSport(ctx, input); err != nil {
+		return err
+	}
+	s.refreshSyncSchedule()
+	return nil
+}
+
+func (s *Service) DeleteLeague(ctx context.Context, input domain.DeleteLeagueInput) error {
+	input.SportSlug = normalizeSlug(input.SportSlug)
+	input.LeagueSlug = normalizeSlug(input.LeagueSlug)
+	if input.SportSlug == "" {
+		return invalidArgument("sport slug is required")
+	}
+	if input.LeagueSlug == "" {
+		return invalidArgument("league slug is required")
+	}
+	if err := s.repo.DeleteLeague(ctx, input); err != nil {
+		return err
+	}
+	s.refreshSyncSchedule()
+	return nil
 }
 
 func (s *Service) ListLeagues(ctx context.Context) (LeaguesResponse, error) {

@@ -53,6 +53,92 @@ func (r *PostgresRepository) CreateSport(ctx context.Context, input domain.Creat
 	return record, nil
 }
 
+func (r *PostgresRepository) UpdateSport(ctx context.Context, input domain.UpdateSportInput) (domain.SportRecord, error) {
+	var (
+		record  domain.SportRecord
+		nameRaw []byte
+		created time.Time
+		updated time.Time
+	)
+	err := r.pool.QueryRow(ctx, `
+		UPDATE sports
+		SET slug = $2, name = $3::jsonb, updated_at = NOW()
+		WHERE slug = $1
+		RETURNING id, slug, name, created_at, updated_at
+	`, input.CurrentSlug, input.Slug, encodeLocalizedText(input.Name)).Scan(
+		&record.ID,
+		&record.Slug,
+		&nameRaw,
+		&created,
+		&updated,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.SportRecord{}, domain.ErrNotFound
+		}
+		return domain.SportRecord{}, mapWriteError("update sport", err)
+	}
+	record.Name = decodeLocalizedText(nameRaw)
+	record.CreatedAt = created.UTC().Format(time.RFC3339)
+	record.UpdatedAt = updated.UTC().Format(time.RFC3339)
+	return record, nil
+}
+
+func (r *PostgresRepository) DeleteSport(ctx context.Context, input domain.DeleteSportInput) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin delete sport transaction: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	sportID, err := lookupSportIDTx(ctx, tx, input.SportSlug)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM matches
+		WHERE season_id IN (
+			SELECT se.id
+			FROM seasons se
+			JOIN leagues l ON l.id = se.league_id
+			WHERE l.sport_id = $1
+		)
+	`, sportID); err != nil {
+		return fmt.Errorf("delete sport matches: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM teams WHERE league_id IN (SELECT id FROM leagues WHERE sport_id = $1)`, sportID); err != nil {
+		return fmt.Errorf("delete sport teams: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM seasons WHERE league_id IN (SELECT id FROM leagues WHERE sport_id = $1)`, sportID); err != nil {
+		return fmt.Errorf("delete sport seasons: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM leagues WHERE sport_id = $1`, sportID); err != nil {
+		return fmt.Errorf("delete sport leagues: %w", err)
+	}
+
+	result, err := tx.Exec(ctx, `DELETE FROM sports WHERE id = $1`, sportID)
+	if err != nil {
+		return fmt.Errorf("delete sport: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete sport transaction: %w", err)
+	}
+	tx = nil
+	return nil
+}
+
 func (r *PostgresRepository) CreateLeague(ctx context.Context, input domain.CreateLeagueInput) (domain.LeagueRecord, error) {
 	sportID, err := r.lookupSportID(ctx, input.SportSlug)
 	if err != nil {
@@ -105,6 +191,102 @@ func (r *PostgresRepository) CreateLeague(ctx context.Context, input domain.Crea
 	return record, nil
 }
 
+func (r *PostgresRepository) UpdateLeague(ctx context.Context, input domain.UpdateLeagueInput) (domain.LeagueRecord, error) {
+	sportID, err := r.lookupSportID(ctx, input.SportSlug)
+	if err != nil {
+		return domain.LeagueRecord{}, err
+	}
+
+	var (
+		record                 domain.LeagueRecord
+		nameRaw                []byte
+		calendarDescriptionRaw []byte
+		dataSourceNoteRaw      []byte
+		notesRaw               []byte
+		created                time.Time
+		updated                time.Time
+	)
+	err = r.pool.QueryRow(ctx, `
+		UPDATE leagues
+		SET slug = $3,
+			name = $4::jsonb,
+			sync_interval = $5,
+			calendar_description = $6::jsonb,
+			data_source_note = $7::jsonb,
+			notes = $8::jsonb,
+			updated_at = NOW()
+		WHERE sport_id = $1 AND slug = $2
+		RETURNING id, slug, name, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
+	`, sportID, input.CurrentSlug, input.Slug, encodeLocalizedText(input.Name), input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
+		&record.ID,
+		&record.Slug,
+		&nameRaw,
+		&record.SyncInterval,
+		&calendarDescriptionRaw,
+		&dataSourceNoteRaw,
+		&notesRaw,
+		&created,
+		&updated,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.LeagueRecord{}, domain.ErrNotFound
+		}
+		return domain.LeagueRecord{}, mapWriteError("update league", err)
+	}
+	record.SportSlug = input.SportSlug
+	record.Name = decodeLocalizedText(nameRaw)
+	record.CalendarDescription = decodeLocalizedText(calendarDescriptionRaw)
+	record.DataSourceNote = decodeLocalizedText(dataSourceNoteRaw)
+	record.Notes = decodeLocalizedText(notesRaw)
+	record.CreatedAt = created.UTC().Format(time.RFC3339)
+	record.UpdatedAt = updated.UTC().Format(time.RFC3339)
+	return record, nil
+}
+
+func (r *PostgresRepository) DeleteLeague(ctx context.Context, input domain.DeleteLeagueInput) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin delete league transaction: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	leagueID, err := lookupLeagueIDTx(ctx, tx, input.SportSlug, input.LeagueSlug)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM matches WHERE season_id IN (SELECT id FROM seasons WHERE league_id = $1)`, leagueID); err != nil {
+		return fmt.Errorf("delete league matches: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM teams WHERE league_id = $1`, leagueID); err != nil {
+		return fmt.Errorf("delete league teams: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM seasons WHERE league_id = $1`, leagueID); err != nil {
+		return fmt.Errorf("delete league seasons: %w", err)
+	}
+
+	result, err := tx.Exec(ctx, `DELETE FROM leagues WHERE id = $1`, leagueID)
+	if err != nil {
+		return fmt.Errorf("delete league: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete league transaction: %w", err)
+	}
+	tx = nil
+	return nil
+}
+
 func (r *PostgresRepository) CreateSeason(ctx context.Context, input domain.CreateSeasonInput) (domain.SeasonRecord, error) {
 	leagueID, err := r.lookupLeagueID(ctx, input.SportSlug, input.LeagueSlug)
 	if err != nil {
@@ -139,6 +321,50 @@ func (r *PostgresRepository) CreateSeason(ctx context.Context, input domain.Crea
 	)
 	if err != nil {
 		return domain.SeasonRecord{}, mapWriteError("create season", err)
+	}
+	record.SportSlug = input.SportSlug
+	record.LeagueSlug = input.LeagueSlug
+	record.CreatedAt = created.UTC().Format(time.RFC3339)
+	record.UpdatedAt = updated.UTC().Format(time.RFC3339)
+	return record, nil
+}
+
+func (r *PostgresRepository) UpdateSeason(ctx context.Context, input domain.UpdateSeasonInput) (domain.SeasonRecord, error) {
+	leagueID, err := r.lookupLeagueID(ctx, input.SportSlug, input.LeagueSlug)
+	if err != nil {
+		return domain.SeasonRecord{}, err
+	}
+
+	var (
+		record  domain.SeasonRecord
+		created time.Time
+		updated time.Time
+	)
+	err = r.pool.QueryRow(ctx, `
+		UPDATE seasons
+		SET slug = $3,
+			label = $4,
+			start_year = $5,
+			end_year = $6,
+			default_match_duration_minutes = $7,
+			updated_at = NOW()
+		WHERE league_id = $1 AND slug = $2
+		RETURNING id, slug, label, start_year, end_year, default_match_duration_minutes, created_at, updated_at
+	`, leagueID, input.CurrentSlug, input.Slug, input.Label, input.StartYear, input.EndYear, input.DefaultMatchDurationMinutes).Scan(
+		&record.ID,
+		&record.Slug,
+		&record.Label,
+		&record.StartYear,
+		&record.EndYear,
+		&record.DefaultMatchDurationMinutes,
+		&created,
+		&updated,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.SeasonRecord{}, domain.ErrNotFound
+		}
+		return domain.SeasonRecord{}, mapWriteError("update season", err)
 	}
 	record.SportSlug = input.SportSlug
 	record.LeagueSlug = input.LeagueSlug
@@ -713,6 +939,23 @@ func (r *PostgresRepository) lookupSportID(ctx context.Context, sportSlug string
 	return sportID, nil
 }
 
+func lookupSportIDTx(ctx context.Context, tx pgx.Tx, sportSlug string) (int64, error) {
+	var sportID int64
+	err := tx.QueryRow(ctx, `
+		SELECT id
+		FROM sports
+		WHERE slug = $1
+		FOR UPDATE
+	`, sportSlug).Scan(&sportID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, domain.ErrNotFound
+		}
+		return 0, fmt.Errorf("lookup sport %s: %w", sportSlug, err)
+	}
+	return sportID, nil
+}
+
 func (r *PostgresRepository) lookupLeagueID(ctx context.Context, sportSlug, leagueSlug string) (int64, error) {
 	var leagueID int64
 	err := r.pool.QueryRow(ctx, `
@@ -720,6 +963,24 @@ func (r *PostgresRepository) lookupLeagueID(ctx context.Context, sportSlug, leag
 		FROM leagues l
 		JOIN sports s ON s.id = l.sport_id
 		WHERE s.slug = $1 AND l.slug = $2
+	`, sportSlug, leagueSlug).Scan(&leagueID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, domain.ErrNotFound
+		}
+		return 0, fmt.Errorf("lookup league %s/%s: %w", sportSlug, leagueSlug, err)
+	}
+	return leagueID, nil
+}
+
+func lookupLeagueIDTx(ctx context.Context, tx pgx.Tx, sportSlug, leagueSlug string) (int64, error) {
+	var leagueID int64
+	err := tx.QueryRow(ctx, `
+		SELECT l.id
+		FROM leagues l
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2
+		FOR UPDATE
 	`, sportSlug, leagueSlug).Scan(&leagueID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -107,3 +107,15 @@ func (s *Service) ListAdminLeagues(ctx context.Context, sportSlug string) (domai
 	}
 	return s.repo.ListAdminLeagues(ctx, sportSlug)
 }
+
+func (s *Service) ListAdminSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error) {
+	sportSlug = normalizeSlug(sportSlug)
+	leagueSlug = normalizeSlug(leagueSlug)
+	if sportSlug == "" {
+		return domain.AdminSeasonsResponse{}, invalidArgument("sport slug is required")
+	}
+	if leagueSlug == "" {
+		return domain.AdminSeasonsResponse{}, invalidArgument("league slug is required")
+	}
+	return s.repo.ListAdminSeasons(ctx, sportSlug, leagueSlug)
+}

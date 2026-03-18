@@ -224,6 +224,33 @@ func (r *fakeRepository) ListAdminLeagues(_ context.Context, sportSlug string) (
 	return domain.AdminLeaguesResponse{SportSlug: sportSlug, Items: items, UpdatedAt: "2026-03-10T00:00:00Z"}, nil
 }
 
+func (r *fakeRepository) ListAdminSeasons(_ context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if league, exists := r.leaguesBySlug[leagueSlug]; !exists || league.SportSlug != sportSlug {
+		return domain.AdminSeasonsResponse{}, domain.ErrNotFound
+	}
+	items := make([]domain.AdminSeasonItem, 0)
+	for _, season := range r.seasonsByKey {
+		if season.SportSlug != sportSlug || season.LeagueSlug != leagueSlug {
+			continue
+		}
+		items = append(items, domain.AdminSeasonItem{
+			ID:                          season.ID,
+			SportSlug:                   season.SportSlug,
+			LeagueSlug:                  season.LeagueSlug,
+			Slug:                        season.Slug,
+			Label:                       season.Label,
+			StartYear:                   season.StartYear,
+			EndYear:                     season.EndYear,
+			DefaultMatchDurationMinutes: season.DefaultMatchDurationMinutes,
+			CreatedAt:                   season.CreatedAt,
+			UpdatedAt:                   season.UpdatedAt,
+		})
+	}
+	return domain.AdminSeasonsResponse{SportSlug: sportSlug, LeagueSlug: leagueSlug, Items: items, UpdatedAt: "2026-03-10T00:00:00Z"}, nil
+}
+
 func (r *fakeRepository) CountUsers(_ context.Context) (int64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -284,6 +311,114 @@ func (r *fakeRepository) CreateLeague(_ context.Context, input domain.CreateLeag
 	return record, nil
 }
 
+func (r *fakeRepository) UpdateSport(_ context.Context, input domain.UpdateSportInput) (domain.SportRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	record, exists := r.sportsBySlug[input.CurrentSlug]
+	if !exists {
+		return domain.SportRecord{}, domain.ErrNotFound
+	}
+	if input.CurrentSlug != input.Slug {
+		if _, exists := r.sportsBySlug[input.Slug]; exists {
+			return domain.SportRecord{}, domain.ErrConflict
+		}
+		delete(r.sportsBySlug, input.CurrentSlug)
+	}
+	record.Slug = input.Slug
+	record.Name = input.Name
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	r.sportsBySlug[input.Slug] = record
+	for key, league := range r.leaguesBySlug {
+		if league.SportSlug != input.CurrentSlug {
+			continue
+		}
+		league.SportSlug = input.Slug
+		r.leaguesBySlug[key] = league
+	}
+	for key, season := range r.seasonsByKey {
+		if season.SportSlug != input.CurrentSlug {
+			continue
+		}
+		delete(r.seasonsByKey, key)
+		season.SportSlug = input.Slug
+		r.seasonsByKey[seasonKey(season.SportSlug, season.LeagueSlug, season.Slug)] = season
+	}
+	return record, nil
+}
+
+func (r *fakeRepository) DeleteSport(_ context.Context, input domain.DeleteSportInput) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.sportsBySlug[input.SportSlug]; !exists {
+		return domain.ErrNotFound
+	}
+	delete(r.sportsBySlug, input.SportSlug)
+	for slug, league := range r.leaguesBySlug {
+		if league.SportSlug != input.SportSlug {
+			continue
+		}
+		delete(r.leaguesBySlug, slug)
+	}
+	for key, season := range r.seasonsByKey {
+		if season.SportSlug != input.SportSlug {
+			continue
+		}
+		delete(r.seasonsByKey, key)
+		delete(r.seasonMatches, key)
+	}
+	return nil
+}
+
+func (r *fakeRepository) UpdateLeague(_ context.Context, input domain.UpdateLeagueInput) (domain.LeagueRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	record, exists := r.leaguesBySlug[input.CurrentSlug]
+	if !exists || record.SportSlug != input.SportSlug {
+		return domain.LeagueRecord{}, domain.ErrNotFound
+	}
+	if input.CurrentSlug != input.Slug {
+		if _, exists := r.leaguesBySlug[input.Slug]; exists {
+			return domain.LeagueRecord{}, domain.ErrConflict
+		}
+		delete(r.leaguesBySlug, input.CurrentSlug)
+	}
+	record.Slug = input.Slug
+	record.Name = input.Name
+	record.SyncInterval = input.SyncInterval
+	record.CalendarDescription = input.CalendarDescription
+	record.DataSourceNote = input.DataSourceNote
+	record.Notes = input.Notes
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	r.leaguesBySlug[input.Slug] = record
+	for key, season := range r.seasonsByKey {
+		if season.SportSlug != input.SportSlug || season.LeagueSlug != input.CurrentSlug {
+			continue
+		}
+		delete(r.seasonsByKey, key)
+		season.LeagueSlug = input.Slug
+		r.seasonsByKey[seasonKey(season.SportSlug, season.LeagueSlug, season.Slug)] = season
+	}
+	return record, nil
+}
+
+func (r *fakeRepository) DeleteLeague(_ context.Context, input domain.DeleteLeagueInput) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	record, exists := r.leaguesBySlug[input.LeagueSlug]
+	if !exists || record.SportSlug != input.SportSlug {
+		return domain.ErrNotFound
+	}
+	delete(r.leaguesBySlug, input.LeagueSlug)
+	for key, season := range r.seasonsByKey {
+		if season.SportSlug != input.SportSlug || season.LeagueSlug != input.LeagueSlug {
+			continue
+		}
+		delete(r.seasonsByKey, key)
+		delete(r.seasonMatches, key)
+	}
+	return nil
+}
+
 func (r *fakeRepository) CreateSeason(_ context.Context, input domain.CreateSeasonInput) (domain.SeasonRecord, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -310,6 +445,35 @@ func (r *fakeRepository) CreateSeason(_ context.Context, input domain.CreateSeas
 	}
 	r.nextSeasonID++
 	r.seasonsByKey[key] = record
+	return record, nil
+}
+
+func (r *fakeRepository) UpdateSeason(_ context.Context, input domain.UpdateSeasonInput) (domain.SeasonRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := seasonKey(input.SportSlug, input.LeagueSlug, input.CurrentSlug)
+	record, exists := r.seasonsByKey[key]
+	if !exists {
+		return domain.SeasonRecord{}, domain.ErrNotFound
+	}
+	nextKey := seasonKey(input.SportSlug, input.LeagueSlug, input.Slug)
+	if nextKey != key {
+		if _, exists := r.seasonsByKey[nextKey]; exists {
+			return domain.SeasonRecord{}, domain.ErrConflict
+		}
+		delete(r.seasonsByKey, key)
+	}
+	record.Slug = input.Slug
+	record.Label = input.Label
+	record.StartYear = input.StartYear
+	record.EndYear = input.EndYear
+	record.DefaultMatchDurationMinutes = input.DefaultMatchDurationMinutes
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	r.seasonsByKey[nextKey] = record
+	if matches, exists := r.seasonMatches[key]; exists {
+		delete(r.seasonMatches, key)
+		r.seasonMatches[nextKey] = matches
+	}
 	return record, nil
 }
 
@@ -543,6 +707,50 @@ func TestDeleteSeason(t *testing.T) {
 	}
 	if _, exists := repo.seasonMatches[seasonKey("football", "csl", "2026")]; exists {
 		t.Fatalf("expected season matches to be deleted")
+	}
+}
+
+func TestDeleteLeague(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/football/leagues/csl", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if _, exists := repo.leaguesBySlug["csl"]; exists {
+		t.Fatalf("expected league to be deleted")
+	}
+	if _, exists := repo.seasonsByKey[seasonKey("football", "csl", "2026")]; exists {
+		t.Fatalf("expected league seasons to be deleted")
+	}
+}
+
+func TestDeleteSport(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/sports/football", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if _, exists := repo.sportsBySlug["football"]; exists {
+		t.Fatalf("expected sport to be deleted")
+	}
+	if _, exists := repo.leaguesBySlug["csl"]; exists {
+		t.Fatalf("expected sport leagues to be deleted")
 	}
 }
 

@@ -67,3 +67,23 @@ type AdminLeaguesResponse struct {
 	Items     []AdminLeagueItem `json:"items"`
 	UpdatedAt string            `json:"updatedAt"`
 }
+
+type AdminSeasonItem struct {
+	ID                          int64  `json:"id"`
+	SportSlug                   string `json:"sportSlug"`
+	LeagueSlug                  string `json:"leagueSlug"`
+	Slug                        string `json:"slug"`
+	Label                       string `json:"label"`
+	StartYear                   int    `json:"startYear"`
+	EndYear                     int    `json:"endYear"`
+	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`
+	CreatedAt                   string `json:"createdAt"`
+	UpdatedAt                   string `json:"updatedAt"`
+}
+
+type AdminSeasonsResponse struct {
+	SportSlug  string            `json:"sportSlug"`
+	LeagueSlug string            `json:"leagueSlug"`
+	Items      []AdminSeasonItem `json:"items"`
+	UpdatedAt  string            `json:"updatedAt"`
+}

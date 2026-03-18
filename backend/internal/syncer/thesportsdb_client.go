@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -63,6 +64,33 @@ type leagueLookupItem struct {
 
 type teamListResponse struct {
 	List []teamListItem `json:"list"`
+}
+
+type allSportsResponse struct {
+	All []allSportsItem `json:"all"`
+}
+
+type allSportsItem struct {
+	SportID string `json:"idSport"`
+	Name    string `json:"strSport"`
+}
+
+type allLeaguesResponse struct {
+	All []allLeaguesItem `json:"all"`
+}
+
+type allLeaguesItem struct {
+	LeagueID string `json:"idLeague"`
+	Name     string `json:"strLeague"`
+	Sport    string `json:"strSport"`
+}
+
+type seasonsListResponse struct {
+	List []seasonsListItem `json:"list"`
+}
+
+type seasonsListItem struct {
+	Season string `json:"strSeason"`
 }
 
 type teamListItem struct {
@@ -197,6 +225,116 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 	}, nil
 }
 
+func (c *TheSportsDBClient) ListSports(ctx context.Context) ([]domain.AdminExternalSportOption, error) {
+	var payload allSportsResponse
+	if err := c.getJSON(ctx, "/api/v2/json/all/sports", &payload); err != nil {
+		return nil, err
+	}
+	items := make([]domain.AdminExternalSportOption, 0, len(payload.All))
+	for _, item := range payload.All {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(strings.TrimSpace(item.SportID), 10, 64)
+		if err != nil {
+			continue
+		}
+		items = append(items, domain.AdminExternalSportOption{
+			ID:            id,
+			Name:          name,
+			SuggestedSlug: slugify(name, item.SportID),
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
+	})
+	return items, nil
+}
+
+func (c *TheSportsDBClient) ListLeaguesBySport(ctx context.Context, sportName string) ([]domain.AdminExternalLeagueOption, error) {
+	var payload allLeaguesResponse
+	if err := c.getJSON(ctx, "/api/v2/json/all/leagues", &payload); err != nil {
+		return nil, err
+	}
+	normalizedSport := normalizeExternalName(sportName)
+	items := make([]domain.AdminExternalLeagueOption, 0, len(payload.All))
+	for _, item := range payload.All {
+		name := strings.TrimSpace(item.Name)
+		itemSport := strings.TrimSpace(item.Sport)
+		if name == "" || itemSport == "" {
+			continue
+		}
+		if normalizedSport != "" && normalizeExternalName(itemSport) != normalizedSport {
+			continue
+		}
+		id, err := strconv.ParseInt(strings.TrimSpace(item.LeagueID), 10, 64)
+		if err != nil {
+			continue
+		}
+		items = append(items, domain.AdminExternalLeagueOption{
+			ID:            id,
+			Name:          name,
+			Sport:         itemSport,
+			SuggestedSlug: slugify(name, item.LeagueID),
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
+	})
+	return items, nil
+}
+
+func (c *TheSportsDBClient) LookupLeague(ctx context.Context, leagueID int64) (domain.AdminExternalLeagueLookup, error) {
+	var payload leagueLookupResponse
+	path := "/api/v2/json/lookup/league/" + url.PathEscape(strconv.FormatInt(leagueID, 10))
+	if err := c.getJSON(ctx, path, &payload); err != nil {
+		return domain.AdminExternalLeagueLookup{}, err
+	}
+	if len(payload.Lookup) == 0 {
+		return domain.AdminExternalLeagueLookup{}, fmt.Errorf("theSportsDB league %d not found", leagueID)
+	}
+	item := payload.Lookup[0]
+	return domain.AdminExternalLeagueLookup{
+		ID:                  leagueID,
+		Name:                strings.TrimSpace(item.LeagueName),
+		Sport:               strings.TrimSpace(item.Sport),
+		Country:             strings.TrimSpace(item.Country),
+		CurrentSeason:       strings.TrimSpace(item.CurrentSeason),
+		SuggestedSlug:       slugify(item.LeagueName, strconv.FormatInt(leagueID, 10)),
+		CalendarDescription: strings.TrimSpace(item.DescriptionEN),
+		DataSourceNote:      strings.TrimSpace(fmt.Sprintf("Synced from TheSportsDB league %d", leagueID)),
+		SyncInterval:        "@daily",
+	}, nil
+}
+
+func (c *TheSportsDBClient) ListSeasons(ctx context.Context, leagueID int64) ([]domain.AdminExternalSeasonOption, error) {
+	var payload seasonsListResponse
+	path := "/api/v2/json/list/seasons/" + url.PathEscape(strconv.FormatInt(leagueID, 10))
+	if err := c.getJSON(ctx, path, &payload); err != nil {
+		return nil, err
+	}
+	items := make([]domain.AdminExternalSeasonOption, 0, len(payload.List))
+	for _, item := range payload.List {
+		value := strings.TrimSpace(item.Season)
+		if value == "" {
+			continue
+		}
+		startYear, endYear := parseSeasonYears(value)
+		items = append(items, domain.AdminExternalSeasonOption{
+			SeasonValue:   value,
+			Label:         value,
+			SuggestedSlug: value,
+			StartYear:     startYear,
+			EndYear:       endYear,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].SeasonValue > items[j].SeasonValue
+	})
+	return items, nil
+}
+
 func (c *TheSportsDBClient) getJSON(ctx context.Context, path string, destination any) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
@@ -287,6 +425,39 @@ func mapMatchStatus(status, postponed string) string {
 	default:
 		return "scheduled"
 	}
+}
+
+func normalizeExternalName(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func parseSeasonYears(value string) (int, int) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, 0
+	}
+	parts := strings.Split(trimmed, "-")
+	if len(parts) == 1 {
+		year, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			return 0, 0
+		}
+		return year, year
+	}
+	startYear, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return 0, 0
+	}
+	endText := strings.TrimSpace(parts[len(parts)-1])
+	if len(endText) == 2 && len(parts[0]) >= 2 {
+		prefix := parts[0][:len(parts[0])-2]
+		endText = prefix + endText
+	}
+	endYear, err := strconv.Atoi(endText)
+	if err != nil {
+		return startYear, startYear
+	}
+	return startYear, endYear
 }
 
 func slugify(value, fallback string) string {

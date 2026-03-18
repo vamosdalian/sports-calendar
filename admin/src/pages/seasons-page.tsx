@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
-import { useAuth } from '@/components/auth-provider'
+import { AddSeasonDialog } from '@/components/add-season-dialog'
+import { ConfirmActionDialog } from '@/components/confirm-action-dialog'
+import { EditSeasonDialog } from '@/components/edit-season-dialog'
+import { useAuth } from '@/components/use-auth'
+import { useToast } from '@/components/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table'
 import { api } from '@/lib/api'
-import type { MatchItem, SeasonDetailResponse, SeasonReference } from '@/types'
+import type { AdminSeasonItem, MatchItem, SeasonDetailResponse } from '@/types'
 
 function displayText(value: string | Record<string, string> | undefined) {
 	if (!value) {
@@ -31,72 +33,70 @@ function countMatches(detail: SeasonDetailResponse | null) {
 export function SeasonsPage() {
 	const { sportSlug = '', leagueSlug = '' } = useParams()
 	const { token } = useAuth()
-	const [seasons, setSeasons] = useState<SeasonReference[]>([])
+	const { showToast } = useToast()
+	const [seasons, setSeasons] = useState<AdminSeasonItem[]>([])
 	const [selectedSeason, setSelectedSeason] = useState<string>('')
 	const [detail, setDetail] = useState<SeasonDetailResponse | null>(null)
 	const [error, setError] = useState<string | null>(null)
-	const [pending, setPending] = useState(false)
-	const [form, setForm] = useState({ slug: '', label: '', startYear: '', endYear: '', defaultMatchDurationMinutes: '120' })
+	const [createOpen, setCreateOpen] = useState(false)
+	const [editingSeason, setEditingSeason] = useState<AdminSeasonItem | null>(null)
+	const [deletingSeason, setDeletingSeason] = useState<AdminSeasonItem | null>(null)
+	const [deletePending, setDeletePending] = useState(false)
+	const [deleteError, setDeleteError] = useState<string | null>(null)
 
 	const loadSeasons = useCallback(async (nextSelectedSeason?: string) => {
-		const response = await api.listSeasons(sportSlug, leagueSlug)
-		setSeasons(response.seasons)
-		const seasonSlug = nextSelectedSeason ?? response.seasons[0]?.slug ?? ''
+		if (!token) {
+			return
+		}
+		const response = await api.listAdminSeasons(token, sportSlug, leagueSlug)
+		setSeasons(response.items)
+		const seasonSlug = nextSelectedSeason ?? response.items[0]?.slug ?? ''
 		setSelectedSeason(seasonSlug)
 		if (seasonSlug) {
 			setDetail(await api.getSeasonDetail(sportSlug, leagueSlug, seasonSlug))
 		} else {
 			setDetail(null)
 		}
-	}, [leagueSlug, sportSlug])
+	}, [leagueSlug, sportSlug, token])
 
 	useEffect(() => {
 		if (!sportSlug || !leagueSlug) {
 			return
 		}
-		void loadSeasons().catch((caught) => setError(caught instanceof Error ? caught.message : 'load failed'))
+		let active = true
+		async function hydrate() {
+			try {
+				await loadSeasons()
+				if (active) {
+					setError(null)
+				}
+			} catch (caught) {
+				if (active) {
+					setError(caught instanceof Error ? caught.message : 'load failed')
+				}
+			}
+		}
+		void hydrate()
+		return () => {
+			active = false
+		}
 	}, [loadSeasons, sportSlug, leagueSlug])
 
-	async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault()
-		if (!token) {
+	async function handleDeleteSeason() {
+		if (!token || !deletingSeason) {
 			return
 		}
-		setPending(true)
-		setError(null)
+		setDeletePending(true)
+		setDeleteError(null)
 		try {
-			await api.createSeason(token, {
-				sportSlug,
-				leagueSlug,
-				slug: form.slug,
-				label: form.label,
-				startYear: Number(form.startYear),
-				endYear: Number(form.endYear),
-				defaultMatchDurationMinutes: Number(form.defaultMatchDurationMinutes),
-			})
-			const createdSlug = form.slug
-			setForm({ slug: '', label: '', startYear: '', endYear: '', defaultMatchDurationMinutes: '120' })
-			await loadSeasons(createdSlug)
-		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : 'create failed')
-		} finally {
-			setPending(false)
-		}
-	}
-
-	async function handleDelete(seasonSlug: string) {
-		if (!token) {
-			return
-		}
-		setPending(true)
-		setError(null)
-		try {
-			await api.deleteSeason(token, sportSlug, leagueSlug, seasonSlug)
+			await api.deleteSeason(token, sportSlug, leagueSlug, deletingSeason.slug)
 			await loadSeasons()
+			setDeletingSeason(null)
+			showToast({ title: 'Season deleted', description: `${deletingSeason.slug} was removed from the local catalog.`, tone: 'success' })
 		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : 'delete failed')
+			setDeleteError(caught instanceof Error ? caught.message : 'delete failed')
 		} finally {
-			setPending(false)
+			setDeletePending(false)
 		}
 	}
 
@@ -122,17 +122,13 @@ export function SeasonsPage() {
 				<CardHeader>
 					<Badge>{leagueSlug}</Badge>
 					<CardTitle className="mt-4">Create season</CardTitle>
-					<CardDescription>Create or delete seasons and inspect the full match schedule below.</CardDescription>
+					<CardDescription>Choose a remote season for this league in a dialog, then keep using the existing fixture inspector below.</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form className="grid gap-4 md:grid-cols-2 xl:grid-cols-5" onSubmit={handleCreate}>
-						<div><Label htmlFor="season-slug">Slug</Label><Input id="season-slug" value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} /></div>
-						<div><Label htmlFor="season-label">Label</Label><Input id="season-label" value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} /></div>
-						<div><Label htmlFor="season-start">Start year</Label><Input id="season-start" value={form.startYear} onChange={(event) => setForm((current) => ({ ...current, startYear: event.target.value }))} /></div>
-						<div><Label htmlFor="season-end">End year</Label><Input id="season-end" value={form.endYear} onChange={(event) => setForm((current) => ({ ...current, endYear: event.target.value }))} /></div>
-						<div><Label htmlFor="season-duration">Duration minutes</Label><Input id="season-duration" value={form.defaultMatchDurationMinutes} onChange={(event) => setForm((current) => ({ ...current, defaultMatchDurationMinutes: event.target.value }))} /></div>
-						<div className="md:col-span-2 xl:col-span-5"><Button disabled={pending} type="submit">{pending ? 'Saving...' : 'Create season'}</Button></div>
-					</form>
+					<div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-4">
+						<p className="text-sm text-muted">The create form now opens in a dialog and preloads candidate seasons from TheSportsDB for the current league.</p>
+						<Button onClick={() => setCreateOpen(true)} type="button">Add season</Button>
+					</div>
 					{error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
 				</CardContent>
 			</Card>
@@ -150,7 +146,7 @@ export function SeasonsPage() {
 									<TableRow key={season.slug} className={season.slug === selectedSeason ? 'bg-shell/70' : ''}>
 										<TableCell className="font-mono text-xs">{season.slug}</TableCell>
 										<TableCell>{season.label}</TableCell>
-										<TableCell className="flex gap-2"><Button size="sm" variant="outline" onClick={() => void handleSelectSeason(season.slug)} type="button">Inspect fixtures</Button><Button size="sm" variant="danger" onClick={() => void handleDelete(season.slug)} type="button">Delete</Button></TableCell>
+										<TableCell className="flex gap-2"><Button size="sm" variant="outline" onClick={() => void handleSelectSeason(season.slug)} type="button">Inspect fixtures</Button><Button size="sm" variant="outline" onClick={() => setEditingSeason(season)} type="button">Edit</Button><Button size="sm" variant="danger" onClick={() => { setDeleteError(null); setDeletingSeason(season) }} type="button">Delete</Button></TableCell>
 									</TableRow>
 								))}
 							</TableBody>
@@ -185,6 +181,33 @@ export function SeasonsPage() {
 					</CardContent>
 				</Card>
 			</div>
+			<AddSeasonDialog
+				sportSlug={sportSlug}
+				leagueSlug={leagueSlug}
+				open={createOpen}
+				onOpenChange={setCreateOpen}
+				onCreated={async (seasonSlug) => {
+					await loadSeasons(seasonSlug)
+					showToast({ title: 'Season created', description: `${seasonSlug} is ready for fixture inspection.`, tone: 'success' })
+				}}
+			/>
+			<EditSeasonDialog season={editingSeason} open={editingSeason !== null} onOpenChange={(open) => { if (!open) { setEditingSeason(null) } }} onSaved={async (seasonSlug) => { await loadSeasons(seasonSlug); showToast({ title: 'Season updated', description: 'Season metadata was saved.', tone: 'success' }) }} />
+			<ConfirmActionDialog
+				open={deletingSeason !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setDeletingSeason(null)
+						setDeleteError(null)
+					}
+				}}
+				title="Delete season"
+				description={deletingSeason ? `Delete ${deletingSeason.slug} and all matches stored under it?` : 'Delete this season?'}
+				confirmLabel="Delete season"
+				pendingLabel="Deleting..."
+				onConfirm={handleDeleteSeason}
+				pending={deletePending}
+				error={deleteError}
+			/>
 		</div>
 	)
 }

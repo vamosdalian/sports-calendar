@@ -116,9 +116,26 @@ type CreateSportInput struct {
 	Name LocalizedText `json:"name"`
 }
 
+type UpdateSportInput struct {
+	CurrentSlug string        `json:"-"`
+	Slug        string        `json:"slug"`
+	Name        LocalizedText `json:"name"`
+}
+
 type CreateLeagueInput struct {
 	ID                  int64         `json:"id"`
 	SportSlug           string        `json:"sportSlug"`
+	Slug                string        `json:"slug"`
+	Name                LocalizedText `json:"name"`
+	SyncInterval        string        `json:"syncInterval"`
+	CalendarDescription LocalizedText `json:"calendarDescription"`
+	DataSourceNote      LocalizedText `json:"dataSourceNote"`
+	Notes               LocalizedText `json:"notes"`
+}
+
+type UpdateLeagueInput struct {
+	SportSlug           string        `json:"-"`
+	CurrentSlug         string        `json:"-"`
 	Slug                string        `json:"slug"`
 	Name                LocalizedText `json:"name"`
 	SyncInterval        string        `json:"syncInterval"`
@@ -137,10 +154,30 @@ type CreateSeasonInput struct {
 	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`
 }
 
+type UpdateSeasonInput struct {
+	SportSlug                   string `json:"-"`
+	LeagueSlug                  string `json:"-"`
+	CurrentSlug                 string `json:"-"`
+	Slug                        string `json:"slug"`
+	Label                       string `json:"label"`
+	StartYear                   int    `json:"startYear"`
+	EndYear                     int    `json:"endYear"`
+	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`
+}
+
 type DeleteSeasonInput struct {
 	SportSlug  string
 	LeagueSlug string
 	SeasonSlug string
+}
+
+type DeleteSportInput struct {
+	SportSlug string
+}
+
+type DeleteLeagueInput struct {
+	SportSlug  string
+	LeagueSlug string
 }
 
 func (m Match) StartTime() (time.Time, error) {

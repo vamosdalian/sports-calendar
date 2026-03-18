@@ -1,7 +1,7 @@
 import { ChartNoAxesCombined, Flag, LogOut, ShieldCheck } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 
-import { useAuth } from '@/components/auth-provider'
+import { useAuth } from '@/components/use-auth'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 

@@ -1,7 +1,12 @@
 import { API_BASE_URL } from '@/lib/config'
 import type {
 	AdminLeaguesResponse,
+	AdminSeasonsResponse,
 	AuthTokenResponse,
+	ExternalLeagueLookup,
+	ExternalLeaguesResponse,
+	ExternalSeasonsResponse,
+	ExternalSportsResponse,
 	LeagueSeasonsResponse,
 	SeasonDetailResponse,
 	SportsResponse,
@@ -44,20 +49,50 @@ export const api = {
 	listSports(token: string) {
 		return request<SportsResponse>('/api/admin/sports', { token })
 	},
+	listTheSportsDBSports(token: string) {
+		return request<ExternalSportsResponse>('/api/admin/thesportsdb/sports', { token })
+	},
 	createSport(token: string, payload: { id: number; slug: string; name: Record<string, string> }) {
 		return request('/api/admin/sports', { method: 'POST', token, body: JSON.stringify(payload) })
+	},
+	updateSport(token: string, sportSlug: string, payload: { slug: string; name: Record<string, string> }) {
+		return request(`/api/admin/sports/${sportSlug}`, { method: 'PUT', token, body: JSON.stringify(payload) })
+	},
+	deleteSport(token: string, sportSlug: string) {
+		return request(`/api/admin/sports/${sportSlug}`, { method: 'DELETE', token })
 	},
 	listLeagues(token: string, sportSlug: string) {
 		return request<AdminLeaguesResponse>(`/api/admin/${sportSlug}/leagues`, { token })
 	},
+	listTheSportsDBLeagues(token: string, sportSlug: string) {
+		return request<ExternalLeaguesResponse>(`/api/admin/${sportSlug}/thesportsdb/leagues`, { token })
+	},
+	lookupTheSportsDBLeague(token: string, leagueID: number) {
+		return request<ExternalLeagueLookup>(`/api/admin/thesportsdb/leagues/${leagueID}`, { token })
+	},
 	createLeague(token: string, payload: Record<string, unknown>) {
 		return request('/api/admin/leagues', { method: 'POST', token, body: JSON.stringify(payload) })
+	},
+	updateLeague(token: string, sportSlug: string, leagueSlug: string, payload: Record<string, unknown>) {
+		return request(`/api/admin/${sportSlug}/leagues/${leagueSlug}`, { method: 'PUT', token, body: JSON.stringify(payload) })
+	},
+	deleteLeague(token: string, sportSlug: string, leagueSlug: string) {
+		return request(`/api/admin/${sportSlug}/leagues/${leagueSlug}`, { method: 'DELETE', token })
+	},
+	listAdminSeasons(token: string, sportSlug: string, leagueSlug: string) {
+		return request<AdminSeasonsResponse>(`/api/admin/${sportSlug}/${leagueSlug}/seasons`, { token })
 	},
 	listSeasons(sportSlug: string, leagueSlug: string) {
 		return request<LeagueSeasonsResponse>(`/api/${sportSlug}/${leagueSlug}/seasons`)
 	},
+	listTheSportsDBSeasons(token: string, sportSlug: string, leagueSlug: string) {
+		return request<ExternalSeasonsResponse>(`/api/admin/${sportSlug}/${leagueSlug}/thesportsdb/seasons`, { token })
+	},
 	createSeason(token: string, payload: Record<string, unknown>) {
 		return request('/api/admin/seasons', { method: 'POST', token, body: JSON.stringify(payload) })
+	},
+	updateSeason(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string, payload: Record<string, unknown>) {
+		return request(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}`, { method: 'PUT', token, body: JSON.stringify(payload) })
 	},
 	deleteSeason(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string) {
 		return request(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}`, { method: 'DELETE', token })

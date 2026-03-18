@@ -1,7 +1,5 @@
 import {
-	createContext,
 	useCallback,
-	useContext,
 	useEffect,
 	useMemo,
 	useRef,
@@ -9,21 +7,10 @@ import {
 	type ReactNode,
 } from 'react'
 
+import { AuthContext } from '@/components/auth-context'
 import { api } from '@/lib/api'
 import { isTokenExpiringSoon, parseToken } from '@/lib/token'
 import type { AuthTokenResponse } from '@/types'
-
-type AuthContextValue = {
-	token: string | null
-	email: string | null
-	ready: boolean
-	login: (email: string, password: string) => Promise<void>
-	register: (email: string, password: string) => Promise<void>
-	logout: () => void
-	refresh: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
 const STORAGE_KEY = 'sports-calendar-admin-session'
 
 type StoredSession = { token: string; email: string }
@@ -49,10 +36,26 @@ function writeStoredSession(session: StoredSession | null) {
 	window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
 }
 
+function readInitialSession(): StoredSession | null {
+	if (typeof window === 'undefined') {
+		return null
+	}
+	const session = readStoredSession()
+	if (!session?.token) {
+		return null
+	}
+	const parsed = parseToken(session.token)
+	if (!parsed || parsed.exp <= Math.floor(Date.now() / 1000)) {
+		writeStoredSession(null)
+		return null
+	}
+	return session
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-	const [token, setToken] = useState<string | null>(null)
-	const [email, setEmail] = useState<string | null>(null)
-	const [ready, setReady] = useState(false)
+	const initialSession = readInitialSession()
+	const [token, setToken] = useState<string | null>(initialSession?.token ?? null)
+	const [email, setEmail] = useState<string | null>(initialSession?.email ?? null)
 	const refreshTimerRef = useRef<number | null>(null)
 
 	const clearRefreshTimer = useCallback(() => {
@@ -94,20 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	}, [])
 
 	useEffect(() => {
-		const session = readStoredSession()
-		if (session?.token) {
-			const parsed = parseToken(session.token)
-			if (parsed && parsed.exp > Math.floor(Date.now() / 1000)) {
-				setToken(session.token)
-				setEmail(session.email)
-			} else {
-				writeStoredSession(null)
-			}
-		}
-		setReady(true)
-	}, [])
-
-	useEffect(() => {
 		clearRefreshTimer()
 		if (!token) {
 			return
@@ -121,15 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		return clearRefreshTimer
 	}, [clearRefreshTimer, logout, refresh, token])
 
+	const ready = true
 	const value = useMemo(() => ({ token, email, ready, login, register, logout, refresh }), [token, email, ready, login, register, logout, refresh])
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-	const context = useContext(AuthContext)
-	if (!context) {
-		throw new Error('useAuth must be used within AuthProvider')
-	}
-	return context
 }

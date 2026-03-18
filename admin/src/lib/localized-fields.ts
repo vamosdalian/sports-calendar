@@ -27,3 +27,11 @@ export function pickLocalizedPreview(value: LocalizedText | undefined) {
 	const firstValue = Object.values(value).find((item) => item.trim() !== '')
 	return firstValue || '-'
 }
+
+export function entriesFromText(value: string, locale = 'en'): LocalizedFieldEntry[] {
+	const trimmed = value.trim()
+	if (!trimmed) {
+		return []
+	}
+	return [{ locale, value: trimmed }]
+}

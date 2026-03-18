@@ -64,6 +64,7 @@ func main() {
 	if err != nil {
 		logger.WithError(err).Fatal("create TheSportsDB client")
 	}
+	svc.SetSportsDataProvider(client)
 
 	leagueSyncer, err := syncer.NewLeagueSyncer(logger, repo, client)
 	if err != nil {
@@ -74,6 +75,7 @@ func main() {
 	if err != nil {
 		logger.WithError(err).Fatal("create sync scheduler")
 	}
+	svc.SetSyncScheduleRefresher(scheduler)
 	scheduler.Start()
 	defer scheduler.Stop()
 

@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -12,10 +13,12 @@ import (
 )
 
 type Scheduler struct {
+	mu      sync.Mutex
 	cron    *cron.Cron
 	logger  *logrus.Logger
 	runner  Runner
 	targets []domain.LeagueSyncTarget
+	started bool
 }
 
 func NewScheduler(logger *logrus.Logger, runner Runner) (*Scheduler, error) {
@@ -26,46 +29,91 @@ func NewScheduler(logger *logrus.Logger, runner Runner) (*Scheduler, error) {
 		return nil, fmt.Errorf("sync runner is required")
 	}
 
-	instance := cron.New()
+	scheduler := &Scheduler{cron: cron.New(), logger: logger, runner: runner}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	targets, err := runner.ListSyncTargets(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load sync targets: %w", err)
+	if err := scheduler.Refresh(ctx); err != nil {
+		return nil, err
 	}
-
-	for _, target := range targets {
-		targetCopy := target
-		if _, err := instance.AddFunc(targetCopy.SyncInterval, func() {
-			runTarget(logger, runner, targetCopy)
-		}); err != nil {
-			return nil, fmt.Errorf("register sync schedule for %s: %w", targetCopy.LeagueSlug, err)
-		}
-	}
-
-	return &Scheduler{cron: instance, logger: logger, runner: runner, targets: targets}, nil
+	return scheduler, nil
 }
 
 func (s *Scheduler) Start() {
-	if s == nil || s.cron == nil {
+	if s == nil {
 		return
 	}
-	s.logger.WithField("targets", len(s.targets)).Info("starting league sync scheduler")
-	s.cron.Start()
-	for _, target := range s.targets {
+	s.mu.Lock()
+	if s.cron == nil || s.started {
+		s.mu.Unlock()
+		return
+	}
+	s.started = true
+	instance := s.cron
+	targets := append([]domain.LeagueSyncTarget(nil), s.targets...)
+	s.mu.Unlock()
+
+	s.logger.WithField("targets", len(targets)).Info("starting league sync scheduler")
+	instance.Start()
+	for _, target := range targets {
 		targetCopy := target
 		go runTarget(s.logger, s.runner, targetCopy)
 	}
 }
 
 func (s *Scheduler) Stop() {
-	if s == nil || s.cron == nil {
+	if s == nil {
 		return
 	}
+	s.mu.Lock()
+	if s.cron == nil || !s.started {
+		s.mu.Unlock()
+		return
+	}
+	instance := s.cron
+	s.started = false
+	s.mu.Unlock()
+
 	s.logger.Info("stopping league sync scheduler")
-	ctx := s.cron.Stop()
+	ctx := instance.Stop()
 	<-ctx.Done()
+}
+
+func (s *Scheduler) Refresh(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	targets, err := s.runner.ListSyncTargets(ctx)
+	if err != nil {
+		return fmt.Errorf("load sync targets: %w", err)
+	}
+
+	instance := cron.New()
+	for _, target := range targets {
+		targetCopy := target
+		if _, err := instance.AddFunc(targetCopy.SyncInterval, func() {
+			runTarget(s.logger, s.runner, targetCopy)
+		}); err != nil {
+			return fmt.Errorf("register sync schedule for %s: %w", targetCopy.LeagueSlug, err)
+		}
+	}
+
+	s.mu.Lock()
+	oldCron := s.cron
+	wasStarted := s.started
+	s.cron = instance
+	s.targets = append([]domain.LeagueSyncTarget(nil), targets...)
+	s.mu.Unlock()
+
+	if wasStarted {
+		instance.Start()
+	}
+	if wasStarted && oldCron != nil {
+		stopCtx := oldCron.Stop()
+		<-stopCtx.Done()
+	}
+
+	s.logger.WithField("targets", len(targets)).Info("refreshed league sync scheduler")
+	return nil
 }
 
 func runTarget(logger *logrus.Logger, runner Runner, target domain.LeagueSyncTarget) {

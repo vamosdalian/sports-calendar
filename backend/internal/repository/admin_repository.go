@@ -105,6 +105,63 @@ func (r *PostgresRepository) ListAdminLeagues(ctx context.Context, sportSlug str
 	return domain.AdminLeaguesResponse{SportSlug: sportSlug, Items: items, UpdatedAt: lastUpdatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
+func (r *PostgresRepository) ListAdminSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT se.id, se.slug, se.label, se.start_year, se.end_year, se.default_match_duration_minutes, se.created_at, se.updated_at
+		FROM seasons se
+		JOIN leagues l ON l.id = se.league_id
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2
+		ORDER BY se.start_year DESC, se.end_year DESC, se.slug DESC
+	`, sportSlug, leagueSlug)
+	if err != nil {
+		return domain.AdminSeasonsResponse{}, fmt.Errorf("list admin seasons: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]domain.AdminSeasonItem, 0)
+	lastUpdatedAt := time.Time{}
+	for rows.Next() {
+		var (
+			item      domain.AdminSeasonItem
+			createdAt time.Time
+			updatedAt time.Time
+		)
+		if scanErr := rows.Scan(&item.ID, &item.Slug, &item.Label, &item.StartYear, &item.EndYear, &item.DefaultMatchDurationMinutes, &createdAt, &updatedAt); scanErr != nil {
+			return domain.AdminSeasonsResponse{}, fmt.Errorf("scan admin season: %w", scanErr)
+		}
+		item.SportSlug = sportSlug
+		item.LeagueSlug = leagueSlug
+		item.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+		item.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
+		items = append(items, item)
+		lastUpdatedAt = maxTime(lastUpdatedAt, updatedAt)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.AdminSeasonsResponse{}, fmt.Errorf("iterate admin seasons: %w", err)
+	}
+	if len(items) == 0 {
+		var exists bool
+		if err := r.pool.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1
+				FROM leagues l
+				JOIN sports s ON s.id = l.sport_id
+				WHERE s.slug = $1 AND l.slug = $2
+			)
+		`, sportSlug, leagueSlug).Scan(&exists); err != nil {
+			return domain.AdminSeasonsResponse{}, fmt.Errorf("check league for admin seasons: %w", err)
+		}
+		if !exists {
+			return domain.AdminSeasonsResponse{}, domain.ErrNotFound
+		}
+	}
+	if lastUpdatedAt.IsZero() {
+		lastUpdatedAt = time.Now().UTC()
+	}
+	return domain.AdminSeasonsResponse{SportSlug: sportSlug, LeagueSlug: leagueSlug, Items: items, UpdatedAt: lastUpdatedAt.UTC().Format(time.RFC3339)}, nil
+}
+
 func (r *PostgresRepository) CountUsers(ctx context.Context) (int64, error) {
 	var count int64
 	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {

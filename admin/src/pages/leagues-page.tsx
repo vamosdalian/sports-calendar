@@ -1,83 +1,79 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
-import { useAuth } from '@/components/auth-provider'
-import { LocalizedFieldsEditor } from '@/components/localized-fields-editor'
+import { AddLeagueDialog } from '@/components/add-league-dialog'
+import { ConfirmActionDialog } from '@/components/confirm-action-dialog'
+import { EditLeagueDialog } from '@/components/edit-league-dialog'
+import { useAuth } from '@/components/use-auth'
+import { useToast } from '@/components/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table'
 import { api } from '@/lib/api'
-import { entriesToLocalizedText, pickLocalizedPreview, type LocalizedFieldEntry } from '@/lib/localized-fields'
+import { pickLocalizedPreview } from '@/lib/localized-fields'
 import type { LeagueItem } from '@/types'
 
 export function LeaguesPage() {
 	const { sportSlug = '' } = useParams()
 	const { token } = useAuth()
+	const { showToast } = useToast()
 	const [leagues, setLeagues] = useState<LeagueItem[]>([])
 	const [error, setError] = useState<string | null>(null)
-	const [pending, setPending] = useState(false)
-	const [form, setForm] = useState({
-		id: '',
-		slug: '',
-		syncInterval: '@daily',
-		nameEntries: [{ locale: 'en', value: '' }] as LocalizedFieldEntry[],
-		calendarDescriptionEntries: [] as LocalizedFieldEntry[],
-		dataSourceNoteEntries: [] as LocalizedFieldEntry[],
-		notesEntries: [] as LocalizedFieldEntry[],
-	})
+	const [createOpen, setCreateOpen] = useState(false)
+	const [editingLeague, setEditingLeague] = useState<LeagueItem | null>(null)
+	const [deletingLeague, setDeletingLeague] = useState<LeagueItem | null>(null)
+	const [deletePending, setDeletePending] = useState(false)
+	const [deleteError, setDeleteError] = useState<string | null>(null)
 
-	async function loadLeagues() {
+	const loadLeagues = useCallback(async () => {
 		if (!token) {
 			return
 		}
 		const leaguesResponse = await api.listLeagues(token, sportSlug)
 		setLeagues(leaguesResponse.items)
+	}, [sportSlug, token])
+
+	async function handleDeleteLeague() {
+		if (!token || !deletingLeague) {
+			return
+		}
+		setDeletePending(true)
+		setDeleteError(null)
+		try {
+			await api.deleteLeague(token, sportSlug, deletingLeague.slug)
+			await loadLeagues()
+			setDeletingLeague(null)
+			showToast({ title: 'League deleted', description: `${deletingLeague.slug} and its seasons were removed from the local catalog.`, tone: 'success' })
+		} catch (caught) {
+			setDeleteError(caught instanceof Error ? caught.message : 'delete failed')
+		} finally {
+			setDeletePending(false)
+		}
 	}
 
 	useEffect(() => {
 		if (!sportSlug) {
 			return
 		}
-		void loadLeagues().catch((caught) => setError(caught instanceof Error ? caught.message : 'load failed'))
-	}, [sportSlug, token])
-
-	async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault()
-		if (!token) {
-			return
+		let active = true
+		async function hydrate() {
+			try {
+				await loadLeagues()
+				if (active) {
+					setError(null)
+				}
+			} catch (caught) {
+				if (active) {
+					setError(caught instanceof Error ? caught.message : 'load failed')
+				}
+			}
 		}
-		setPending(true)
-		setError(null)
-		try {
-			await api.createLeague(token, {
-				id: Number(form.id),
-				sportSlug,
-				slug: form.slug,
-				name: entriesToLocalizedText(form.nameEntries),
-				syncInterval: form.syncInterval,
-				calendarDescription: entriesToLocalizedText(form.calendarDescriptionEntries),
-				dataSourceNote: entriesToLocalizedText(form.dataSourceNoteEntries),
-				notes: entriesToLocalizedText(form.notesEntries),
-			})
-			setForm({
-				id: '',
-				slug: '',
-				syncInterval: '@daily',
-				nameEntries: [{ locale: 'en', value: '' }],
-				calendarDescriptionEntries: [],
-				dataSourceNoteEntries: [],
-				notesEntries: [],
-			})
-			await loadLeagues()
-		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : 'create failed')
-		} finally {
-			setPending(false)
+		void hydrate()
+		return () => {
+			active = false
 		}
-	}
+	}, [loadLeagues, sportSlug])
 
 	return (
 		<div className="space-y-6">
@@ -96,46 +92,13 @@ export function LeaguesPage() {
 				<CardHeader>
 					<Badge>{sportSlug}</Badge>
 					<CardTitle className="mt-4">Create league</CardTitle>
-					<CardDescription>League id must match the TheSportsDB league id consumed by backend sync. Multi-language fields are submitted as locale maps.</CardDescription>
+					<CardDescription>Choose a matching TheSportsDB league, let the lookup prefill the fields, and save the local league from a dialog.</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form className="space-y-4" onSubmit={handleCreate}>
-						<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-						<div><Label htmlFor="league-id">TheSportsDB id</Label><Input id="league-id" value={form.id} onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))} /></div>
-						<div><Label htmlFor="league-slug">Slug</Label><Input id="league-slug" value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} /></div>
-						<div><Label htmlFor="league-sync">Sync interval</Label><Input id="league-sync" value={form.syncInterval} onChange={(event) => setForm((current) => ({ ...current, syncInterval: event.target.value }))} /></div>
-						</div>
-						<LocalizedFieldsEditor
-							idPrefix="league-name"
-							label="Localized name"
-							description="Add any locales you need. The backend requires at least one `en` entry."
-							entries={form.nameEntries}
-							onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))}
-							required
-						/>
-						<LocalizedFieldsEditor
-							idPrefix="league-calendar-description"
-							label="Calendar description"
-							description="Optional localized description for exported calendar metadata."
-							entries={form.calendarDescriptionEntries}
-							onChange={(calendarDescriptionEntries) => setForm((current) => ({ ...current, calendarDescriptionEntries }))}
-						/>
-						<LocalizedFieldsEditor
-							idPrefix="league-data-source-note"
-							label="Data source note"
-							description="Optional localized note that explains the data origin."
-							entries={form.dataSourceNoteEntries}
-							onChange={(dataSourceNoteEntries) => setForm((current) => ({ ...current, dataSourceNoteEntries }))}
-						/>
-						<LocalizedFieldsEditor
-							idPrefix="league-notes"
-							label="Notes"
-							description="Optional internal notes shown in season detail views."
-							entries={form.notesEntries}
-							onChange={(notesEntries) => setForm((current) => ({ ...current, notesEntries }))}
-						/>
-						<div><Button disabled={pending} type="submit">{pending ? 'Creating...' : 'Create league'}</Button></div>
-					</form>
+					<div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-4">
+						<p className="text-sm text-muted">The dialog keeps the page focused on the league table while still letting you adjust every field before save.</p>
+						<Button onClick={() => setCreateOpen(true)} type="button">Add league</Button>
+					</div>
 					{error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
 				</CardContent>
 			</Card>
@@ -154,13 +117,31 @@ export function LeaguesPage() {
 									<TableCell className="font-mono text-xs">{league.slug}</TableCell>
 									<TableCell>{pickLocalizedPreview(league.name)}</TableCell>
 									<TableCell>{league.syncInterval}</TableCell>
-									<TableCell><Button asChild size="sm" variant="outline"><Link to={`/sports/${sportSlug}/leagues/${league.slug}/seasons`}>Open seasons</Link></Button></TableCell>
+									<TableCell className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setEditingLeague(league)} type="button">Edit</Button><Button size="sm" variant="danger" onClick={() => { setDeleteError(null); setDeletingLeague(league) }} type="button">Delete</Button><Button asChild size="sm" variant="outline"><Link to={`/sports/${sportSlug}/leagues/${league.slug}/seasons`}>Open seasons</Link></Button></TableCell>
 								</TableRow>
 							))}
 						</TableBody>
 					</Table>
 				</CardContent>
 			</Card>
+			<AddLeagueDialog sportSlug={sportSlug} open={createOpen} onOpenChange={setCreateOpen} onCreated={async () => { await loadLeagues(); showToast({ title: 'League created', description: 'The league is ready for season setup.', tone: 'success' }) }} />
+			<EditLeagueDialog league={editingLeague} open={editingLeague !== null} onOpenChange={(open) => { if (!open) { setEditingLeague(null) } }} onSaved={async () => { await loadLeagues(); showToast({ title: 'League updated', description: 'Local league settings were saved.', tone: 'success' }) }} />
+			<ConfirmActionDialog
+				open={deletingLeague !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setDeletingLeague(null)
+						setDeleteError(null)
+					}
+				}}
+				title="Delete league"
+				description={deletingLeague ? `Delete ${deletingLeague.slug} and every season, team, and match under it?` : 'Delete this league?'}
+				confirmLabel="Delete league"
+				pendingLabel="Deleting..."
+				onConfirm={handleDeleteLeague}
+				pending={deletePending}
+				error={deleteError}
+			/>
 		</div>
 	)
 }
