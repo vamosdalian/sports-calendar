@@ -41,6 +41,8 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 						"idEvent":      "2267073",
 						"idHomeTeam":   "133602",
 						"idAwayTeam":   "134301",
+						"strHomeTeam":  "Liverpool",
+						"strAwayTeam":  "Bournemouth",
 						"intRound":     "1",
 						"strTimestamp": "2025-08-15T19:00:00",
 						"strVenue":     "Anfield",
@@ -52,6 +54,8 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 						"idEvent":      "2267999",
 						"idHomeTeam":   "133602",
 						"idAwayTeam":   "134301",
+						"strHomeTeam":  "Liverpool",
+						"strAwayTeam":  "Bournemouth",
 						"intRound":     "2",
 						"dateEvent":    "2025-08-22",
 						"strTime":      "15:00:00",
@@ -99,6 +103,12 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 	}
 	if len(snapshot.Matches[0].Teams) != 2 || snapshot.Matches[0].Teams[0] != 133602 || snapshot.Matches[0].Teams[1] != 134301 {
 		t.Fatalf("unexpected first match teams: %#v", snapshot.Matches[0].Teams)
+	}
+	if got := snapshot.Matches[0].TeamNames[0]["en"]; got != "Liverpool" {
+		t.Fatalf("unexpected first home team name: %q", got)
+	}
+	if got := snapshot.Matches[0].TeamNames[1]["en"]; got != "Bournemouth" {
+		t.Fatalf("unexpected first away team name: %q", got)
 	}
 	if got := snapshot.Matches[0].Status; got != "finished" {
 		t.Fatalf("unexpected first match status: %q", got)

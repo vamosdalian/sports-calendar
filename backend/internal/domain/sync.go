@@ -30,6 +30,7 @@ type TeamSyncRecord struct {
 type MatchSyncRecord struct {
 	ExternalID string
 	Teams      []int64
+	TeamNames  []LocalizedText
 	Round      LocalizedText
 	Venue      LocalizedText
 	City       LocalizedText

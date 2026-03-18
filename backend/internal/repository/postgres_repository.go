@@ -775,33 +775,9 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 		return teams[i].ID < teams[j].ID
 	})
 	for _, team := range teams {
-		var teamID int64
-		if err := tx.QueryRow(ctx, `
-			INSERT INTO teams (id, league_id, slug, name, short_name)
-			VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
-			ON CONFLICT (id) DO UPDATE
-			SET league_id = EXCLUDED.league_id,
-			    slug = EXCLUDED.slug,
-			    name = teams.name || EXCLUDED.name,
-			    short_name = teams.short_name || EXCLUDED.short_name,
-			    updated_at = NOW()
-			WHERE teams.league_id IS DISTINCT FROM EXCLUDED.league_id
-			   OR teams.slug IS DISTINCT FROM EXCLUDED.slug
-			   OR teams.name IS DISTINCT FROM teams.name || EXCLUDED.name
-			   OR teams.short_name IS DISTINCT FROM teams.short_name || EXCLUDED.short_name
-			RETURNING id
-		`, team.ID, snapshot.Target.LeagueID, team.Slug, encodeLocalizedText(team.Names), encodeLocalizedText(team.ShortName)).Scan(&teamID); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				if lookupErr := tx.QueryRow(ctx, `
-					SELECT id
-					FROM teams
-					WHERE id = $1
-				`, team.ID).Scan(&teamID); lookupErr != nil {
-					return fmt.Errorf("load unchanged team id %d: %w", team.ID, lookupErr)
-				}
-			} else {
-				return fmt.Errorf("upsert team %d: %w", team.ID, err)
-			}
+		teamID, err := upsertSnapshotTeam(ctx, tx, snapshot.Target.LeagueID, team)
+		if err != nil {
+			return err
 		}
 		teamIDs[team.ID] = teamID
 	}
@@ -809,10 +785,23 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 	matchExternalIDs := make([]string, 0, len(snapshot.Matches))
 	for _, match := range snapshot.Matches {
 		storedTeamIDs := make([]int64, 0, len(match.Teams))
-		for _, teamID := range match.Teams {
+		for index, teamID := range match.Teams {
 			storedTeamID, ok := teamIDs[teamID]
 			if !ok {
-				return fmt.Errorf("match %s references missing team %d", match.ExternalID, teamID)
+				placeholderName := domain.LocalizedText{"en": fmt.Sprintf("Team %d", teamID)}
+				if index < len(match.TeamNames) && len(match.TeamNames[index]) > 0 {
+					placeholderName = match.TeamNames[index]
+				}
+				storedTeamID, err = upsertSnapshotTeam(ctx, tx, snapshot.Target.LeagueID, domain.TeamSyncRecord{
+					ID:        teamID,
+					Slug:      fmt.Sprintf("team-%d", teamID),
+					Names:     placeholderName,
+					ShortName: domain.LocalizedText{},
+				})
+				if err != nil {
+					return fmt.Errorf("upsert placeholder team %d for match %s: %w", teamID, match.ExternalID, err)
+				}
+				teamIDs[teamID] = storedTeamID
 			}
 			storedTeamIDs = append(storedTeamIDs, storedTeamID)
 		}
@@ -872,6 +861,39 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 	}
 	tx = nil
 	return nil
+}
+
+func upsertSnapshotTeam(ctx context.Context, tx pgx.Tx, leagueID int64, team domain.TeamSyncRecord) (int64, error) {
+	var storedTeamID int64
+	err := tx.QueryRow(ctx, `
+		INSERT INTO teams (id, league_id, slug, name, short_name)
+		VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
+		ON CONFLICT (id) DO UPDATE
+		SET league_id = EXCLUDED.league_id,
+		    slug = EXCLUDED.slug,
+		    name = teams.name || EXCLUDED.name,
+		    short_name = teams.short_name || EXCLUDED.short_name,
+		    updated_at = NOW()
+		WHERE teams.league_id IS DISTINCT FROM EXCLUDED.league_id
+		   OR teams.slug IS DISTINCT FROM EXCLUDED.slug
+		   OR teams.name IS DISTINCT FROM teams.name || EXCLUDED.name
+		   OR teams.short_name IS DISTINCT FROM teams.short_name || EXCLUDED.short_name
+		RETURNING id
+	`, team.ID, leagueID, team.Slug, encodeLocalizedText(team.Names), encodeLocalizedText(team.ShortName)).Scan(&storedTeamID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			if lookupErr := tx.QueryRow(ctx, `
+				SELECT id
+				FROM teams
+				WHERE id = $1
+			`, team.ID).Scan(&storedTeamID); lookupErr != nil {
+				return 0, fmt.Errorf("load unchanged team id %d: %w", team.ID, lookupErr)
+			}
+			return storedTeamID, nil
+		}
+		return 0, fmt.Errorf("upsert team %d: %w", team.ID, err)
+	}
+	return storedTeamID, nil
 }
 
 func (r *PostgresRepository) latestUpdatedAt(ctx context.Context) (string, error) {

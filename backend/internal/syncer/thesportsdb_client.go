@@ -204,12 +204,16 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 		matches = append(matches, domain.MatchSyncRecord{
 			ExternalID: event.EventID,
 			Teams:      []int64{homeTeamID, awayTeamID},
-			Round:      roundText(event.Round),
-			Venue:      englishText(event.Venue),
-			City:       emptyLocalizedText(),
-			Country:    englishText(event.Country),
-			StartsAt:   startsAt,
-			Status:     mapMatchStatus(event.Status, event.Postponed),
+			TeamNames: []domain.LocalizedText{
+				englishText(event.HomeTeamName),
+				englishText(event.AwayTeamName),
+			},
+			Round:    roundText(event.Round),
+			Venue:    englishText(event.Venue),
+			City:     emptyLocalizedText(),
+			Country:  englishText(event.Country),
+			StartsAt: startsAt,
+			Status:   mapMatchStatus(event.Status, event.Postponed),
 		})
 	}
 
