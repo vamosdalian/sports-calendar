@@ -97,6 +97,9 @@ export const api = {
 	deleteSeason(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string) {
 		return request(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}`, { method: 'DELETE', token })
 	},
+	refreshSeasonSchedule(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string) {
+		return request(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}/refresh`, { method: 'POST', token })
+	},
 	getSeasonDetail(sportSlug: string, leagueSlug: string, seasonSlug: string) {
 		return request<SeasonDetailResponse>(`/api/${sportSlug}/${leagueSlug}/${seasonSlug}`)
 	},

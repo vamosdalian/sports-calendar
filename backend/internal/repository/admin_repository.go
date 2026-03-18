@@ -162,6 +162,31 @@ func (r *PostgresRepository) ListAdminSeasons(ctx context.Context, sportSlug, le
 	return domain.AdminSeasonsResponse{SportSlug: sportSlug, LeagueSlug: leagueSlug, Items: items, UpdatedAt: lastUpdatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
+func (r *PostgresRepository) GetSeasonSyncTarget(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error) {
+	var target domain.LeagueSyncTarget
+	err := r.pool.QueryRow(ctx, `
+		SELECT l.id, l.slug, l.sync_interval, se.id, se.slug, se.label
+		FROM seasons se
+		JOIN leagues l ON l.id = se.league_id
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2 AND se.slug = $3
+	`, sportSlug, leagueSlug, seasonSlug).Scan(
+		&target.LeagueID,
+		&target.LeagueSlug,
+		&target.SyncInterval,
+		&target.SeasonID,
+		&target.SeasonSlug,
+		&target.SeasonLabel,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.LeagueSyncTarget{}, domain.ErrNotFound
+		}
+		return domain.LeagueSyncTarget{}, fmt.Errorf("get season sync target: %w", err)
+	}
+	return target, nil
+}
+
 func (r *PostgresRepository) CountUsers(ctx context.Context) (int64, error) {
 	var count int64
 	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {

@@ -50,6 +50,7 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	admin.PUT("/:sport/leagues/:league", handler.updateLeague)
 	admin.DELETE("/:sport/leagues/:league", handler.deleteLeague)
 	admin.POST("/seasons", handler.createSeason)
+	admin.POST("/:sport/:league/seasons/:season/refresh", handler.refreshSeasonNow)
 	admin.PUT("/:sport/:league/seasons/:season", handler.updateSeason)
 	admin.DELETE("/:sport/:league/seasons/:season", handler.deleteSeason)
 

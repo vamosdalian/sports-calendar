@@ -7,6 +7,37 @@ import (
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 )
 
+func (s *Service) RefreshSeasonNow(ctx context.Context, input domain.RefreshSeasonInput) error {
+	if s.runner == nil {
+		return invalidArgument("season sync runner is not configured")
+	}
+
+	input.SportSlug = normalizeSlug(input.SportSlug)
+	input.LeagueSlug = normalizeSlug(input.LeagueSlug)
+	input.SeasonSlug = strings.TrimSpace(input.SeasonSlug)
+
+	if input.SportSlug == "" {
+		return invalidArgument("sportSlug is required")
+	}
+	if input.LeagueSlug == "" {
+		return invalidArgument("leagueSlug is required")
+	}
+	if input.SeasonSlug == "" {
+		return invalidArgument("seasonSlug is required")
+	}
+
+	target, err := s.repo.GetSeasonSyncTarget(ctx, input.SportSlug, input.LeagueSlug, input.SeasonSlug)
+	if err != nil {
+		return err
+	}
+
+	if err := s.runner.SyncLeague(ctx, target); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *Service) UpdateSport(ctx context.Context, input domain.UpdateSportInput) (SportRecord, error) {
 	input.CurrentSlug = normalizeSlug(input.CurrentSlug)
 	input.Slug = normalizeSlug(input.Slug)

@@ -77,3 +77,17 @@ func (h *Handler) updateSeason(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, payload)
 }
+
+func (h *Handler) refreshSeasonNow(c *gin.Context) {
+	err := h.service.RefreshSeasonNow(c.Request.Context(), domain.RefreshSeasonInput{
+		SportSlug:  c.Param("sport"),
+		LeagueSlug: c.Param("league"),
+		SeasonSlug: c.Param("season"),
+	})
+	if err != nil {
+		handleServiceError(c, err, "refresh_season_failed", "refresh season failed")
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

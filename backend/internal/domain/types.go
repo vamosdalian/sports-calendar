@@ -180,6 +180,12 @@ type DeleteLeagueInput struct {
 	LeagueSlug string
 }
 
+type RefreshSeasonInput struct {
+	SportSlug  string
+	LeagueSlug string
+	SeasonSlug string
+}
+
 func (m Match) StartTime() (time.Time, error) {
 	parsed, err := time.Parse(time.RFC3339, m.StartsAt)
 	if err != nil {

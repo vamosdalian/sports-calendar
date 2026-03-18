@@ -21,6 +21,7 @@ type repository interface {
 	ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error)
 	ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error)
 	GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error)
+	GetSeasonSyncTarget(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error)
 	ListAdminSports(ctx context.Context) (domain.AdminSportsResponse, error)
 	ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error)
 	ListAdminSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error)
@@ -49,11 +50,16 @@ type syncScheduleRefresher interface {
 	Refresh(ctx context.Context) error
 }
 
+type syncRunner interface {
+	SyncLeague(ctx context.Context, target domain.LeagueSyncTarget) error
+}
+
 type Service struct {
 	repo         repository
 	tokenManager tokenManager
 	provider     sportsDataProvider
 	refresher    syncScheduleRefresher
+	runner       syncRunner
 }
 
 type SportDirectoryItem = domain.SportDirectoryItem
@@ -83,6 +89,10 @@ func (s *Service) SetSyncScheduleRefresher(refresher syncScheduleRefresher) {
 	refreshCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = refresher.Refresh(refreshCtx)
+}
+
+func (s *Service) SetSyncRunner(runner syncRunner) {
+	s.runner = runner
 }
 
 func (s *Service) refreshSyncSchedule() {

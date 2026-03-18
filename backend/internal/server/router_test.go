@@ -30,6 +30,11 @@ type fakeRepository struct {
 	seasonsByKey  map[string]domain.SeasonRecord
 	seasonMatches map[string]int
 	usersByEmail  map[string]fakeUser
+	syncedTargets []domain.LeagueSyncTarget
+}
+
+type fakeSyncRunner struct {
+	repo *fakeRepository
 }
 
 type fakeUser struct {
@@ -89,12 +94,43 @@ func testRouter(t *testing.T) (*gin.Engine, *fakeRepository, *auth.Manager) {
 	logger.SetOutput(io.Discard)
 	repo := newFakeRepository()
 	svc := service.New(repo)
+	svc.SetSyncRunner(&fakeSyncRunner{repo: repo})
 	manager, err := auth.NewManager("test-secret", 30*time.Minute)
 	if err != nil {
 		t.Fatalf("create test token manager: %v", err)
 	}
 	svc.SetTokenManager(manager)
 	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100)), repo, manager
+}
+
+func (r *fakeRepository) GetSeasonSyncTarget(_ context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	league, exists := r.leaguesBySlug[leagueSlug]
+	if !exists || league.SportSlug != sportSlug {
+		return domain.LeagueSyncTarget{}, domain.ErrNotFound
+	}
+	season, exists := r.seasonsByKey[seasonKey(sportSlug, leagueSlug, seasonSlug)]
+	if !exists {
+		return domain.LeagueSyncTarget{}, domain.ErrNotFound
+	}
+	return domain.LeagueSyncTarget{
+		LeagueID:     league.ID,
+		LeagueSlug:   league.Slug,
+		SyncInterval: league.SyncInterval,
+		SeasonID:     season.ID,
+		SeasonSlug:   season.Slug,
+		SeasonLabel:  season.Label,
+	}, nil
+}
+
+func (r *fakeSyncRunner) SyncLeague(_ context.Context, target domain.LeagueSyncTarget) error {
+	r.repo.mu.Lock()
+	defer r.repo.mu.Unlock()
+	r.repo.syncedTargets = append(r.repo.syncedTargets, target)
+	key := seasonKey("football", target.LeagueSlug, target.SeasonSlug)
+	r.repo.seasonMatches[key] = 2
+	return nil
 }
 
 func (r *fakeRepository) ListLeagues(_ context.Context) ([]domain.SportDirectoryItem, string, error) {
@@ -707,6 +743,41 @@ func TestDeleteSeason(t *testing.T) {
 	}
 	if _, exists := repo.seasonMatches[seasonKey("football", "csl", "2026")]; exists {
 		t.Fatalf("expected season matches to be deleted")
+	}
+}
+
+func TestRefreshSeasonNow(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/football/csl/seasons/2026/refresh", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.syncedTargets) != 1 {
+		t.Fatalf("expected one synced target, got %d", len(repo.syncedTargets))
+	}
+	if repo.syncedTargets[0].SeasonSlug != "2026" {
+		t.Fatalf("expected synced season 2026, got %s", repo.syncedTargets[0].SeasonSlug)
+	}
+}
+
+func TestRefreshSeasonNowNotFound(t *testing.T) {
+	router, _, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/football/csl/seasons/unknown/refresh", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 

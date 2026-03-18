@@ -70,6 +70,7 @@ func main() {
 	if err != nil {
 		logger.WithError(err).Fatal("create league syncer")
 	}
+	svc.SetSyncRunner(leagueSyncer)
 
 	scheduler, err := syncer.NewScheduler(logger, leagueSyncer)
 	if err != nil {

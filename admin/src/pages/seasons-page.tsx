@@ -43,6 +43,7 @@ export function SeasonsPage() {
 	const [createOpen, setCreateOpen] = useState(false)
 	const [editingSeason, setEditingSeason] = useState<AdminSeasonItem | null>(null)
 	const [deletingSeason, setDeletingSeason] = useState<AdminSeasonItem | null>(null)
+	const [refreshingSeasonSlug, setRefreshingSeasonSlug] = useState<string | null>(null)
 	const [deletePending, setDeletePending] = useState(false)
 	const [deleteError, setDeleteError] = useState<string | null>(null)
 
@@ -107,6 +108,22 @@ export function SeasonsPage() {
 		setDetail(await api.getSeasonDetail(sportSlug, leagueSlug, seasonSlug))
 	}
 
+	async function handleRefreshSeason(season: AdminSeasonItem) {
+		if (!token) {
+			return
+		}
+		setRefreshingSeasonSlug(season.slug)
+		try {
+			await api.refreshSeasonSchedule(token, sportSlug, leagueSlug, season.slug)
+			await loadSeasons(season.slug)
+			showToast({ title: 'Season refreshed', description: `${season.slug} fixtures were fetched immediately.`, tone: 'success' })
+		} catch (caught) {
+			showToast({ title: 'Refresh failed', description: caught instanceof Error ? caught.message : 'refresh failed', tone: 'error' })
+		} finally {
+			setRefreshingSeasonSlug(null)
+		}
+	}
+
 	return (
 		<div className="space-y-6">
 			<Card className="demo-panel">
@@ -148,6 +165,14 @@ export function SeasonsPage() {
 								<>
 									<DropdownMenuItem onSelect={() => void handleSelectSeason(season.slug)}>
 										Inspect fixtures
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										disabled={refreshingSeasonSlug === season.slug}
+										onSelect={() => {
+											void handleRefreshSeason(season)
+										}}
+									>
+										{refreshingSeasonSlug === season.slug ? 'Refreshing...' : 'Refresh now'}
 									</DropdownMenuItem>
 									<DropdownMenuItem onSelect={() => setEditingSeason(season)}>Edit</DropdownMenuItem>
 									<DropdownMenuSeparator />
