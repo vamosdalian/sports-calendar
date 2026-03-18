@@ -1,11 +1,16 @@
-import { useContext } from 'react'
+import { toast } from 'sonner'
 
-import { ToastContext } from '@/components/ui/toast-context'
+import type { ToastInput } from '@/components/ui/toast-context'
 
 export function useToast() {
-	const context = useContext(ToastContext)
-	if (!context) {
-		throw new Error('useToast must be used within ToastProvider')
+	function showToast({ title, description, tone }: ToastInput) {
+		if (tone === 'success') {
+			toast.success(title, { description })
+			return
+		}
+
+		toast.error(title, { description })
 	}
-	return context
+
+	return { showToast }
 }

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { entriesFromText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
 import type { ExternalLeagueOption, ExternalLeagueLookup } from '@/types'
@@ -163,13 +163,18 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 					<div>
 						<Label htmlFor="external-league">TheSportsDB league</Label>
 						<Select
-							id="external-league"
 							disabled={loadingOptions || options.length === 0}
 							value={selectedID}
-							onChange={(event) => setSelectedID(event.target.value)}
+							onValueChange={setSelectedID}
 						>
-							<option value="">{loadingOptions ? 'Loading leagues...' : 'Select a league'}</option>
-							{options.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+							<SelectTrigger id="external-league">
+								<SelectValue placeholder={loadingOptions ? 'Loading leagues...' : 'Select a league'} />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									{options.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
+								</SelectGroup>
+							</SelectContent>
 						</Select>
 					</div>
 					<div className="rounded-2xl border border-line/70 bg-shell/55 px-4 py-3 text-sm text-muted">

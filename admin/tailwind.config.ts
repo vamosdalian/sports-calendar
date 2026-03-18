@@ -4,34 +4,90 @@ export default {
   darkMode: ['class'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
-    extend: {
-      colors: {
-        shell: '#f7f8f0',
-        header: '#355872',
-        aside: '#d7e5ee',
-        panel: '#fcfdff',
-        ink: '#102132',
-        line: 'rgba(16, 33, 50, 0.14)',
-        highlight: '#d96b2b',
-        success: '#2b7d56',
-        danger: '#b64242',
-        muted: '#61788d',
-      },
-      borderRadius: {
-        panel: '14px',
-      },
-      boxShadow: {
-        panel: '0 24px 80px rgba(16, 33, 50, 0.12)',
-      },
-      fontFamily: {
-        sans: ['IBM Plex Sans', 'Noto Sans SC', 'sans-serif'],
-        display: ['Space Grotesk', 'IBM Plex Sans', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
-      },
-      backgroundImage: {
-        grid: 'linear-gradient(rgba(16, 33, 50, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(16, 33, 50, 0.05) 1px, transparent 1px)',
-      },
-    },
+  	extend: {
+  		colors: {
+  			border: 'hsl(var(--border))',
+  			input: 'hsl(var(--input))',
+  			ring: 'hsl(var(--ring))',
+  			background: 'hsl(var(--background))',
+  			foreground: 'hsl(var(--foreground))',
+  			primary: {
+  				DEFAULT: 'hsl(var(--primary))',
+  				foreground: 'hsl(var(--primary-foreground))'
+  			},
+  			secondary: {
+  				DEFAULT: 'hsl(var(--secondary))',
+  				foreground: 'hsl(var(--secondary-foreground))'
+  			},
+  			destructive: {
+  				DEFAULT: 'hsl(var(--destructive))',
+  				foreground: 'hsl(var(--destructive-foreground))'
+  			},
+  			muted: {
+  				DEFAULT: 'hsl(var(--muted))',
+  				foreground: 'hsl(var(--muted-foreground))'
+  			},
+  			accent: {
+  				DEFAULT: 'hsl(var(--accent))',
+  				foreground: 'hsl(var(--accent-foreground))'
+  			},
+  			popover: {
+  				DEFAULT: 'hsl(var(--popover))',
+  				foreground: 'hsl(var(--popover-foreground))'
+  			},
+  			card: {
+  				DEFAULT: 'hsl(var(--card))',
+  				foreground: 'hsl(var(--card-foreground))'
+  			},
+  			shell: 'hsl(var(--shell))',
+  			header: 'hsl(var(--header))',
+  			aside: 'hsl(var(--aside))',
+  			panel: 'hsl(var(--panel))',
+  			ink: 'hsl(var(--ink))',
+  			line: 'hsl(var(--line))',
+  			highlight: 'hsl(var(--highlight))',
+  			success: 'hsl(var(--success))',
+  			danger: 'hsl(var(--danger))',
+  			sidebar: {
+  				DEFAULT: 'hsl(var(--sidebar-background))',
+  				foreground: 'hsl(var(--sidebar-foreground))',
+  				primary: 'hsl(var(--sidebar-primary))',
+  				'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+  				accent: 'hsl(var(--sidebar-accent))',
+  				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+  				border: 'hsl(var(--sidebar-border))',
+  				ring: 'hsl(var(--sidebar-ring))'
+  			}
+  		},
+  		borderRadius: {
+  			lg: 'var(--radius)',
+  			md: 'calc(var(--radius) - 2px)',
+  			sm: 'calc(var(--radius) - 4px)',
+  			panel: 'var(--radius)'
+  		},
+  		boxShadow: {
+  			panel: '0 24px 80px rgba(76, 29, 149, 0.12)'
+  		},
+  		fontFamily: {
+  			sans: [
+  				'IBM Plex Sans',
+  				'Noto Sans SC',
+  				'sans-serif'
+  			],
+  			display: [
+  				'Space Grotesk',
+  				'IBM Plex Sans',
+  				'sans-serif'
+  			],
+  			mono: [
+  				'JetBrains Mono',
+  				'monospace'
+  			]
+  		},
+  		backgroundImage: {
+  			grid: 'linear-gradient(hsl(var(--line) / 0.45) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--line) / 0.45) 1px, transparent 1px)'
+  		}
+  	}
   },
   plugins: [],
 } satisfies Config

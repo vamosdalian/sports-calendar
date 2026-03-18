@@ -2,14 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { AddLeagueDialog } from '@/components/add-league-dialog'
+import { CatalogDataTable } from '@/components/catalog-data-table'
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog'
 import { EditLeagueDialog } from '@/components/edit-league-dialog'
 import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
 import { pickLocalizedPreview } from '@/lib/localized-fields'
 import type { LeagueItem } from '@/types'
@@ -77,51 +77,47 @@ export function LeaguesPage() {
 
 	return (
 		<div className="space-y-6">
-			<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line/70 bg-white px-5 py-4">
-				<div>
-					<p className="text-xs uppercase tracking-[0.16em] text-muted">Catalog path</p>
-					<h1 className="mt-2 text-2xl font-semibold text-ink">Sports / {sportSlug} / Leagues</h1>
-					<p className="mt-1 text-sm text-muted">Pick a league to continue into season management for this sport.</p>
-				</div>
-				<div className="flex items-center gap-3">
-					<Badge>Step 2 of 3</Badge>
-					<Button asChild size="sm" variant="outline"><Link to="/sports">Back to sports</Link></Button>
-				</div>
-			</div>
-			<Card>
-				<CardHeader>
-					<Badge>{sportSlug}</Badge>
-					<CardTitle className="mt-4">Create league</CardTitle>
-					<CardDescription>Choose a matching TheSportsDB league, let the lookup prefill the fields, and save the local league from a dialog.</CardDescription>
+			<Card className="demo-panel">
+				<CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+					<div>
+						<CardTitle>League catalog</CardTitle>
+						<CardDescription>Manage leagues for {sportSlug}.</CardDescription>
+					</div>
+					<Button onClick={() => setCreateOpen(true)} type="button">Add league</Button>
 				</CardHeader>
 				<CardContent>
-					<div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-4">
-						<p className="text-sm text-muted">The dialog keeps the page focused on the league table while still letting you adjust every field before save.</p>
-						<Button onClick={() => setCreateOpen(true)} type="button">Add league</Button>
-					</div>
-					{error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
-				</CardContent>
-			</Card>
-			<Card>
-				<CardHeader>
-					<CardTitle>League catalog</CardTitle>
-					<CardDescription>{sportSlug}</CardDescription>
-				</CardHeader>
-				<CardContent className="overflow-x-auto">
-					<Table>
-						<TableHead><TableRow><TableHeaderCell>ID</TableHeaderCell><TableHeaderCell>Slug</TableHeaderCell><TableHeaderCell>Name</TableHeaderCell><TableHeaderCell>Sync</TableHeaderCell><TableHeaderCell>Action</TableHeaderCell></TableRow></TableHead>
-						<TableBody>
-							{leagues.map((league) => (
-								<TableRow key={league.slug}>
-									<TableCell>{league.id}</TableCell>
-									<TableCell className="font-mono text-xs">{league.slug}</TableCell>
-									<TableCell>{pickLocalizedPreview(league.name)}</TableCell>
-									<TableCell>{league.syncInterval}</TableCell>
-									<TableCell className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setEditingLeague(league)} type="button">Edit</Button><Button size="sm" variant="danger" onClick={() => { setDeleteError(null); setDeletingLeague(league) }} type="button">Delete</Button><Button asChild size="sm" variant="outline"><Link to={`/sports/${sportSlug}/leagues/${league.slug}/seasons`}>Open seasons</Link></Button></TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
+					{error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
+					<CatalogDataTable
+						columns={[
+							{ id: 'id', header: 'ID', cell: (league) => league.id.toString(), cellClassName: 'w-20' },
+							{ id: 'slug', header: 'Slug', cell: (league) => <span className="font-mono text-xs">{league.slug}</span> },
+							{ id: 'name', header: 'Name', cell: (league) => pickLocalizedPreview(league.name) },
+							{ id: 'syncInterval', header: 'Sync', cell: (league) => league.syncInterval, cellClassName: 'text-muted-foreground' },
+						]}
+						rows={leagues}
+						getRowId={(league) => league.slug}
+						getSearchText={(league) => `${league.slug} ${pickLocalizedPreview(league.name)} ${league.syncInterval}`}
+						searchPlaceholder="Filter leagues..."
+						emptyMessage="No leagues found."
+						renderRowActions={(league) => (
+							<>
+								<DropdownMenuItem asChild>
+									<Link to={`/sports/${sportSlug}/leagues/${league.slug}/seasons`}>Open seasons</Link>
+								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={() => setEditingLeague(league)}>Edit</DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									className="text-destructive focus:text-destructive"
+									onSelect={() => {
+										setDeleteError(null)
+										setDeletingLeague(league)
+									}}
+								>
+									Delete
+								</DropdownMenuItem>
+							</>
+						)}
+					/>
 				</CardContent>
 			</Card>
 			<AddLeagueDialog sportSlug={sportSlug} open={createOpen} onOpenChange={setCreateOpen} onCreated={async () => { await loadLeagues(); showToast({ title: 'League created', description: 'The league is ready for season setup.', tone: 'success' }) }} />

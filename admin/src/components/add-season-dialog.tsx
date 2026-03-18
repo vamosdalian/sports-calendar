@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import type { ExternalSeasonOption } from '@/types'
 
@@ -123,18 +123,23 @@ export function AddSeasonDialog({ sportSlug, leagueSlug, open, onOpenChange, onC
 				<div>
 					<Label htmlFor="external-season">TheSportsDB season</Label>
 					<Select
-						id="external-season"
 						disabled={loading || options.length === 0}
 						value={selectedSeasonValue}
-						onChange={(event) => {
-							const next = options.find((item) => item.seasonValue === event.target.value)
+						onValueChange={(value) => {
+							const next = options.find((item) => item.seasonValue === value)
 							if (next) {
 								applySelection(next)
 							}
 						}}
 					>
-						<option value="">{loading ? 'Loading seasons...' : 'Select a season'}</option>
-						{options.map((item) => <option key={item.seasonValue} value={item.seasonValue}>{item.label}</option>)}
+						<SelectTrigger id="external-season">
+							<SelectValue placeholder={loading ? 'Loading seasons...' : 'Select a season'} />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectGroup>
+								{options.map((item) => <SelectItem key={item.seasonValue} value={item.seasonValue}>{item.label}</SelectItem>)}
+							</SelectGroup>
+						</SelectContent>
 					</Select>
 				</div>
 				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

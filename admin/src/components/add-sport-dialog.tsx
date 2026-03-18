@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { entriesFromText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
 import type { ExternalSportOption } from '@/types'
@@ -114,18 +114,23 @@ export function AddSportDialog({ open, onOpenChange, onCreated }: AddSportDialog
 					<div>
 						<Label htmlFor="external-sport">TheSportsDB sport</Label>
 						<Select
-							id="external-sport"
 							disabled={loading || options.length === 0}
 							value={selectedID}
-							onChange={(event) => {
-								const next = options.find((item) => String(item.id) === event.target.value)
+							onValueChange={(value) => {
+								const next = options.find((item) => String(item.id) === value)
 								if (next) {
 									applySelection(next)
 								}
 							}}
 						>
-							<option value="">{loading ? 'Loading sports...' : 'Select a sport'}</option>
-							{options.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+							<SelectTrigger id="external-sport">
+								<SelectValue placeholder={loading ? 'Loading sports...' : 'Select a sport'} />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									{options.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
+								</SelectGroup>
+							</SelectContent>
 						</Select>
 					</div>
 				</div>

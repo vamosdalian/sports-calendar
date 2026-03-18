@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import { ChevronDownIcon } from 'lucide-react'
 
 import { AddSeasonDialog } from '@/components/add-season-dialog'
+import { CatalogDataTable } from '@/components/catalog-data-table'
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog'
 import { EditSeasonDialog } from '@/components/edit-season-dialog'
 import { useAuth } from '@/components/use-auth'
@@ -9,7 +11,7 @@ import { useToast } from '@/components/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/table'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
 import type { AdminSeasonItem, MatchItem, SeasonDetailResponse } from '@/types'
 
@@ -107,53 +109,63 @@ export function SeasonsPage() {
 
 	return (
 		<div className="space-y-6">
-			<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line/70 bg-white px-5 py-4">
-				<div>
-					<p className="text-xs uppercase tracking-[0.16em] text-muted">Catalog path</p>
-					<h1 className="mt-2 text-2xl font-semibold text-ink">Sports / {sportSlug} / Leagues / {leagueSlug} / Seasons</h1>
-					<p className="mt-1 text-sm text-muted">Create seasons, inspect fixtures, and return to the league list when needed.</p>
-				</div>
-				<div className="flex items-center gap-3">
-					<Badge>Step 3 of 3</Badge>
-					<Button asChild size="sm" variant="outline"><Link to={`/sports/${sportSlug}/leagues`}>Back to leagues</Link></Button>
-				</div>
-			</div>
-			<Card>
-				<CardHeader>
-					<Badge>{leagueSlug}</Badge>
-					<CardTitle className="mt-4">Create season</CardTitle>
-					<CardDescription>Choose a remote season for this league in a dialog, then keep using the existing fixture inspector below.</CardDescription>
+			<Card className="demo-panel">
+				<CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+					<div>
+						<CardTitle>Season management</CardTitle>
+						<CardDescription>Manage seasons for {leagueSlug}.</CardDescription>
+					</div>
+					<Button onClick={() => setCreateOpen(true)} type="button">Add season</Button>
 				</CardHeader>
 				<CardContent>
-					<div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-4">
-						<p className="text-sm text-muted">The create form now opens in a dialog and preloads candidate seasons from TheSportsDB for the current league.</p>
-						<Button onClick={() => setCreateOpen(true)} type="button">Add season</Button>
-					</div>
 					{error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
 				</CardContent>
 			</Card>
 			<div className="space-y-6">
-				<Card>
+				<Card className="demo-panel">
 					<CardHeader>
 						<CardTitle>Season list</CardTitle>
-						<CardDescription>Select a season to inspect all matches returned by the public season endpoint.</CardDescription>
+						<CardDescription>Select a season.</CardDescription>
 					</CardHeader>
-					<CardContent className="overflow-x-auto">
-						<Table>
-							<TableHead><TableRow><TableHeaderCell>Slug</TableHeaderCell><TableHeaderCell>Label</TableHeaderCell><TableHeaderCell>Action</TableHeaderCell></TableRow></TableHead>
-							<TableBody>
-								{seasons.map((season) => (
-									<TableRow key={season.slug} className={season.slug === selectedSeason ? 'bg-shell/70' : ''}>
-										<TableCell className="font-mono text-xs">{season.slug}</TableCell>
-										<TableCell>{season.label}</TableCell>
-										<TableCell className="flex gap-2"><Button size="sm" variant="outline" onClick={() => void handleSelectSeason(season.slug)} type="button">Inspect fixtures</Button><Button size="sm" variant="outline" onClick={() => setEditingSeason(season)} type="button">Edit</Button><Button size="sm" variant="danger" onClick={() => { setDeleteError(null); setDeletingSeason(season) }} type="button">Delete</Button></TableCell>
-									</TableRow>
-								))}
-							</TableBody>
-						</Table>
+					<CardContent>
+						<CatalogDataTable
+							columns={[
+								{ id: 'slug', header: 'Slug', cell: (season) => <span className="font-mono text-xs">{season.slug}</span>, headerClassName: 'min-w-40' },
+								{ id: 'label', header: 'Label', cell: (season) => season.label },
+								{ id: 'years', header: 'Years', cell: (season) => `${season.startYear}-${season.endYear}`, cellClassName: 'text-muted-foreground' },
+								{ id: 'duration', header: 'Duration', cell: (season) => `${season.defaultMatchDurationMinutes} min`, cellClassName: 'text-muted-foreground' },
+							]}
+							rows={seasons}
+							getRowId={(season) => season.slug}
+							getSearchText={(season) => `${season.slug} ${season.label} ${season.startYear} ${season.endYear}`}
+							searchPlaceholder="Filter seasons..."
+							emptyMessage="No seasons found."
+							onRowClick={(season) => {
+								void handleSelectSeason(season.slug)
+							}}
+							rowClassName={(season) => season.slug === selectedSeason ? 'bg-muted/40' : undefined}
+							renderRowActions={(season) => (
+								<>
+									<DropdownMenuItem onSelect={() => void handleSelectSeason(season.slug)}>
+										Inspect fixtures
+									</DropdownMenuItem>
+									<DropdownMenuItem onSelect={() => setEditingSeason(season)}>Edit</DropdownMenuItem>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem
+										className="text-destructive focus:text-destructive"
+										onSelect={() => {
+											setDeleteError(null)
+											setDeletingSeason(season)
+										}}
+									>
+										Delete
+									</DropdownMenuItem>
+								</>
+							)}
+						/>
 					</CardContent>
 				</Card>
-				<Card>
+				<Card className="demo-panel">
 					<CardHeader>
 						<CardTitle>Season fixtures</CardTitle>
 						<CardDescription>{detail ? `${detail.seasonLabel} · ${countMatches(detail)} matches` : 'Select a season to inspect its full schedule.'}</CardDescription>
@@ -161,16 +173,16 @@ export function SeasonsPage() {
 					<CardContent className="space-y-6">
 						{detail ? (
 							<>
-								<div className="space-y-4">
-									<div className="rounded-lg bg-shell px-4 py-4"><p className="text-xs uppercase tracking-[0.16em] text-muted">Description</p><p className="mt-2 text-sm">{displayText(detail.calendarDescription)}</p></div>
-									<div className="rounded-lg bg-shell px-4 py-4"><p className="text-xs uppercase tracking-[0.16em] text-muted">Data source</p><p className="mt-2 text-sm">{displayText(detail.dataSourceNote)}</p></div>
-									<div className="rounded-lg bg-shell px-4 py-4"><p className="text-xs uppercase tracking-[0.16em] text-muted">Notes</p><p className="mt-2 text-sm">{displayText(detail.notes)}</p></div>
+								<div className="space-y-3">
+									<FixtureMetaDisclosure label="Description" value={displayText(detail.calendarDescription)} />
+									<FixtureMetaDisclosure label="Data source" value={displayText(detail.dataSourceNote)} />
+									<FixtureMetaDisclosure label="Notes" value={displayText(detail.notes)} />
 								</div>
 								<div className="space-y-4">
 									{detail.groups.map((group) => (
-										<div key={group.key} className="rounded-lg border border-line/70">
-											<div className="border-b border-line/70 bg-shell/70 px-4 py-3"><p className="font-semibold text-ink">{displayText(group.label)}</p></div>
-											<div className="divide-y divide-line/60">{group.matches.map((match) => <MatchRow key={match.id} match={match} />)}</div>
+										<div key={group.key} className="rounded-lg border border-border">
+											<div className="border-b border-border bg-muted/20 px-4 py-3"><p className="font-semibold text-ink">{displayText(group.label)}</p></div>
+											<div className="divide-y divide-border">{group.matches.map((match) => <MatchRow key={match.id} match={match} />)}</div>
 										</div>
 									))}
 								</div>
@@ -220,5 +232,21 @@ function MatchRow({ match }: { match: MatchItem }) {
 			<div><Badge className="bg-shell text-ink">{match.status}</Badge></div>
 			<div className="text-sm text-muted">{displayText(match.round)}</div>
 		</div>
+	)
+}
+
+function FixtureMetaDisclosure({ label, value }: { label: string; value: string }) {
+	return (
+		<details className="group rounded-lg border border-border bg-muted/20">
+			<summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:hidden">
+				<div>
+					<p className="eyebrow-label">{label}</p>
+				</div>
+				<ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+			</summary>
+			<div className="border-t border-border px-4 py-4 text-sm text-foreground">
+				{value}
+			</div>
+		</details>
 	)
 }
