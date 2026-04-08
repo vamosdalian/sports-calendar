@@ -23,7 +23,8 @@ go version
 
 - Frontend: `web/` (Next.js App Router)
 - Backend: `backend/` (Gin + PostgreSQL + go-ical)
-- Database init SQL: `database/init/001_postgres_init.sql`
+- Admin frontend: `admin/` (Vite + React + Tailwind)
+- Database init SQL: `database/init/001_postgres_init.sql`, `database/init/002_auth_init.sql`
 - Local backend config: `backend/config/config.local.yaml`
 
 ## 3. Backend Local Testing
@@ -56,6 +57,7 @@ Expected tables:
 - `seasons`
 - `teams`
 - `matches`
+- `users`
 
 The init SQL inserts a minimal `football / csl / 2026` seed dataset so the API can be smoke-tested immediately.
 
@@ -89,6 +91,10 @@ database:
 	user: sports_calendar
 	password: sports_calendar
 	sslmode: disable
+
+adminAuth:
+	secret: local-admin-secret-change-me
+	tokenTTLMinutes: 30
 ```
 
 ### 3.4 API smoke tests
@@ -110,6 +116,74 @@ curl -s "http://localhost:8080/api/football/csl/2026?lang=en" | jq .
 
 # ICS feed
 curl -i "http://localhost:8080/ics/football/csl/2026/matches.ics"
+
+# Bootstrap the first admin user
+curl -s -X POST "http://localhost:8080/api/auth/register" \
+	-H 'Content-Type: application/json' \
+	-d '{
+	  "email": "admin@example.com",
+	  "password": "change-me-123"
+	}' | jq .
+
+# Login and keep the token for protected admin APIs
+TOKEN=$(curl -s -X POST "http://localhost:8080/api/auth/login" \
+	-H 'Content-Type: application/json' \
+	-d '{
+	  "email": "admin@example.com",
+	  "password": "change-me-123"
+	}' | jq -r '.token')
+
+# Refresh the current token
+curl -s -X POST "http://localhost:8080/api/auth/refresh" \
+	-H "Authorization: Bearer $TOKEN" | jq .
+
+# List admin sports
+curl -s "http://localhost:8080/api/admin/sports" \
+	-H "Authorization: Bearer $TOKEN" | jq .
+
+# Create sport
+curl -s -X POST "http://localhost:8080/api/admin/sports" \
+	-H "Authorization: Bearer $TOKEN" \
+	-H 'Content-Type: application/json' \
+	-d '{
+	  "id": 102,
+	  "slug": "basketball",
+	  "name": {"en": "Basketball", "zh": "篮球"}
+	}' | jq .
+
+# Create league (id must be TheSportsDB league id)
+curl -s -X POST "http://localhost:8080/api/admin/leagues" \
+	-H "Authorization: Bearer $TOKEN" \
+	-H 'Content-Type: application/json' \
+	-d '{
+	  "id": 4387,
+	  "sportSlug": "football",
+	  "slug": "afc-champions-league-elite",
+	  "name": {"en": "AFC Champions League Elite", "zh": "亚冠精英联赛"},
+	  "syncInterval": "@daily"
+	}' | jq .
+
+# List leagues for one sport
+curl -s "http://localhost:8080/api/admin/football/leagues" \
+	-H "Authorization: Bearer $TOKEN" | jq .
+
+# Create season
+curl -s -X POST "http://localhost:8080/api/admin/seasons" \
+	-H "Authorization: Bearer $TOKEN" \
+	-H 'Content-Type: application/json' \
+	-d '{
+	  "sportSlug": "football",
+	  "leagueSlug": "afc-champions-league-elite",
+	  "slug": "2026-2027",
+	  "label": "2026-2027",
+	  "startYear": 2026,
+	  "endYear": 2027,
+	  "defaultMatchDurationMinutes": 120
+	}' | jq .
+
+# Delete season and cascade delete season matches
+curl -i -X DELETE "http://localhost:8080/api/admin/football/afc-champions-league-elite/seasons/2026-2027" \
+	-H "Authorization: Bearer $TOKEN"
 ```
 
 Notes:
@@ -143,7 +217,38 @@ npm run build
 
 Expected result: build succeeds, and routes are generated with language prefix.
 
-## 5. URL Policy Verification (Important)
+## 5. Admin Frontend Local Testing
+
+### 5.1 Install dependencies
+
+```bash
+cd admin
+npm install
+```
+
+### 5.2 Run dev server
+
+```bash
+npm run dev
+```
+
+Default address: `http://localhost:5174`
+
+If the backend runs on the default local port, the admin frontend can use it directly. If needed, set a custom API base URL before starting dev/build:
+
+```bash
+VITE_API_BASE_URL=http://localhost:8080 npm run dev
+```
+
+### 5.3 Run production build check
+
+```bash
+npm run build
+```
+
+Expected result: build succeeds and outputs static files to `admin/dist`.
+
+## 6. URL Policy Verification (Important)
 
 Current standard URL format:
 
@@ -158,7 +263,7 @@ Compatibility behavior:
 
 - `http://localhost:3000/` redirects to `/en`
 
-## 6. Legacy Compatibility Checks
+## 7. Legacy Compatibility Checks
 
 ### 6.1 Legacy query parameter
 
@@ -168,7 +273,7 @@ Open:
 
 Expected: redirect to the default season route for that league from `/api/leagues`.
 
-## 7. Optional: Docker Build Verification
+## 8. Optional: Docker Build Verification
 
 From repo root:
 
@@ -178,12 +283,13 @@ docker build -f backend/Dockerfile .
 
 If you see shell errors like `fork failed: resource temporarily unavailable`, this is usually an environment/process limit issue rather than code compilation failure.
 
-## 8. Quick Regression Checklist
+## 9. Quick Regression Checklist
 
 Run this after code changes:
 
 1. `docker exec -it sports-calendar-postgres psql -U sports_calendar -d sports_calendar -c '\dt'`
 2. `cd backend && go test ./...`
 3. `cd web && npm run build`
-4. Manually open at least one `en` route and one `zh` route.
-5. Verify one ICS endpoint responds correctly and the season page "订阅" button opens a `webcal://` URL.
+4. `cd admin && npm run build`
+5. Manually open at least one `en` route and one `zh` route.
+6. Verify one ICS endpoint responds correctly and the season page "订阅" button opens a `webcal://` URL.

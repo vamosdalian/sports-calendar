@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronDownIcon } from 'lucide-react'
 
 import { AddSeasonDialog } from '@/components/add-season-dialog'
@@ -8,12 +8,11 @@ import { ConfirmActionDialog } from '@/components/confirm-action-dialog'
 import { EditSeasonDialog } from '@/components/edit-season-dialog'
 import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
-import type { AdminSeasonItem, MatchItem, SeasonDetailResponse } from '@/types'
+import type { AdminSeasonItem, SeasonDetailResponse } from '@/types'
 
 function displayText(value: string | Record<string, string> | undefined) {
 	if (!value) {
@@ -25,20 +24,13 @@ function displayText(value: string | Record<string, string> | undefined) {
 	return value.zh || value.en || Object.values(value)[0] || '-'
 }
 
-function countMatches(detail: SeasonDetailResponse | null) {
-	if (!detail) {
-		return 0
-	}
-	return detail.groups.reduce((total, group) => total + group.matches.length, 0)
-}
-
 export function SeasonsPage() {
 	const { sportSlug = '', leagueSlug = '' } = useParams()
+	const navigate = useNavigate()
 	const { token } = useAuth()
 	const { showToast } = useToast()
 	const [seasons, setSeasons] = useState<AdminSeasonItem[]>([])
-	const [selectedSeason, setSelectedSeason] = useState<string>('')
-	const [detail, setDetail] = useState<SeasonDetailResponse | null>(null)
+	const [leagueMetadata, setLeagueMetadata] = useState<SeasonDetailResponse | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [createOpen, setCreateOpen] = useState(false)
 	const [editingSeason, setEditingSeason] = useState<AdminSeasonItem | null>(null)
@@ -47,18 +39,17 @@ export function SeasonsPage() {
 	const [deletePending, setDeletePending] = useState(false)
 	const [deleteError, setDeleteError] = useState<string | null>(null)
 
-	const loadSeasons = useCallback(async (nextSelectedSeason?: string) => {
+	const loadSeasons = useCallback(async () => {
 		if (!token) {
 			return
 		}
 		const response = await api.listAdminSeasons(token, sportSlug, leagueSlug)
 		setSeasons(response.items)
-		const seasonSlug = nextSelectedSeason ?? response.items[0]?.slug ?? ''
-		setSelectedSeason(seasonSlug)
-		if (seasonSlug) {
-			setDetail(await api.getSeasonDetail(sportSlug, leagueSlug, seasonSlug))
+		const firstSeasonSlug = response.items[0]?.slug
+		if (firstSeasonSlug) {
+			setLeagueMetadata(await api.getSeasonDetail(sportSlug, leagueSlug, firstSeasonSlug))
 		} else {
-			setDetail(null)
+			setLeagueMetadata(null)
 		}
 	}, [leagueSlug, sportSlug, token])
 
@@ -103,9 +94,8 @@ export function SeasonsPage() {
 		}
 	}
 
-	async function handleSelectSeason(seasonSlug: string) {
-		setSelectedSeason(seasonSlug)
-		setDetail(await api.getSeasonDetail(sportSlug, leagueSlug, seasonSlug))
+	function openMatches(seasonSlug: string) {
+		void navigate(`/sports/${sportSlug}/leagues/${leagueSlug}/seasons/${seasonSlug}/matches`)
 	}
 
 	async function handleRefreshSeason(season: AdminSeasonItem) {
@@ -115,7 +105,7 @@ export function SeasonsPage() {
 		setRefreshingSeasonSlug(season.slug)
 		try {
 			await api.refreshSeasonSchedule(token, sportSlug, leagueSlug, season.slug)
-			await loadSeasons(season.slug)
+			await loadSeasons()
 			showToast({ title: 'Season refreshed', description: `${season.slug} fixtures were fetched immediately.`, tone: 'success' })
 		} catch (caught) {
 			showToast({ title: 'Refresh failed', description: caught instanceof Error ? caught.message : 'refresh failed', tone: 'error' })
@@ -142,7 +132,7 @@ export function SeasonsPage() {
 				<Card className="demo-panel">
 					<CardHeader>
 						<CardTitle>Season list</CardTitle>
-						<CardDescription>Select a season.</CardDescription>
+						<CardDescription>Open a season to view matches.</CardDescription>
 					</CardHeader>
 					<CardContent>
 						<CatalogDataTable
@@ -158,13 +148,12 @@ export function SeasonsPage() {
 							searchPlaceholder="Filter seasons..."
 							emptyMessage="No seasons found."
 							onRowClick={(season) => {
-								void handleSelectSeason(season.slug)
+								openMatches(season.slug)
 							}}
-							rowClassName={(season) => season.slug === selectedSeason ? 'bg-muted/40' : undefined}
 							renderRowActions={(season) => (
 								<>
-									<DropdownMenuItem onSelect={() => void handleSelectSeason(season.slug)}>
-										Inspect fixtures
+									<DropdownMenuItem onSelect={() => openMatches(season.slug)}>
+										Open matches
 									</DropdownMenuItem>
 									<DropdownMenuItem
 										disabled={refreshingSeasonSlug === season.slug}
@@ -190,33 +179,19 @@ export function SeasonsPage() {
 						/>
 					</CardContent>
 				</Card>
-				<Card className="demo-panel">
-					<CardHeader>
-						<CardTitle>Season fixtures</CardTitle>
-						<CardDescription>{detail ? `${detail.seasonLabel} · ${countMatches(detail)} matches` : 'Select a season to inspect its full schedule.'}</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-6">
-						{detail ? (
-							<>
-								<div className="space-y-3">
-									<FixtureMetaDisclosure label="Description" value={displayText(detail.calendarDescription)} />
-									<FixtureMetaDisclosure label="Data source" value={displayText(detail.dataSourceNote)} />
-									<FixtureMetaDisclosure label="Notes" value={displayText(detail.notes)} />
-								</div>
-								<div className="space-y-4">
-									{detail.groups.map((group) => (
-										<div key={group.key} className="rounded-lg border border-border">
-											<div className="border-b border-border bg-muted/20 px-4 py-3"><p className="font-semibold text-ink">{displayText(group.label)}</p></div>
-											<div className="divide-y divide-border">{group.matches.map((match) => <MatchRow key={match.id} match={match} />)}</div>
-										</div>
-									))}
-								</div>
-							</>
-						) : (
-							<p className="text-sm text-muted">No season selected yet.</p>
-						)}
-					</CardContent>
-				</Card>
+				{leagueMetadata ? (
+					<Card className="demo-panel">
+						<CardHeader>
+							<CardTitle>League metadata</CardTitle>
+							<CardDescription>Reference notes for this league.</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-3">
+							<FixtureMetaDisclosure label="Description" value={displayText(leagueMetadata.calendarDescription)} />
+							<FixtureMetaDisclosure label="Data source" value={displayText(leagueMetadata.dataSourceNote)} />
+							<FixtureMetaDisclosure label="Notes" value={displayText(leagueMetadata.notes)} />
+						</CardContent>
+					</Card>
+				) : null}
 			</div>
 			<AddSeasonDialog
 				sportSlug={sportSlug}
@@ -224,11 +199,11 @@ export function SeasonsPage() {
 				open={createOpen}
 				onOpenChange={setCreateOpen}
 				onCreated={async (seasonSlug) => {
-					await loadSeasons(seasonSlug)
+					await loadSeasons()
 					showToast({ title: 'Season created', description: `${seasonSlug} is ready for fixture inspection.`, tone: 'success' })
 				}}
 			/>
-			<EditSeasonDialog season={editingSeason} open={editingSeason !== null} onOpenChange={(open) => { if (!open) { setEditingSeason(null) } }} onSaved={async (seasonSlug) => { await loadSeasons(seasonSlug); showToast({ title: 'Season updated', description: 'Season metadata was saved.', tone: 'success' }) }} />
+			<EditSeasonDialog season={editingSeason} open={editingSeason !== null} onOpenChange={(open) => { if (!open) { setEditingSeason(null) } }} onSaved={async () => { await loadSeasons(); showToast({ title: 'Season updated', description: 'Season metadata was saved.', tone: 'success' }) }} />
 			<ConfirmActionDialog
 				open={deletingSeason !== null}
 				onOpenChange={(open) => {
@@ -249,24 +224,11 @@ export function SeasonsPage() {
 	)
 }
 
-function MatchRow({ match }: { match: MatchItem }) {
-	return (
-		<div className="grid gap-2 px-4 py-4 md:grid-cols-[1.1fr_0.9fr_0.6fr_0.8fr] md:items-center">
-			<div><p className="font-medium text-ink">{displayText(match.homeTeam?.name)} vs {displayText(match.awayTeam?.name)}</p><p className="mt-1 font-mono text-xs text-muted">{match.id}</p></div>
-			<div><p className="text-sm text-ink">{new Date(match.startsAt).toLocaleString()}</p><p className="mt-1 text-xs text-muted">{displayText(match.venue)} · {displayText(match.city)}</p></div>
-			<div><Badge className="bg-shell text-ink">{match.status}</Badge></div>
-			<div className="text-sm text-muted">{displayText(match.round)}</div>
-		</div>
-	)
-}
-
 function FixtureMetaDisclosure({ label, value }: { label: string; value: string }) {
 	return (
 		<details className="group rounded-lg border border-border bg-muted/20">
 			<summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:hidden">
-				<div>
-					<p className="eyebrow-label">{label}</p>
-				</div>
+				<p className="eyebrow-label">{label}</p>
 				<ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
 			</summary>
 			<div className="border-t border-border px-4 py-4 text-sm text-foreground">

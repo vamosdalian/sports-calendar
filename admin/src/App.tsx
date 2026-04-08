@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { LeaguesPage } from '@/pages/leagues-page'
 import { LoginPage } from '@/pages/login-page'
+import { MatchesPage } from '@/pages/matches-page'
 import { SeasonsPage } from '@/pages/seasons-page'
 import { SportsPage } from '@/pages/sports-page'
 
@@ -27,6 +28,7 @@ export default function App() {
 					<Route path="sports" element={<SportsPage />} />
 					<Route path="sports/:sportSlug/leagues" element={<LeaguesPage />} />
 					<Route path="sports/:sportSlug/leagues/:leagueSlug/seasons" element={<SeasonsPage />} />
+					<Route path="sports/:sportSlug/leagues/:leagueSlug/seasons/:seasonSlug/matches" element={<MatchesPage />} />
 				</Route>
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>
