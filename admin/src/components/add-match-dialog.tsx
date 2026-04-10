@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
+import { format } from 'date-fns'
+import { CalendarIcon } from 'lucide-react'
 
 import { useAuth } from '@/components/use-auth'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { pickLocalizedPreview } from '@/lib/localized-fields'
+import { cn } from '@/lib/utils'
 import type { AdminTeamItem, MatchItem } from '@/types'
 
 const UNKNOWN_TEAM_ID = '-1'
@@ -52,8 +57,34 @@ function toDateTimeLocalValue(value: string) {
 	if (Number.isNaN(date.getTime())) {
 		return ''
 	}
-	const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-	return local.toISOString().slice(0, 16)
+	return `${formatLocalDate(date)}T${formatLocalTime(date)}`
+}
+
+function formatLocalDate(date: Date) {
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function formatLocalTime(date: Date) {
+	return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function getDatePart(value: string) {
+	return value.split('T')[0] || ''
+}
+
+function getTimePart(value: string) {
+	return value.includes('T') ? value.slice(11, 16) : ''
+}
+
+function parseLocalDateTime(value: string) {
+	if (!value) {
+		return undefined
+	}
+	const date = new Date(value)
+	if (Number.isNaN(date.getTime())) {
+		return undefined
+	}
+	return date
 }
 
 function buildMatchForm(match?: MatchItem | null): MatchFormState {
@@ -77,13 +108,16 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 	const [teams, setTeams] = useState<AdminTeamItem[]>([])
 	const [loading, setLoading] = useState(false)
 	const [pending, setPending] = useState(false)
+	const [calendarOpen, setCalendarOpen] = useState(false)
 	const [form, setForm] = useState<MatchFormState>(emptyMatchForm)
 	const [error, setError] = useState<string | null>(null)
 	const isEditing = match !== null
+	const selectedKickoffDate = parseLocalDateTime(form.startsAt)
 
 	useEffect(() => {
 		if (!open) {
 			setForm(emptyMatchForm)
+			setCalendarOpen(false)
 			setError(null)
 			return
 		}
@@ -132,8 +166,8 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 		if (!token) {
 			return
 		}
-		const startsAt = new Date(form.startsAt)
-		if (Number.isNaN(startsAt.getTime())) {
+		const startsAt = parseLocalDateTime(form.startsAt)
+		if (!startsAt) {
 			setError('Kickoff must be a valid date and time')
 			return
 		}
@@ -166,6 +200,26 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 		} finally {
 			setPending(false)
 		}
+	}
+
+	function handleDateSelect(date: Date | undefined) {
+		if (!date) {
+			return
+		}
+		const timePart = getTimePart(form.startsAt) || '12:00'
+		setForm((current) => ({
+			...current,
+			startsAt: `${formatLocalDate(date)}T${timePart}`,
+		}))
+		setCalendarOpen(false)
+	}
+
+	function handleTimeChange(value: string) {
+		const datePart = getDatePart(form.startsAt)
+		setForm((current) => ({
+			...current,
+			startsAt: datePart ? `${datePart}T${value}` : current.startsAt,
+		}))
 	}
 
 	return (
@@ -201,7 +255,35 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 				</div>
 				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 					<div><Label htmlFor="match-round">Round</Label><Input id="match-round" required value={form.round} onChange={(event) => setForm((current) => ({ ...current, round: event.target.value }))} /></div>
-					<div><Label htmlFor="match-starts-at">Kickoff</Label><Input id="match-starts-at" required type="datetime-local" value={form.startsAt} onChange={(event) => setForm((current) => ({ ...current, startsAt: event.target.value }))} /></div>
+					<div>
+						<Label htmlFor="match-starts-at-date">Date</Label>
+						<div className="mt-2">
+							<Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+								<PopoverTrigger asChild>
+									<Button id="match-starts-at-date" type="button" variant="outline" className={cn('w-full justify-start px-3 text-left font-normal', !selectedKickoffDate && 'text-muted-foreground')}>
+										<CalendarIcon data-icon="inline-start" />
+										{selectedKickoffDate ? format(selectedKickoffDate, 'PPP') : 'Select date'}
+									</Button>
+								</PopoverTrigger>
+								<PopoverContent align="start" className="w-auto p-0">
+									<Calendar
+										mode="single"
+										selected={selectedKickoffDate}
+										onSelect={handleDateSelect}
+										captionLayout="dropdown"
+										initialFocus
+										timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+									/>
+								</PopoverContent>
+							</Popover>
+						</div>
+					</div>
+					<div>
+						<Label htmlFor="match-starts-at-time">Time</Label>
+						<div className="mt-2">
+							<Input id="match-starts-at-time" required type="time" step="60" value={getTimePart(form.startsAt)} disabled={!getDatePart(form.startsAt)} onChange={(event) => handleTimeChange(event.target.value)} />
+						</div>
+					</div>
 					<div>
 						<Label htmlFor="match-status">Status</Label>
 						<Select value={form.status} onValueChange={(status) => setForm((current) => ({ ...current, status }))}>
@@ -216,9 +298,9 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 							</SelectContent>
 						</Select>
 					</div>
-					<div><Label htmlFor="match-country">Country</Label><Input id="match-country" value={form.country} onChange={(event) => setForm((current) => ({ ...current, country: event.target.value }))} /></div>
 				</div>
-				<div className="grid gap-4 md:grid-cols-2">
+				<div className="grid gap-4 md:grid-cols-3">
+					<div><Label htmlFor="match-country">Country</Label><Input id="match-country" value={form.country} onChange={(event) => setForm((current) => ({ ...current, country: event.target.value }))} /></div>
 					<div><Label htmlFor="match-venue">Venue</Label><Input id="match-venue" value={form.venue} onChange={(event) => setForm((current) => ({ ...current, venue: event.target.value }))} /></div>
 					<div><Label htmlFor="match-city">City</Label><Input id="match-city" value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} /></div>
 				</div>
