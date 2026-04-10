@@ -98,6 +98,13 @@ export const api = {
 	createMatch(token: string, payload: Record<string, unknown>) {
 		return request('/api/admin/matches', { method: 'POST', token, body: JSON.stringify(payload) })
 	},
+	updateMatch(token: string, matchID: string, payload: Record<string, unknown>) {
+		return request(`/api/admin/matches/${encodeURIComponent(matchID)}`, { method: 'PUT', token, body: JSON.stringify(payload) })
+	},
+	deleteMatch(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string, matchID: string) {
+		const params = new URLSearchParams({ sport: sportSlug, league: leagueSlug, season: seasonSlug })
+		return request(`/api/admin/matches/${encodeURIComponent(matchID)}?${params.toString()}`, { method: 'DELETE', token })
+	},
 	updateSeason(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string, payload: Record<string, unknown>) {
 		return request(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}`, { method: 'PUT', token, body: JSON.stringify(payload) })
 	},

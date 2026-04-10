@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
@@ -186,6 +187,7 @@ func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlu
 			Status:   "scheduled",
 			Venue:    domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
 			City:     domain.LocalizedText{"en": "Beijing", "zh": "北京"},
+			Country:  domain.LocalizedText{"en": "China", "zh": "中国"},
 			HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
 			AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
 		},
@@ -565,17 +567,78 @@ func (r *fakeRepository) CreateMatch(_ context.Context, input domain.CreateMatch
 		return domain.ErrNotFound
 	}
 	match := domain.Match{
-		ID:       input.ExternalID,
-		Round:    input.Round,
-		StartsAt: input.StartsAt,
-		Status:   input.Status,
-		Venue:    input.Venue,
-		City:     input.City,
-		HomeTeam: fakeMatchTeam(r.teamsByLeague[input.SportSlug+"/"+input.LeagueSlug], input.HomeTeamID),
-		AwayTeam: fakeMatchTeam(r.teamsByLeague[input.SportSlug+"/"+input.LeagueSlug], input.AwayTeamID),
+		ID:         input.ExternalID,
+		Round:      input.Round,
+		StartsAt:   input.StartsAt,
+		Status:     input.Status,
+		Venue:      input.Venue,
+		City:       input.City,
+		Country:    input.Country,
+		HomeTeamID: input.HomeTeamID,
+		AwayTeamID: input.AwayTeamID,
+		HomeTeam:   fakeMatchTeam(r.teamsByLeague[input.SportSlug+"/"+input.LeagueSlug], input.HomeTeamID),
+		AwayTeam:   fakeMatchTeam(r.teamsByLeague[input.SportSlug+"/"+input.LeagueSlug], input.AwayTeamID),
 	}
 	r.manualMatches[key] = append(r.manualMatches[key], match)
 	r.seasonMatches[key] = r.seasonMatches[key] + 1
+	return nil
+}
+
+func (r *fakeRepository) UpdateMatch(_ context.Context, input domain.UpdateMatchInput) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := seasonKey(input.SportSlug, input.LeagueSlug, input.SeasonSlug)
+	matches, exists := r.manualMatches[key]
+	if !exists {
+		return domain.ErrNotFound
+	}
+	for index, match := range matches {
+		if match.ID != input.ExternalID {
+			continue
+		}
+		matches[index] = domain.Match{
+			ID:         input.ExternalID,
+			Round:      input.Round,
+			StartsAt:   input.StartsAt,
+			Status:     input.Status,
+			Venue:      input.Venue,
+			City:       input.City,
+			Country:    input.Country,
+			HomeTeamID: input.HomeTeamID,
+			AwayTeamID: input.AwayTeamID,
+			HomeTeam:   fakeMatchTeam(r.teamsByLeague[input.SportSlug+"/"+input.LeagueSlug], input.HomeTeamID),
+			AwayTeam:   fakeMatchTeam(r.teamsByLeague[input.SportSlug+"/"+input.LeagueSlug], input.AwayTeamID),
+		}
+		r.manualMatches[key] = matches
+		return nil
+	}
+	return domain.ErrNotFound
+}
+
+func (r *fakeRepository) DeleteMatch(_ context.Context, input domain.DeleteMatchInput) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := seasonKey(input.SportSlug, input.LeagueSlug, input.SeasonSlug)
+	matches, exists := r.manualMatches[key]
+	if !exists {
+		return domain.ErrNotFound
+	}
+	filtered := matches[:0]
+	deleted := false
+	for _, match := range matches {
+		if match.ID == input.ExternalID {
+			deleted = true
+			continue
+		}
+		filtered = append(filtered, match)
+	}
+	if !deleted {
+		return domain.ErrNotFound
+	}
+	r.manualMatches[key] = append([]domain.Match(nil), filtered...)
+	if r.seasonMatches[key] > 0 {
+		r.seasonMatches[key]--
+	}
 	return nil
 }
 
@@ -865,6 +928,158 @@ func TestCreateMatch(t *testing.T) {
 	defer repo.mu.Unlock()
 	if len(repo.manualMatches[seasonKey("football", "csl", "2026")]) != 1 {
 		t.Fatalf("expected one manual match, got %d", len(repo.manualMatches[seasonKey("football", "csl", "2026")]))
+	}
+}
+
+func TestUpdateMatch(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	matchID := "manual:2026:20260629t120000:1"
+	repo.mu.Lock()
+	repo.manualMatches[seasonKey("football", "csl", "2026")] = []domain.Match{{
+		ID:         matchID,
+		Round:      domain.LocalizedText{"en": "Round of 16"},
+		StartsAt:   "2026-06-29T12:00:00Z",
+		Status:     "scheduled",
+		Venue:      domain.LocalizedText{"en": "Workers Stadium"},
+		City:       domain.LocalizedText{"en": "Beijing"},
+		Country:    domain.LocalizedText{"en": "United States"},
+		HomeTeamID: domain.UnknownTeamID,
+		AwayTeamID: 10002,
+		HomeTeam:   fakeMatchTeam(repo.teamsByLeague["football/csl"], domain.UnknownTeamID),
+		AwayTeam:   fakeMatchTeam(repo.teamsByLeague["football/csl"], 10002),
+	}}
+	repo.seasonMatches[seasonKey("football", "csl", "2026")] = 2
+	repo.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/matches/"+url.PathEscape(matchID), bytes.NewBufferString(`{"sportSlug":"football","leagueSlug":"csl","seasonSlug":"2026","homeTeamID":10001,"awayTeamID":-1,"round":{"en":"Quarter-finals"},"startsAt":"2026-07-03T16:00:00Z","status":"scheduled","venue":{"en":"MetLife Stadium"},"city":{"en":"New York"},"country":{"en":"United States"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	detailRecorder := httptest.NewRecorder()
+	detailRequest := httptest.NewRequest(http.MethodGet, "/api/football/csl/2026", nil)
+	router.ServeHTTP(detailRecorder, detailRequest)
+
+	if detailRecorder.Code != http.StatusOK {
+		t.Fatalf("unexpected season detail status: %d body=%s", detailRecorder.Code, detailRecorder.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(detailRecorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	groups, ok := payload["groups"].([]any)
+	if !ok || len(groups) == 0 {
+		t.Fatalf("expected groups in response")
+	}
+	lastGroup, ok := groups[len(groups)-1].(map[string]any)
+	if !ok {
+		t.Fatalf("expected last group object")
+	}
+	matches, ok := lastGroup["matches"].([]any)
+	if !ok || len(matches) == 0 {
+		t.Fatalf("expected matches in last group")
+	}
+	lastMatch, ok := matches[len(matches)-1].(map[string]any)
+	if !ok {
+		t.Fatalf("expected last match object")
+	}
+	if lastMatch["homeTeamID"] != float64(10001) {
+		t.Fatalf("expected homeTeamID 10001, got %#v", lastMatch["homeTeamID"])
+	}
+	if lastMatch["awayTeamID"] != float64(-1) {
+		t.Fatalf("expected awayTeamID -1, got %#v", lastMatch["awayTeamID"])
+	}
+	if lastMatch["round"] != "Quarter-finals" {
+		t.Fatalf("expected updated round, got %#v", lastMatch["round"])
+	}
+	if lastMatch["country"] != "United States" {
+		t.Fatalf("expected updated country, got %#v", lastMatch["country"])
+	}
+	awayTeam, ok := lastMatch["awayTeam"].(map[string]any)
+	if !ok || awayTeam["name"] != "Unknown team" {
+		t.Fatalf("expected unknown away team, got %#v", lastMatch["awayTeam"])
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	stored := repo.manualMatches[seasonKey("football", "csl", "2026")]
+	if len(stored) != 1 {
+		t.Fatalf("expected one manual match, got %d", len(stored))
+	}
+	if stored[0].Venue["en"] != "MetLife Stadium" {
+		t.Fatalf("expected updated venue, got %#v", stored[0].Venue)
+	}
+}
+
+func TestDeleteMatch(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	matchID := "manual:2026:20260629t120000:1"
+	repo.mu.Lock()
+	repo.manualMatches[seasonKey("football", "csl", "2026")] = []domain.Match{{
+		ID:         matchID,
+		Round:      domain.LocalizedText{"en": "Round of 16"},
+		StartsAt:   "2026-06-29T12:00:00Z",
+		Status:     "scheduled",
+		Country:    domain.LocalizedText{"en": "United States"},
+		HomeTeamID: domain.UnknownTeamID,
+		AwayTeamID: 10002,
+		HomeTeam:   fakeMatchTeam(repo.teamsByLeague["football/csl"], domain.UnknownTeamID),
+		AwayTeam:   fakeMatchTeam(repo.teamsByLeague["football/csl"], 10002),
+	}}
+	repo.seasonMatches[seasonKey("football", "csl", "2026")] = 2
+	repo.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/matches/"+url.PathEscape(matchID)+"?sport=football&league=csl&season=2026", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	repo.mu.Lock()
+	if len(repo.manualMatches[seasonKey("football", "csl", "2026")]) != 0 {
+		repo.mu.Unlock()
+		t.Fatalf("expected manual matches to be deleted")
+	}
+	if repo.seasonMatches[seasonKey("football", "csl", "2026")] != 1 {
+		repo.mu.Unlock()
+		t.Fatalf("expected season match count decremented to 1, got %d", repo.seasonMatches[seasonKey("football", "csl", "2026")])
+	}
+	repo.mu.Unlock()
+
+	detailRecorder := httptest.NewRecorder()
+	detailRequest := httptest.NewRequest(http.MethodGet, "/api/football/csl/2026", nil)
+	router.ServeHTTP(detailRecorder, detailRequest)
+
+	if detailRecorder.Code != http.StatusOK {
+		t.Fatalf("unexpected season detail status: %d body=%s", detailRecorder.Code, detailRecorder.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(detailRecorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	groups, ok := payload["groups"].([]any)
+	if !ok || len(groups) != 1 {
+		t.Fatalf("expected one group after delete, got %#v", payload["groups"])
+	}
+	firstGroup, ok := groups[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected group object")
+	}
+	matches, ok := firstGroup["matches"].([]any)
+	if !ok || len(matches) != 1 {
+		t.Fatalf("expected only synced match to remain, got %#v", firstGroup["matches"])
 	}
 }
 

@@ -39,6 +39,8 @@ type repository interface {
 	UpdateSeason(ctx context.Context, input domain.UpdateSeasonInput) (domain.SeasonRecord, error)
 	DeleteSeason(ctx context.Context, input domain.DeleteSeasonInput) error
 	CreateMatch(ctx context.Context, input domain.CreateMatchInput) error
+	UpdateMatch(ctx context.Context, input domain.UpdateMatchInput) error
+	DeleteMatch(ctx context.Context, input domain.DeleteMatchInput) error
 }
 
 type sportsDataProvider interface {

@@ -50,15 +50,18 @@ type localizedMatchGroup struct {
 }
 
 type localizedMatch struct {
-	ID       string         `json:"id"`
-	Round    string         `json:"round"`
-	Title    string         `json:"title"`
-	StartsAt string         `json:"startsAt"`
-	Status   string         `json:"status"`
-	Venue    string         `json:"venue"`
-	City     string         `json:"city"`
-	HomeTeam *localizedTeam `json:"homeTeam,omitempty"`
-	AwayTeam *localizedTeam `json:"awayTeam,omitempty"`
+	ID         string         `json:"id"`
+	Round      string         `json:"round"`
+	Title      string         `json:"title"`
+	StartsAt   string         `json:"startsAt"`
+	Status     string         `json:"status"`
+	Venue      string         `json:"venue"`
+	City       string         `json:"city"`
+	Country    string         `json:"country"`
+	HomeTeamID int64          `json:"homeTeamID,omitempty"`
+	AwayTeamID int64          `json:"awayTeamID,omitempty"`
+	HomeTeam   *localizedTeam `json:"homeTeam,omitempty"`
+	AwayTeam   *localizedTeam `json:"awayTeam,omitempty"`
 }
 
 type localizedTeam struct {
@@ -108,13 +111,16 @@ func localizeSeasonDetail(payload service.SeasonDetail, locale string) localized
 		matches := make([]localizedMatch, 0, len(group.Matches))
 		for _, match := range group.Matches {
 			localized := localizedMatch{
-				ID:       match.ID,
-				Round:    pickLocalizedText(match.Round, locale),
-				Title:    match.DisplayTitle(locale),
-				StartsAt: match.StartsAt,
-				Status:   match.Status,
-				Venue:    pickLocalizedText(match.Venue, locale),
-				City:     pickLocalizedText(match.City, locale),
+				ID:         match.ID,
+				Round:      pickLocalizedText(match.Round, locale),
+				Title:      match.DisplayTitle(locale),
+				StartsAt:   match.StartsAt,
+				Status:     match.Status,
+				Venue:      pickLocalizedText(match.Venue, locale),
+				City:       pickLocalizedText(match.City, locale),
+				Country:    pickLocalizedText(match.Country, locale),
+				HomeTeamID: match.HomeTeamID,
+				AwayTeamID: match.AwayTeamID,
 			}
 
 			if match.HomeTeam != nil {

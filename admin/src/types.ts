@@ -143,6 +143,9 @@ export type MatchItem = {
 	status: string
 	venue: string
 	city: string
+	country: string
+	homeTeamID?: number
+	awayTeamID?: number
 	homeTeam?: TeamRef
 	awayTeam?: TeamRef
 }

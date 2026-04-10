@@ -63,14 +63,17 @@ type SeasonDetail struct {
 }
 
 type Match struct {
-	ID       string        `json:"id"`
-	Round    LocalizedText `json:"round"`
-	StartsAt string        `json:"startsAt"`
-	Status   string        `json:"status"`
-	Venue    LocalizedText `json:"venue"`
-	City     LocalizedText `json:"city"`
-	HomeTeam *Team         `json:"homeTeam,omitempty"`
-	AwayTeam *Team         `json:"awayTeam,omitempty"`
+	ID         string        `json:"id"`
+	Round      LocalizedText `json:"round"`
+	StartsAt   string        `json:"startsAt"`
+	Status     string        `json:"status"`
+	Venue      LocalizedText `json:"venue"`
+	City       LocalizedText `json:"city"`
+	Country    LocalizedText `json:"country"`
+	HomeTeamID int64         `json:"homeTeamID,omitempty"`
+	AwayTeamID int64         `json:"awayTeamID,omitempty"`
+	HomeTeam   *Team         `json:"homeTeam,omitempty"`
+	AwayTeam   *Team         `json:"awayTeam,omitempty"`
 }
 
 type Team struct {
@@ -186,6 +189,28 @@ type CreateMatchInput struct {
 	Venue      LocalizedText `json:"venue"`
 	City       LocalizedText `json:"city"`
 	Country    LocalizedText `json:"country"`
+}
+
+type UpdateMatchInput struct {
+	SportSlug  string        `json:"sportSlug"`
+	LeagueSlug string        `json:"leagueSlug"`
+	SeasonSlug string        `json:"seasonSlug"`
+	ExternalID string        `json:"externalId"`
+	HomeTeamID int64         `json:"homeTeamID"`
+	AwayTeamID int64         `json:"awayTeamID"`
+	Round      LocalizedText `json:"round"`
+	StartsAt   string        `json:"startsAt"`
+	Status     string        `json:"status"`
+	Venue      LocalizedText `json:"venue"`
+	City       LocalizedText `json:"city"`
+	Country    LocalizedText `json:"country"`
+}
+
+type DeleteMatchInput struct {
+	SportSlug  string
+	LeagueSlug string
+	SeasonSlug string
+	ExternalID string
 }
 
 type DeleteSportInput struct {

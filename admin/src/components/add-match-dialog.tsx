@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { pickLocalizedPreview } from '@/lib/localized-fields'
-import type { AdminTeamItem } from '@/types'
+import type { AdminTeamItem, MatchItem } from '@/types'
 
 const UNKNOWN_TEAM_ID = '-1'
 
@@ -16,9 +16,10 @@ type AddMatchDialogProps = {
 	sportSlug: string
 	leagueSlug: string
 	seasonSlug: string
+	match?: MatchItem | null
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	onCreated: () => Promise<void>
+	onSaved: () => Promise<void>
 }
 
 type MatchFormState = {
@@ -43,13 +44,52 @@ const emptyMatchForm: MatchFormState = {
 	country: '',
 }
 
-export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, open, onOpenChange, onCreated }: AddMatchDialogProps) {
+function toDateTimeLocalValue(value: string) {
+	if (!value) {
+		return ''
+	}
+	const date = new Date(value)
+	if (Number.isNaN(date.getTime())) {
+		return ''
+	}
+	const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+	return local.toISOString().slice(0, 16)
+}
+
+function buildMatchForm(match?: MatchItem | null): MatchFormState {
+	if (!match) {
+		return emptyMatchForm
+	}
+	return {
+		homeTeamID: String(match.homeTeamID ?? UNKNOWN_TEAM_ID),
+		awayTeamID: String(match.awayTeamID ?? UNKNOWN_TEAM_ID),
+		round: match.round ?? '',
+		startsAt: toDateTimeLocalValue(match.startsAt),
+		status: match.status || 'scheduled',
+		venue: match.venue ?? '',
+		city: match.city ?? '',
+		country: match.country ?? '',
+	}
+}
+
+export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null, open, onOpenChange, onSaved }: AddMatchDialogProps) {
 	const { token } = useAuth()
 	const [teams, setTeams] = useState<AdminTeamItem[]>([])
 	const [loading, setLoading] = useState(false)
 	const [pending, setPending] = useState(false)
 	const [form, setForm] = useState<MatchFormState>(emptyMatchForm)
 	const [error, setError] = useState<string | null>(null)
+	const isEditing = match !== null
+
+	useEffect(() => {
+		if (!open) {
+			setForm(emptyMatchForm)
+			setError(null)
+			return
+		}
+		setForm(buildMatchForm(match))
+		setError(null)
+	}, [match, open])
 
 	useEffect(() => {
 		if (!open || !token) {
@@ -92,34 +132,44 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, open, onOpen
 		if (!token) {
 			return
 		}
+		const startsAt = new Date(form.startsAt)
+		if (Number.isNaN(startsAt.getTime())) {
+			setError('Kickoff must be a valid date and time')
+			return
+		}
 		setPending(true)
 		setError(null)
 		try {
-			await api.createMatch(token, {
+			const payload = {
 				sportSlug,
 				leagueSlug,
 				seasonSlug,
 				homeTeamID: Number(form.homeTeamID),
 				awayTeamID: Number(form.awayTeamID),
 				round: { en: form.round },
-				startsAt: new Date(form.startsAt).toISOString(),
+				startsAt: startsAt.toISOString(),
 				status: form.status,
 				venue: form.venue ? { en: form.venue } : {},
 				city: form.city ? { en: form.city } : {},
 				country: form.country ? { en: form.country } : {},
-			})
-			await onCreated()
+			}
+			if (match) {
+				await api.updateMatch(token, match.id, payload)
+			} else {
+				await api.createMatch(token, payload)
+			}
+			await onSaved()
 			onOpenChange(false)
 			setForm(emptyMatchForm)
 		} catch (caught) {
-			setError(caught instanceof Error ? caught.message : 'create failed')
+			setError(caught instanceof Error ? caught.message : isEditing ? 'update failed' : 'create failed')
 		} finally {
 			setPending(false)
 		}
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange} title="Add match" description="Create a single manual fixture for this season. Unknown-team slots use the shared sentinel value instead of fake teams." contentClassName="max-w-2xl">
+		<Dialog open={open} onOpenChange={onOpenChange} title={isEditing ? 'Edit match' : 'Add match'} description={isEditing ? 'Update a manually managed fixture. Synced matches remain read-only.' : 'Create a single manual fixture for this season. Unknown-team slots use the shared sentinel value instead of fake teams.'} contentClassName="max-w-2xl">
 			<form className="space-y-5" onSubmit={handleSubmit}>
 				<div className="grid gap-4 md:grid-cols-2">
 					<div>
@@ -175,7 +225,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, open, onOpen
 				{error ? <p className="text-sm text-danger">{error}</p> : null}
 				<div className="flex justify-end gap-3">
 					<Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>
-					<Button disabled={pending || loading} type="submit">{pending ? 'Creating...' : 'Create match'}</Button>
+					<Button disabled={pending || loading} type="submit">{pending ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save changes' : 'Create match')}</Button>
 				</div>
 			</form>
 		</Dialog>

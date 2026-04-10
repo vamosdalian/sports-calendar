@@ -122,38 +122,44 @@ export function CatalogDataTable<T>({
 					</TableHeader>
 					<TableBody>
 						{pageRows.length > 0 ? (
-							pageRows.map((row) => (
-								<TableRow
-									key={getRowId(row)}
-									onClick={onRowClick ? () => onRowClick(row) : undefined}
-									className={cn(onRowClick ? 'cursor-pointer' : undefined, rowClassName?.(row))}
-								>
-									{columns.map((column) => (
-										<TableCell key={column.id} className={column.cellClassName}>
-											{column.cell(row)}
-										</TableCell>
-									))}
-									{renderRowActions ? (
-										<TableCell className="w-12" onClick={(event) => event.stopPropagation()}>
-											<DropdownMenu>
-												<DropdownMenuTrigger asChild>
-													<Button
-														variant="ghost"
-														size="icon"
-														className="ml-auto flex size-8 text-muted-foreground data-[state=open]:bg-muted"
-													>
-														<MoreVerticalIcon />
-														<span className="sr-only">Open row actions</span>
-													</Button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end" className="w-40">
-													{renderRowActions(row)}
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</TableCell>
-									) : null}
-								</TableRow>
-							))
+							pageRows.map((row) => {
+								const actions = renderRowActions?.(row)
+
+								return (
+									<TableRow
+										key={getRowId(row)}
+										onClick={onRowClick ? () => onRowClick(row) : undefined}
+										className={cn(onRowClick ? 'cursor-pointer' : undefined, rowClassName?.(row))}
+									>
+										{columns.map((column) => (
+											<TableCell key={column.id} className={column.cellClassName}>
+												{column.cell(row)}
+											</TableCell>
+										))}
+										{renderRowActions ? (
+											<TableCell className="w-12" onClick={(event) => event.stopPropagation()}>
+												{actions ? (
+													<DropdownMenu>
+														<DropdownMenuTrigger asChild>
+															<Button
+																variant="ghost"
+																size="icon"
+																className="ml-auto flex size-8 text-muted-foreground data-[state=open]:bg-muted"
+															>
+																<MoreVerticalIcon />
+																<span className="sr-only">Open row actions</span>
+															</Button>
+														</DropdownMenuTrigger>
+														<DropdownMenuContent align="end" className="w-40">
+															{actions}
+														</DropdownMenuContent>
+													</DropdownMenu>
+												) : null}
+											</TableCell>
+										) : null}
+									</TableRow>
+								)
+							})
 						) : (
 							<TableRow>
 								<TableCell colSpan={columns.length + (renderRowActions ? 1 : 0)} className="h-24 text-center text-muted-foreground">

@@ -457,6 +457,103 @@ func (r *PostgresRepository) CreateMatch(ctx context.Context, input domain.Creat
 	return nil
 }
 
+func (r *PostgresRepository) UpdateMatch(ctx context.Context, input domain.UpdateMatchInput) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin update match transaction: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	seasonID, leagueID, err := lookupSeasonAndLeagueIDTx(ctx, tx, input.SportSlug, input.LeagueSlug, input.SeasonSlug)
+	if err != nil {
+		return err
+	}
+	if err := validateMatchTeamIDTx(ctx, tx, leagueID, input.HomeTeamID); err != nil {
+		return err
+	}
+	if err := validateMatchTeamIDTx(ctx, tx, leagueID, input.AwayTeamID); err != nil {
+		return err
+	}
+	startsAt, err := time.Parse(time.RFC3339, input.StartsAt)
+	if err != nil {
+		return fmt.Errorf("parse match startsAt: %w", err)
+	}
+
+	result, err := tx.Exec(ctx, `
+		UPDATE matches
+		SET teams = $5,
+		    round_name = $6::jsonb,
+		    venue = $7::jsonb,
+		    city = $8::jsonb,
+		    country = $9::jsonb,
+		    starts_at = $10,
+		    status = $11,
+		    updated_at = NOW()
+		WHERE season_id = $1
+		  AND external_id = $2
+		  AND external_id LIKE 'manual:%'
+		  AND EXISTS (
+			SELECT 1
+			FROM seasons se
+			JOIN leagues l ON l.id = se.league_id
+			JOIN sports s ON s.id = l.sport_id
+			WHERE se.id = $1 AND s.slug = $3 AND l.slug = $4
+		  )
+	`, seasonID, input.ExternalID, input.SportSlug, input.LeagueSlug, []int64{input.HomeTeamID, input.AwayTeamID}, encodeLocalizedText(input.Round), encodeLocalizedText(input.Venue), encodeLocalizedText(input.City), encodeLocalizedText(input.Country), startsAt.UTC(), input.Status)
+	if err != nil {
+		return fmt.Errorf("update match %s: %w", input.ExternalID, err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit update match transaction: %w", err)
+	}
+	tx = nil
+	return nil
+}
+
+func (r *PostgresRepository) DeleteMatch(ctx context.Context, input domain.DeleteMatchInput) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin delete match transaction: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	seasonID, _, err := lookupSeasonAndLeagueIDTx(ctx, tx, input.SportSlug, input.LeagueSlug, input.SeasonSlug)
+	if err != nil {
+		return err
+	}
+
+	result, err := tx.Exec(ctx, `
+		DELETE FROM matches
+		WHERE season_id = $1
+		  AND external_id = $2
+		  AND external_id LIKE 'manual:%'
+	`, seasonID, input.ExternalID)
+	if err != nil {
+		return fmt.Errorf("delete match %s: %w", input.ExternalID, err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete match transaction: %w", err)
+	}
+	tx = nil
+	return nil
+}
+
 func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT s.slug, s.name, l.slug, l.name, se.slug, se.label
@@ -677,7 +774,7 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 	}
 
 	matchRows, err := r.pool.Query(ctx, `
-		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.venue, m.city, m.teams, m.updated_at
+		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.venue, m.city, m.country, m.teams, m.updated_at
 		FROM matches m
 		WHERE m.season_id = $1
 		ORDER BY m.starts_at ASC, m.id ASC
@@ -696,6 +793,7 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 			startsAt       time.Time
 			venueRaw       []byte
 			cityRaw        []byte
+			countryRaw     []byte
 			teamIDs        []int64
 			matchUpdatedAt time.Time
 		)
@@ -706,6 +804,7 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 			&match.Status,
 			&venueRaw,
 			&cityRaw,
+			&countryRaw,
 			&teamIDs,
 			&matchUpdatedAt,
 		); scanErr != nil {
@@ -716,10 +815,13 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 		match.StartsAt = startsAt.UTC().Format(time.RFC3339)
 		match.Venue = decodeLocalizedText(venueRaw)
 		match.City = decodeLocalizedText(cityRaw)
+		match.Country = decodeLocalizedText(countryRaw)
 		if len(teamIDs) > 0 {
+			match.HomeTeamID = teamIDs[0]
 			match.HomeTeam = resolveMatchTeam(teamIDs[0], teamMap)
 		}
 		if len(teamIDs) > 1 {
+			match.AwayTeamID = teamIDs[1]
 			match.AwayTeam = resolveMatchTeam(teamIDs[1], teamMap)
 		}
 		matches = append(matches, match)

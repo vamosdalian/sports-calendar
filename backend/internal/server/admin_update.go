@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
 
@@ -32,6 +33,44 @@ func (h *Handler) createMatch(c *gin.Context) {
 	}
 	if err := h.service.CreateMatch(c.Request.Context(), input); err != nil {
 		handleServiceError(c, err, "create_match_failed", "create match failed")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) updateMatch(c *gin.Context) {
+	var input domain.UpdateMatchInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	matchID, err := url.PathUnescape(c.Param("matchID"))
+	if err != nil {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_request", "invalid match id")
+		return
+	}
+	input.ExternalID = matchID
+	if err := h.service.UpdateMatch(c.Request.Context(), input); err != nil {
+		handleServiceError(c, err, "update_match_failed", "update match failed")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) deleteMatch(c *gin.Context) {
+	matchID, err := url.PathUnescape(c.Param("matchID"))
+	if err != nil {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_request", "invalid match id")
+		return
+	}
+	err = h.service.DeleteMatch(c.Request.Context(), domain.DeleteMatchInput{
+		SportSlug:  c.Query("sport"),
+		LeagueSlug: c.Query("league"),
+		SeasonSlug: c.Query("season"),
+		ExternalID: matchID,
+	})
+	if err != nil {
+		handleServiceError(c, err, "delete_match_failed", "delete match failed")
 		return
 	}
 	c.Status(http.StatusNoContent)
