@@ -22,22 +22,36 @@ export function LanguageSwitcher({ localePaths }: LanguageSwitcherProps) {
   }
 
   return (
-    <select
-      aria-label="Language selector"
-      className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white outline-none"
-      value={selectedLocale}
-      onChange={(event) => {
-        const target = safeLocalePaths[event.target.value as Locale];
-        if (target) {
-          router.replace(target);
-        }
-      }}
-    >
-      {options.map((option) => (
-        <option key={option.code} value={option.code} className="text-ink">
-          {option.label}
-        </option>
-      ))}
-    </select>
+    <div className="relative inline-block">
+      <select
+        aria-label="Language selector"
+        className="h-9 appearance-none rounded-full border border-white/20 bg-white/10 px-4 pr-10 text-sm font-medium leading-5 text-white outline-none"
+        value={selectedLocale}
+        onChange={(event) => {
+          const target = safeLocalePaths[event.target.value as Locale];
+          if (target) {
+            router.replace(target);
+          }
+        }}
+      >
+        {options.map((option) => (
+          <option key={option.code} value={option.code} className="text-ink">
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/80"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M4.5 6.5L8 10l3.5-3.5" />
+      </svg>
+    </div>
   );
 }
