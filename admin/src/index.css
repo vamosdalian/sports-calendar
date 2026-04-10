@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	:root {
+		--background: 0 0% 100%;
+		--foreground: 240 10% 3.9%;
+		--card: 0 0% 100%;
+		--card-foreground: 240 10% 3.9%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 240 10% 3.9%;
+		--primary: 262 83% 58%;
+		--primary-foreground: 0 0% 100%;
+		--secondary: 240 4.8% 95.9%;
+		--secondary-foreground: 240 5.9% 10%;
+		--muted: 240 4.8% 95.9%;
+		--muted-foreground: 240 3.8% 46.1%;
+		--accent: 270 100% 98%;
+		--accent-foreground: 262 54% 32%;
+		--destructive: 0 72% 56%;
+		--destructive-foreground: 0 0% 100%;
+		--border: 240 5.9% 90%;
+		--input: 240 5.9% 90%;
+		--ring: 262 83% 58%;
+		--radius: 0.75rem;
+		--shell: 0 0% 100%;
+		--panel: 0 0% 100%;
+		--header: 0 0% 100%;
+		--aside: 240 4.8% 95.9%;
+		--ink: 240 10% 3.9%;
+		--line: 240 5.9% 90%;
+		--highlight: 262 83% 58%;
+		--success: 151 56% 38%;
+		--danger: 0 72% 56%;
+		font-family: 'IBM Plex Sans', 'Noto Sans SC', sans-serif;
+		color: hsl(var(--foreground));
+		background: hsl(var(--background));
+		font-synthesis: none;
+		text-rendering: optimizeLegibility;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		--sidebar-background: 0 0% 98%;
+		--sidebar-foreground: 240 5.3% 26.1%;
+		--sidebar-primary: 240 5.9% 10%;
+		--sidebar-primary-foreground: 0 0% 98%;
+		--sidebar-accent: 240 4.8% 95.9%;
+		--sidebar-accent-foreground: 240 5.9% 10%;
+		--sidebar-border: 220 13% 91%;
+		--sidebar-ring: 217.2 91.2% 59.8%;
+	}
+
+	* {
+		@apply border-border;
+	}
+
+	body {
+		@apply min-h-screen bg-background text-foreground;
+		margin: 0;
+	}
+
+	a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	button,
+	input,
+	select,
+	textarea {
+		font: inherit;
+	}
+
+	#root {
+		@apply min-h-screen;
+	}
+	.dark {
+		--background: 252 36% 10%;
+		--foreground: 260 40% 96%;
+		--card: 252 31% 13%;
+		--card-foreground: 260 40% 96%;
+		--popover: 252 31% 13%;
+		--popover-foreground: 260 40% 96%;
+		--primary: 271 91% 65%;
+		--primary-foreground: 252 36% 10%;
+		--secondary: 252 22% 18%;
+		--secondary-foreground: 260 40% 96%;
+		--muted: 252 20% 18%;
+		--muted-foreground: 255 18% 74%;
+		--accent: 262 30% 22%;
+		--accent-foreground: 260 40% 96%;
+		--destructive: 0 72% 56%;
+		--destructive-foreground: 0 0% 100%;
+		--border: 252 20% 22%;
+		--input: 252 20% 22%;
+		--ring: 271 91% 65%;
+		--shell: 252 36% 10%;
+		--panel: 252 31% 13%;
+		--header: 252 40% 9%;
+		--aside: 252 22% 18%;
+		--ink: 260 40% 96%;
+		--line: 252 20% 22%;
+		--highlight: 278 84% 66%;
+		--success: 151 56% 42%;
+		--danger: 0 72% 56%;
+		--sidebar-background: 240 5.9% 10%;
+		--sidebar-foreground: 240 4.8% 95.9%;
+		--sidebar-primary: 224.3 76.3% 48%;
+		--sidebar-primary-foreground: 0 0% 100%;
+		--sidebar-accent: 240 3.7% 15.9%;
+		--sidebar-accent-foreground: 240 4.8% 95.9%;
+		--sidebar-border: 240 3.7% 15.9%;
+		--sidebar-ring: 217.2 91.2% 59.8%;
+	}
+}
+
+@layer components {
+	.panel-surface {
+		@apply rounded-lg border bg-card shadow-sm;
+	}
+
+	.demo-panel {
+		@apply rounded-lg border bg-card shadow-sm;
+	}
+
+	.demo-panel-dashed {
+		@apply rounded-lg border border-dashed bg-card;
+	}
+
+	.eyebrow-label {
+		@apply text-[11px] uppercase tracking-[0.22em] text-muted-foreground;
+	}
+}
