@@ -66,17 +66,19 @@ function MonthCalendar({
   }).format(new Date(Date.UTC(month.year, month.monthIndex, 1)));
 
   const days = buildCalendarCells(month.year, month.monthIndex);
-  const dots = new Map<string, number>();
+  const matchesByDay = new Map<string, Match[]>();
   for (const match of matches) {
     const parts = getDateParts(match.startsAt, timeZone);
     if (parts.year === month.year && parts.monthIndex === month.monthIndex) {
       const key = `${parts.year}-${parts.monthIndex}-${parts.day}`;
-      dots.set(key, (dots.get(key) ?? 0) + 1);
+      const existing = matchesByDay.get(key) ?? [];
+      existing.push(match);
+      matchesByDay.set(key, existing);
     }
   }
 
   return (
-    <article className="rounded-3xl border border-ink/10 bg-white/35 px-4 py-3 backdrop-blur-sm">
+    <article className="relative z-0 rounded-3xl border border-ink/10 bg-white/35 px-4 py-3 backdrop-blur-sm hover:z-40">
       <h3 className="text-center text-sm text-ink" suppressHydrationWarning>
         {monthLabel}
       </h3>
@@ -92,14 +94,35 @@ function MonthCalendar({
           }
 
           const key = `${month.year}-${month.monthIndex}-${day}`;
-          const count = dots.get(key) ?? 0;
+          const dayMatches = matchesByDay.get(key) ?? [];
+          const count = dayMatches.length;
 
           return (
             <div
               key={key}
-              className={`flex aspect-square flex-col items-center justify-center rounded-2xl ${count > 0 ? "bg-header text-white" : "bg-white/50"}`}
+              className={`group relative flex aspect-square select-none flex-col items-center justify-center rounded-2xl cursor-default ${count > 0 ? "bg-header text-white" : "bg-white/50"}`}
             >
               <span>{day}</span>
+              {dayMatches.length > 0 ? (
+                <div className="pointer-events-none absolute left-1/2 top-full z-[120] mt-2 hidden w-64 -translate-x-1/2 rounded-2xl bg-header px-3 py-2 text-left text-xs text-white shadow-lg group-hover:block">
+                  <div className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-header" />
+                  <ul className="space-y-1.5">
+                    {dayMatches.map((match) => (
+                      <li key={`tooltip-${match.id}`} className="truncate whitespace-nowrap leading-5">
+                        <span className="font-medium">{formatTooltipTime(match.startsAt, locale, timeZone)}</span>
+                        <span className="text-white/75"> · </span>
+                        <span>{formatTooltipMatchLabel(match)}</span>
+                        {match.venue ? (
+                          <>
+                            <span className="text-white/75"> / </span>
+                            <span className="text-white/85">{match.venue}</span>
+                          </>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -162,4 +185,20 @@ function getDateParts(iso: string, timeZone: string) {
   const monthIndex = Number(parts.find((part) => part.type === "month")?.value ?? 1) - 1;
   const day = Number(parts.find((part) => part.type === "day")?.value ?? 1);
   return { year, monthIndex, day };
+}
+
+function formatTooltipTime(startsAt: string, locale: Locale, timeZone: string) {
+  return new Intl.DateTimeFormat(localizedDateLocale(locale), {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(startsAt));
+}
+
+function formatTooltipMatchLabel(match: Match) {
+  if (match.homeTeam && match.awayTeam) {
+    return `${match.homeTeam.name} vs ${match.awayTeam.name}`;
+  }
+
+  return match.title || match.id;
 }

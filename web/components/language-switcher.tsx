@@ -24,7 +24,7 @@ export function LanguageSwitcher({ localePaths }: LanguageSwitcherProps) {
   return (
     <select
       aria-label="Language selector"
-      className="border border-white/20 bg-white/10 px-3 py-2 text-sm text-white outline-none"
+      className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white outline-none"
       value={selectedLocale}
       onChange={(event) => {
         const target = safeLocalePaths[event.target.value as Locale];
