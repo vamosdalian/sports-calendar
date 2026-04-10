@@ -408,6 +408,55 @@ func (r *PostgresRepository) DeleteSeason(ctx context.Context, input domain.Dele
 	return nil
 }
 
+func (r *PostgresRepository) CreateMatch(ctx context.Context, input domain.CreateMatchInput) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin create match transaction: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	seasonID, leagueID, err := lookupSeasonAndLeagueIDTx(ctx, tx, input.SportSlug, input.LeagueSlug, input.SeasonSlug)
+	if err != nil {
+		return err
+	}
+	if err := validateMatchTeamIDTx(ctx, tx, leagueID, input.HomeTeamID); err != nil {
+		return err
+	}
+	if err := validateMatchTeamIDTx(ctx, tx, leagueID, input.AwayTeamID); err != nil {
+		return err
+	}
+	startsAt, err := time.Parse(time.RFC3339, input.StartsAt)
+	if err != nil {
+		return fmt.Errorf("parse match startsAt: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO matches (
+			season_id,
+			external_id,
+			teams,
+			round_name,
+			venue,
+			city,
+			country,
+			starts_at,
+			status
+		) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9)
+	`, seasonID, input.ExternalID, []int64{input.HomeTeamID, input.AwayTeamID}, encodeLocalizedText(input.Round), encodeLocalizedText(input.Venue), encodeLocalizedText(input.City), encodeLocalizedText(input.Country), startsAt.UTC(), input.Status); err != nil {
+		return mapWriteError("create match", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit create match transaction: %w", err)
+	}
+	tx = nil
+	return nil
+}
+
 func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT s.slug, s.name, l.slug, l.name, se.slug, se.label
@@ -668,16 +717,10 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 		match.Venue = decodeLocalizedText(venueRaw)
 		match.City = decodeLocalizedText(cityRaw)
 		if len(teamIDs) > 0 {
-			if team, ok := teamMap[teamIDs[0]]; ok {
-				teamCopy := team
-				match.HomeTeam = &teamCopy
-			}
+			match.HomeTeam = resolveMatchTeam(teamIDs[0], teamMap)
 		}
 		if len(teamIDs) > 1 {
-			if team, ok := teamMap[teamIDs[1]]; ok {
-				teamCopy := team
-				match.AwayTeam = &teamCopy
-			}
+			match.AwayTeam = resolveMatchTeam(teamIDs[1], teamMap)
 		}
 		matches = append(matches, match)
 		lastUpdatedAt = maxTime(lastUpdatedAt, matchUpdatedAt)
@@ -843,13 +886,14 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 	}
 
 	if len(matchExternalIDs) == 0 {
-		if _, err := tx.Exec(ctx, `DELETE FROM matches WHERE season_id = $1`, snapshot.Target.SeasonID); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM matches WHERE season_id = $1 AND external_id NOT LIKE 'manual:%'`, snapshot.Target.SeasonID); err != nil {
 			return fmt.Errorf("delete season matches: %w", err)
 		}
 	} else {
 		if _, err := tx.Exec(ctx, `
 			DELETE FROM matches
 			WHERE season_id = $1
+			  AND external_id NOT LIKE 'manual:%'
 			  AND NOT (external_id = ANY($2))
 		`, snapshot.Target.SeasonID, matchExternalIDs); err != nil {
 			return fmt.Errorf("delete stale matches: %w", err)
@@ -894,6 +938,19 @@ func upsertSnapshotTeam(ctx context.Context, tx pgx.Tx, leagueID int64, team dom
 		return 0, fmt.Errorf("upsert team %d: %w", team.ID, err)
 	}
 	return storedTeamID, nil
+}
+
+func resolveMatchTeam(teamID int64, teamMap map[int64]domain.Team) *domain.Team {
+	if teamID == domain.UnknownTeamID {
+		team := domain.UnknownTeam()
+		return &team
+	}
+	team, ok := teamMap[teamID]
+	if !ok {
+		return nil
+	}
+	teamCopy := team
+	return &teamCopy
 }
 
 func (r *PostgresRepository) latestUpdatedAt(ctx context.Context) (string, error) {
@@ -1030,6 +1087,42 @@ func lookupSeasonID(ctx context.Context, tx pgx.Tx, input domain.DeleteSeasonInp
 		return 0, fmt.Errorf("lookup season %s/%s/%s: %w", input.SportSlug, input.LeagueSlug, input.SeasonSlug, err)
 	}
 	return seasonID, nil
+}
+
+func lookupSeasonAndLeagueIDTx(ctx context.Context, tx pgx.Tx, sportSlug, leagueSlug, seasonSlug string) (int64, int64, error) {
+	var (
+		seasonID int64
+		leagueID int64
+	)
+	err := tx.QueryRow(ctx, `
+		SELECT se.id, l.id
+		FROM seasons se
+		JOIN leagues l ON l.id = se.league_id
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2 AND se.slug = $3
+		FOR UPDATE
+	`, sportSlug, leagueSlug, seasonSlug).Scan(&seasonID, &leagueID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, 0, domain.ErrNotFound
+		}
+		return 0, 0, fmt.Errorf("lookup season %s/%s/%s: %w", sportSlug, leagueSlug, seasonSlug, err)
+	}
+	return seasonID, leagueID, nil
+}
+
+func validateMatchTeamIDTx(ctx context.Context, tx pgx.Tx, leagueID, teamID int64) error {
+	if teamID == domain.UnknownTeamID {
+		return nil
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM teams WHERE league_id = $1 AND id = $2)`, leagueID, teamID).Scan(&exists); err != nil {
+		return fmt.Errorf("validate team %d: %w", teamID, err)
+	}
+	if !exists {
+		return fmt.Errorf("%w: team %d does not belong to this league", domain.ErrInvalidArgument, teamID)
+	}
+	return nil
 }
 
 func mapWriteError(action string, err error) error {

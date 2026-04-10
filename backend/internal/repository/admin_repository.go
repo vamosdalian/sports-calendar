@@ -162,6 +162,60 @@ func (r *PostgresRepository) ListAdminSeasons(ctx context.Context, sportSlug, le
 	return domain.AdminSeasonsResponse{SportSlug: sportSlug, LeagueSlug: leagueSlug, Items: items, UpdatedAt: lastUpdatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
+func (r *PostgresRepository) ListAdminTeams(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminTeamsResponse, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT t.id, t.slug, t.name, t.updated_at
+		FROM teams t
+		JOIN leagues l ON l.id = t.league_id
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2
+		ORDER BY t.slug ASC
+	`, sportSlug, leagueSlug)
+	if err != nil {
+		return domain.AdminTeamsResponse{}, fmt.Errorf("list admin teams: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]domain.AdminTeamItem, 0)
+	lastUpdatedAt := time.Time{}
+	for rows.Next() {
+		var (
+			item      domain.AdminTeamItem
+			nameRaw   []byte
+			updatedAt time.Time
+		)
+		if scanErr := rows.Scan(&item.ID, &item.Slug, &nameRaw, &updatedAt); scanErr != nil {
+			return domain.AdminTeamsResponse{}, fmt.Errorf("scan admin team: %w", scanErr)
+		}
+		item.Name = decodeLocalizedText(nameRaw)
+		items = append(items, item)
+		lastUpdatedAt = maxTime(lastUpdatedAt, updatedAt)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.AdminTeamsResponse{}, fmt.Errorf("iterate admin teams: %w", err)
+	}
+	if len(items) == 0 {
+		var exists bool
+		if err := r.pool.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1
+				FROM leagues l
+				JOIN sports s ON s.id = l.sport_id
+				WHERE s.slug = $1 AND l.slug = $2
+			)
+		`, sportSlug, leagueSlug).Scan(&exists); err != nil {
+			return domain.AdminTeamsResponse{}, fmt.Errorf("check league for admin teams: %w", err)
+		}
+		if !exists {
+			return domain.AdminTeamsResponse{}, domain.ErrNotFound
+		}
+	}
+	if lastUpdatedAt.IsZero() {
+		lastUpdatedAt = time.Now().UTC()
+	}
+	return domain.AdminTeamsResponse{SportSlug: sportSlug, LeagueSlug: leagueSlug, Items: items, UpdatedAt: lastUpdatedAt.UTC().Format(time.RFC3339)}, nil
+}
+
 func (r *PostgresRepository) GetSeasonSyncTarget(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error) {
 	var target domain.LeagueSyncTarget
 	err := r.pool.QueryRow(ctx, `

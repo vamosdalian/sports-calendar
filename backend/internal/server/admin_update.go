@@ -24,6 +24,19 @@ func (h *Handler) updateSport(c *gin.Context) {
 	c.JSON(http.StatusOK, payload)
 }
 
+func (h *Handler) createMatch(c *gin.Context) {
+	var input domain.CreateMatchInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if err := h.service.CreateMatch(c.Request.Context(), input); err != nil {
+		handleServiceError(c, err, "create_match_failed", "create match failed")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *Handler) deleteSport(c *gin.Context) {
 	err := h.service.DeleteSport(c.Request.Context(), domain.DeleteSportInput{SportSlug: c.Param("sport")})
 	if err != nil {

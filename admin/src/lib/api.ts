@@ -2,6 +2,7 @@ import { API_BASE_URL } from '@/lib/config'
 import type {
 	AdminLeaguesResponse,
 	AdminSeasonsResponse,
+	AdminTeamsResponse,
 	AuthTokenResponse,
 	ExternalLeagueLookup,
 	ExternalLeaguesResponse,
@@ -82,6 +83,9 @@ export const api = {
 	listAdminSeasons(token: string, sportSlug: string, leagueSlug: string) {
 		return request<AdminSeasonsResponse>(`/api/admin/${sportSlug}/${leagueSlug}/seasons`, { token })
 	},
+	listAdminTeams(token: string, sportSlug: string, leagueSlug: string) {
+		return request<AdminTeamsResponse>(`/api/admin/${sportSlug}/${leagueSlug}/teams`, { token })
+	},
 	listSeasons(sportSlug: string, leagueSlug: string) {
 		return request<LeagueSeasonsResponse>(`/api/${sportSlug}/${leagueSlug}/seasons`)
 	},
@@ -90,6 +94,9 @@ export const api = {
 	},
 	createSeason(token: string, payload: Record<string, unknown>) {
 		return request('/api/admin/seasons', { method: 'POST', token, body: JSON.stringify(payload) })
+	},
+	createMatch(token: string, payload: Record<string, unknown>) {
+		return request('/api/admin/matches', { method: 'POST', token, body: JSON.stringify(payload) })
 	},
 	updateSeason(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string, payload: Record<string, unknown>) {
 		return request(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}`, { method: 'PUT', token, body: JSON.stringify(payload) })

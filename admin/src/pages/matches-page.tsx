@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { AddMatchDialog } from '@/components/add-match-dialog'
 import { CatalogDataTable } from '@/components/catalog-data-table'
 import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
@@ -46,6 +47,7 @@ export function MatchesPage() {
 	const [detail, setDetail] = useState<SeasonDetailResponse | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [refreshing, setRefreshing] = useState(false)
+	const [addDialogOpen, setAddDialogOpen] = useState(false)
 
 	const loadSeasonDetail = useCallback(async () => {
 		const response = await api.getSeasonDetail(sportSlug, leagueSlug, seasonSlug)
@@ -112,6 +114,14 @@ export function MatchesPage() {
 
 	return (
 		<div className="space-y-6">
+			<AddMatchDialog
+				sportSlug={sportSlug}
+				leagueSlug={leagueSlug}
+				seasonSlug={seasonSlug}
+				open={addDialogOpen}
+				onOpenChange={setAddDialogOpen}
+				onCreated={loadSeasonDetail}
+			/>
 			<Card className="demo-panel">
 				<CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
 					<div>
@@ -123,6 +133,9 @@ export function MatchesPage() {
 					<div className="flex items-center gap-2">
 						<Button asChild type="button" variant="outline">
 							<Link to={`/sports/${sportSlug}/leagues/${leagueSlug}/seasons`}>Back to seasons</Link>
+						</Button>
+						<Button onClick={() => setAddDialogOpen(true)} type="button" variant="outline">
+							Add match
 						</Button>
 						<Button disabled={refreshing} onClick={() => void handleRefresh()} type="button">
 							{refreshing ? 'Refreshing...' : 'Refresh now'}

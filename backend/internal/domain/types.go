@@ -10,6 +10,8 @@ var ErrNotFound = errors.New("resource not found")
 var ErrConflict = errors.New("resource conflict")
 var ErrInvalidArgument = errors.New("invalid argument")
 
+const UnknownTeamID int64 = -1
+
 type LocalizedText map[string]string
 
 type SeasonReference struct {
@@ -171,6 +173,21 @@ type DeleteSeasonInput struct {
 	SeasonSlug string
 }
 
+type CreateMatchInput struct {
+	SportSlug  string        `json:"sportSlug"`
+	LeagueSlug string        `json:"leagueSlug"`
+	SeasonSlug string        `json:"seasonSlug"`
+	ExternalID string        `json:"externalId,omitempty"`
+	HomeTeamID int64         `json:"homeTeamID"`
+	AwayTeamID int64         `json:"awayTeamID"`
+	Round      LocalizedText `json:"round"`
+	StartsAt   string        `json:"startsAt"`
+	Status     string        `json:"status"`
+	Venue      LocalizedText `json:"venue"`
+	City       LocalizedText `json:"city"`
+	Country    LocalizedText `json:"country"`
+}
+
 type DeleteSportInput struct {
 	SportSlug string
 }
@@ -219,4 +236,25 @@ func PickLocalized(value LocalizedText, locale string) string {
 		return text
 	}
 	return ""
+}
+
+func NormalizeTeamID(teamID int64) int64 {
+	if teamID <= 0 {
+		return UnknownTeamID
+	}
+	return teamID
+}
+
+func UnknownTeam() Team {
+	return Team{
+		Slug:  "unknown",
+		Names: UnknownTeamNames(),
+	}
+}
+
+func UnknownTeamNames() LocalizedText {
+	return LocalizedText{
+		"en": "Unknown team",
+		"zh": "未知球队",
+	}
 }

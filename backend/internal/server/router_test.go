@@ -28,6 +28,8 @@ type fakeRepository struct {
 	sportsBySlug  map[string]domain.SportRecord
 	leaguesBySlug map[string]domain.LeagueRecord
 	seasonsByKey  map[string]domain.SeasonRecord
+	teamsByLeague map[string][]domain.AdminTeamItem
+	manualMatches map[string][]domain.Match
 	seasonMatches map[string]int
 	usersByEmail  map[string]fakeUser
 	syncedTargets []domain.LeagueSyncTarget
@@ -81,6 +83,13 @@ func newFakeRepository() *fakeRepository {
 				UpdatedAt:                   now,
 			},
 		},
+		teamsByLeague: map[string][]domain.AdminTeamItem{
+			"football/csl": {
+				{ID: 10001, Slug: "beijing-guoan", Name: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
+				{ID: 10002, Slug: "shanghai-shenhua", Name: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
+			},
+		},
+		manualMatches: map[string][]domain.Match{},
 		seasonMatches: map[string]int{
 			"football/csl/2026": 1,
 		},
@@ -164,9 +173,24 @@ func (r *fakeRepository) ListLeagueSeasons(_ context.Context, sportSlug, leagueS
 }
 
 func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if sportSlug != "football" || leagueSlug != "csl" || seasonSlug != "2026" {
 		return domain.SeasonDetail{}, domain.ErrNotFound
 	}
+	matches := []domain.Match{
+		{
+			ID:       "csl-2026-r1-guoan-shenhua",
+			Round:    domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
+			StartsAt: "2026-03-14T11:35:00Z",
+			Status:   "scheduled",
+			Venue:    domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
+			City:     domain.LocalizedText{"en": "Beijing", "zh": "北京"},
+			HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
+			AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
+		},
+	}
+	matches = append(matches, r.manualMatches[seasonKey(sportSlug, leagueSlug, seasonSlug)]...)
 	return domain.SeasonDetail{
 		SportSlug:                   "football",
 		SportNames:                  domain.LocalizedText{"en": "Football", "zh": "足球"},
@@ -178,19 +202,8 @@ func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlu
 		CalendarDescription:         domain.LocalizedText{"en": "Season calendar", "zh": "赛程日历"},
 		DataSourceNote:              domain.LocalizedText{"en": "Test data", "zh": "测试数据"},
 		Notes:                       domain.LocalizedText{"en": "Note", "zh": "备注"},
-		Matches: []domain.Match{
-			{
-				ID:       "csl-2026-r1-guoan-shenhua",
-				Round:    domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
-				StartsAt: "2026-03-14T11:35:00Z",
-				Status:   "scheduled",
-				Venue:    domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
-				City:     domain.LocalizedText{"en": "Beijing", "zh": "北京"},
-				HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
-				AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
-			},
-		},
-		UpdatedAt: "2026-03-10T00:00:00Z",
+		Matches:                     matches,
+		UpdatedAt:                   "2026-03-10T00:00:00Z",
 	}, nil
 }
 
@@ -231,6 +244,22 @@ func (r *fakeRepository) ListAdminSports(_ context.Context) (domain.AdminSportsR
 		})
 	}
 	return domain.AdminSportsResponse{Items: items, UpdatedAt: "2026-03-10T00:00:00Z"}, nil
+}
+
+func (r *fakeRepository) ListAdminTeams(_ context.Context, sportSlug, leagueSlug string) (domain.AdminTeamsResponse, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := sportSlug + "/" + leagueSlug
+	items, exists := r.teamsByLeague[key]
+	if !exists {
+		return domain.AdminTeamsResponse{}, domain.ErrNotFound
+	}
+	return domain.AdminTeamsResponse{
+		SportSlug:  sportSlug,
+		LeagueSlug: leagueSlug,
+		Items:      append([]domain.AdminTeamItem(nil), items...),
+		UpdatedAt:  time.Now().UTC().Format(time.RFC3339),
+	}, nil
 }
 
 func (r *fakeRepository) ListAdminLeagues(_ context.Context, sportSlug string) (domain.AdminLeaguesResponse, error) {
@@ -401,6 +430,7 @@ func (r *fakeRepository) DeleteSport(_ context.Context, input domain.DeleteSport
 		}
 		delete(r.seasonsByKey, key)
 		delete(r.seasonMatches, key)
+		delete(r.manualMatches, key)
 	}
 	return nil
 }
@@ -451,6 +481,7 @@ func (r *fakeRepository) DeleteLeague(_ context.Context, input domain.DeleteLeag
 		}
 		delete(r.seasonsByKey, key)
 		delete(r.seasonMatches, key)
+		delete(r.manualMatches, key)
 	}
 	return nil
 }
@@ -522,6 +553,44 @@ func (r *fakeRepository) DeleteSeason(_ context.Context, input domain.DeleteSeas
 	}
 	delete(r.seasonsByKey, key)
 	delete(r.seasonMatches, key)
+	delete(r.manualMatches, key)
+	return nil
+}
+
+func (r *fakeRepository) CreateMatch(_ context.Context, input domain.CreateMatchInput) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := seasonKey(input.SportSlug, input.LeagueSlug, input.SeasonSlug)
+	if _, exists := r.seasonsByKey[key]; !exists {
+		return domain.ErrNotFound
+	}
+	match := domain.Match{
+		ID:       input.ExternalID,
+		Round:    input.Round,
+		StartsAt: input.StartsAt,
+		Status:   input.Status,
+		Venue:    input.Venue,
+		City:     input.City,
+		HomeTeam: fakeMatchTeam(r.teamsByLeague[input.SportSlug+"/"+input.LeagueSlug], input.HomeTeamID),
+		AwayTeam: fakeMatchTeam(r.teamsByLeague[input.SportSlug+"/"+input.LeagueSlug], input.AwayTeamID),
+	}
+	r.manualMatches[key] = append(r.manualMatches[key], match)
+	r.seasonMatches[key] = r.seasonMatches[key] + 1
+	return nil
+}
+
+func fakeMatchTeam(teams []domain.AdminTeamItem, teamID int64) *domain.Team {
+	if teamID == domain.UnknownTeamID {
+		team := domain.UnknownTeam()
+		return &team
+	}
+	for _, team := range teams {
+		if team.ID != teamID {
+			continue
+		}
+		resolved := domain.Team{Slug: team.Slug, Names: team.Name}
+		return &resolved
+	}
 	return nil
 }
 
@@ -721,6 +790,81 @@ func TestCreateSeasonConflict(t *testing.T) {
 
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestListAdminTeams(t *testing.T) {
+	router, _, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/football/csl/teams", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	items, ok := payload["items"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("expected 2 teams, got %#v", payload["items"])
+	}
+}
+
+func TestCreateMatch(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/matches", bytes.NewBufferString(`{"sportSlug":"football","leagueSlug":"csl","seasonSlug":"2026","homeTeamID":-1,"awayTeamID":10002,"round":{"en":"Round of 16"},"startsAt":"2026-06-29T12:00:00Z","status":"scheduled","venue":{"en":"Workers Stadium"},"city":{"en":"Beijing"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	detailRecorder := httptest.NewRecorder()
+	detailRequest := httptest.NewRequest(http.MethodGet, "/api/football/csl/2026", nil)
+	router.ServeHTTP(detailRecorder, detailRequest)
+
+	if detailRecorder.Code != http.StatusOK {
+		t.Fatalf("unexpected season detail status: %d body=%s", detailRecorder.Code, detailRecorder.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(detailRecorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	groups, ok := payload["groups"].([]any)
+	if !ok || len(groups) == 0 {
+		t.Fatalf("expected groups in response")
+	}
+	lastGroup, ok := groups[len(groups)-1].(map[string]any)
+	if !ok {
+		t.Fatalf("expected last group object")
+	}
+	matches, ok := lastGroup["matches"].([]any)
+	if !ok || len(matches) == 0 {
+		t.Fatalf("expected matches in last group")
+	}
+	lastMatch, ok := matches[len(matches)-1].(map[string]any)
+	if !ok {
+		t.Fatalf("expected last match object")
+	}
+	homeTeam, ok := lastMatch["homeTeam"].(map[string]any)
+	if !ok || homeTeam["name"] != "Unknown team" {
+		t.Fatalf("expected unknown home team, got %#v", lastMatch["homeTeam"])
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.manualMatches[seasonKey("football", "csl", "2026")]) != 1 {
+		t.Fatalf("expected one manual match, got %d", len(repo.manualMatches[seasonKey("football", "csl", "2026")]))
 	}
 }
 

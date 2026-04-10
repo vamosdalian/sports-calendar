@@ -42,6 +42,19 @@ type AdminExternalSeasonOption struct {
 	EndYear       int    `json:"endYear"`
 }
 
+type AdminTeamItem struct {
+	ID   int64         `json:"id"`
+	Slug string        `json:"slug"`
+	Name LocalizedText `json:"name"`
+}
+
+type AdminTeamsResponse struct {
+	SportSlug  string          `json:"sportSlug"`
+	LeagueSlug string          `json:"leagueSlug"`
+	Items      []AdminTeamItem `json:"items"`
+	UpdatedAt  string          `json:"updatedAt"`
+}
+
 type AdminExternalSeasonsResponse struct {
 	SportSlug  string                      `json:"sportSlug"`
 	LeagueSlug string                      `json:"leagueSlug"`

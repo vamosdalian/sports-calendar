@@ -123,6 +123,19 @@ export type TeamRef = {
 	name: string
 }
 
+export type AdminTeamItem = {
+	id: number
+	slug: string
+	name: LocalizedText
+}
+
+export type AdminTeamsResponse = {
+	sportSlug: string
+	leagueSlug: string
+	items: AdminTeamItem[]
+	updatedAt: string
+}
+
 export type MatchItem = {
 	id: string
 	round: string

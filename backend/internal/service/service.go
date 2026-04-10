@@ -25,6 +25,7 @@ type repository interface {
 	ListAdminSports(ctx context.Context) (domain.AdminSportsResponse, error)
 	ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error)
 	ListAdminSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error)
+	ListAdminTeams(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminTeamsResponse, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateUser(ctx context.Context, email, passwordHash string) (domain.UserRecord, error)
 	GetUserByEmail(ctx context.Context, email string) (domain.UserRecord, string, error)
@@ -37,6 +38,7 @@ type repository interface {
 	CreateSeason(ctx context.Context, input domain.CreateSeasonInput) (domain.SeasonRecord, error)
 	UpdateSeason(ctx context.Context, input domain.UpdateSeasonInput) (domain.SeasonRecord, error)
 	DeleteSeason(ctx context.Context, input domain.DeleteSeasonInput) error
+	CreateMatch(ctx context.Context, input domain.CreateMatchInput) error
 }
 
 type sportsDataProvider interface {
