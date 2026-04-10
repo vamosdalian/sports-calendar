@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { getLeagueSeasons, getLeagues, getSeasonPageData, getSeasonSubscriptionUrl, matchLabel } from "../lib/catalog";
+import { getLeagueSeasons, getLeagues, getSeasonPageData, getSeasonSubscriptionUrl, formatMatchLocation, type Match } from "../lib/catalog";
 import { locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
@@ -133,7 +133,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
                       <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
                         <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
                         <span className="mx-2 text-ink/45">/</span>
-                        <span>{matchLabel(match)}</span>
+                        <MatchSummary match={match} />
                       </li>
                     ))}
                   </ul>
@@ -163,6 +163,32 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
         </div>
       </footer>
     </div>
+  );
+}
+
+function MatchSummary({ match }: { match: Match }) {
+  const location = formatMatchLocation(match);
+
+  return (
+    <>
+      <span>
+        {match.homeTeam && match.awayTeam ? (
+          <>
+            <strong className="font-semibold text-ink">{match.homeTeam.name}</strong>
+            <span className="text-ink/65"> vs </span>
+            <strong className="font-semibold text-ink">{match.awayTeam.name}</strong>
+          </>
+        ) : (
+          <span>{match.title || match.id}</span>
+        )}
+      </span>
+      {location ? (
+        <>
+          <span className="mx-2 text-ink/45">/</span>
+          <span className="text-ink/72">{location}</span>
+        </>
+      ) : null}
+    </>
   );
 }
 

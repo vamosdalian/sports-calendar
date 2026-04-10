@@ -13,6 +13,7 @@ export type Match = {
   status: string;
   venue: string;
   city: string;
+  country: string;
   homeTeam?: Team;
   awayTeam?: Team;
 };
@@ -290,6 +291,10 @@ export function matchLabel(match: Match) {
     return `${match.homeTeam.name} vs ${match.awayTeam.name}`;
   }
   return match.id;
+}
+
+export function formatMatchLocation(match: Match) {
+  return [match.venue, match.city, match.country].filter(Boolean).join(", ");
 }
 
 export function getSeasonSubscriptionUrl(sportSlug: string, leagueSlug: string, seasonSlug: string) {
