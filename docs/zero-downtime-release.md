@@ -45,14 +45,17 @@ cd ../web && npm run build
 cd ../admin && npm run build
 ```
 
-并准备新镜像 tag，例如：`release-2026-04-10-01`。
+并准备新镜像 tag，例如：`release-2026-04-10-01`，随后发布同名 GitHub Release。
 
-## 3.2 推送新镜像
+## 3.2 等待新镜像发布到 GHCR
 
-```bash
-docker build -f backend/Dockerfile -t your-registry/sports-calendar-api:release-2026-04-10-01 .
-docker push your-registry/sports-calendar-api:release-2026-04-10-01
-```
+Release 发布后，`.github/workflows/backend-release.yml` 会自动执行：
+
+1. 读取 release tag 作为镜像版本。
+2. 运行 `cd backend && go test ./...`。
+3. 构建并推送 `ghcr.io/vamosdalian/sports-calendar-api:release-2026-04-10-01`。
+
+进入服务器发布前，先确认 GitHub Actions 已成功完成。
 
 ## 3.3 识别当前在线颜色
 
@@ -78,7 +81,7 @@ docker run -d \
   --network sports-calendar-net \
   -p 127.0.0.1:18081:8080 \
   -v /opt/sports-calendar/config/config.prod.yaml:/app/config.yaml:ro \
-  your-registry/sports-calendar-api:release-2026-04-10-01 \
+  ghcr.io/vamosdalian/sports-calendar-api:release-2026-04-10-01 \
   -config /app/config.yaml
 ```
 
@@ -217,7 +220,7 @@ docker logs --tail=200 sports-calendar-api-green
 
 ## 7. 可复制的发布清单（简版）
 
-1. 推新镜像 tag
+1. 发布 GitHub Release，等待新镜像进入 GHCR
 2. 起新颜色容器（不同端口）
 3. 本机健康检查通过
 4. Nginx reload 切流

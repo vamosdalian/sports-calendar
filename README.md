@@ -12,7 +12,7 @@
    - `JSON`：联赛元信息（`data/leagues.json`）
    - `CSV`：赛程数据（`data/*_fixtures.csv`）
 4. 使用 `script/generate_ics.py` 从 JSON + CSV 生成并更新 `calendar/`。
-5. 不使用 GitHub Action。
+5. Backend 发布通过 GitHub Release 触发 GitHub Actions 自动构建并推送到 GHCR；静态日历文件仍可按需手工生成。
 
 ## 目录结构
 
