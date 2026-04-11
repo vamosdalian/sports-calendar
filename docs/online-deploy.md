@@ -27,8 +27,18 @@
 
 ### 2.1 代码冻结
 
-1. 在主分支打上线 tag，例如 `release-2026-04-10`。
+1. 在主分支创建上线 tag，并发布 GitHub Release，例如 `release-2026-04-10`。
 2. 确认本次发布 commit 已通过本地测试。
+
+推荐命令：
+
+```bash
+git tag release-2026-04-10
+git push origin release-2026-04-10
+gh release create release-2026-04-10 --generate-notes
+```
+
+说明：发布 Release 后，仓库中的 `.github/workflows/backend-release.yml` 会自动读取 release tag，构建 backend 镜像并推送到 GitHub Container Registry（GHCR）。
 
 ### 2.2 本地构建与测试
 
@@ -51,6 +61,16 @@ cd ../admin && npm run build
 3. 后端管理员 JWT Secret（高强度随机字符串）
 4. 数据库账号密码
 5. Cloudflare 项目访问权限
+
+### 2.4 GitHub Release / GHCR 前置项
+
+首次启用自动发布时，额外确认：
+
+1. 仓库 Actions 允许使用 `GITHUB_TOKEN` 写入 packages。
+2. GHCR 中允许创建 `ghcr.io/vamosdalian/sports-calendar-api` 包。
+3. 如需匿名拉取，可在 GHCR 页面将该镜像包设为 public。
+
+如为 fork 仓库，请把上述 owner 替换为你自己的 GitHub 用户或组织名。
 
 ---
 
@@ -119,14 +139,25 @@ adminAuth:
 1. `adminAuth.secret` 必须替换为长度足够的随机值。
 2. 不要把生产密钥提交到 Git。
 
-## 3.4 构建后端镜像
+## 3.4 通过 GitHub Release 自动构建后端镜像
 
-在 CI 或本地构建并推送：
+后端镜像不再建议手工 `docker build` 后推送。标准流程如下：
 
-```bash
-docker build -f backend/Dockerfile -t your-registry/sports-calendar-api:release-2026-04-10 .
-docker push your-registry/sports-calendar-api:release-2026-04-10
+1. 在目标 commit 上创建 tag。
+2. 发布同名 GitHub Release。
+3. GitHub Actions 自动读取 release tag 作为镜像版本号。
+4. Actions 执行 `go test ./...`，然后构建并推送镜像到 GHCR。
+
+产物示例：
+
+```text
+ghcr.io/vamosdalian/sports-calendar-api:release-2026-04-10
+ghcr.io/vamosdalian/sports-calendar-api:latest
 ```
+
+说明：`latest` 仅在非 prerelease 的正式 Release 上更新；如果发布的是预发布版本，则只推送 tag 对应版本。
+
+如需查看自动发布结果，打开 GitHub `Actions` 页面，确认 `Release Backend Image` 工作流成功完成。
 
 ## 3.5 启动数据库与 API
 
@@ -154,7 +185,7 @@ docker run -d \
   --network sports-calendar-net \
   -p 127.0.0.1:8080:8080 \
   -v /opt/sports-calendar/config/config.prod.yaml:/app/config.yaml:ro \
-  your-registry/sports-calendar-api:release-2026-04-10 \
+  ghcr.io/vamosdalian/sports-calendar-api:release-2026-04-10 \
   -config /app/config.yaml
 ```
 
@@ -378,7 +409,7 @@ docker run -d \
   --network sports-calendar-net \
   -p 127.0.0.1:8080:8080 \
   -v /opt/sports-calendar/config/config.prod.yaml:/app/config.yaml:ro \
-  your-registry/sports-calendar-api:LAST_GOOD_TAG \
+  ghcr.io/vamosdalian/sports-calendar-api:LAST_GOOD_TAG \
   -config /app/config.yaml
 ```
 
@@ -423,7 +454,7 @@ npm run build
 
 ## 10. 建议的发布节奏
 
-1. 每次发布使用独立 tag
+1. 每次发布使用独立 tag，并发布对应 GitHub Release
 2. 先发 Backend，再发 Web/Admin
 3. 发布后 10~30 分钟内重点观察：
    - 5xx 比例
