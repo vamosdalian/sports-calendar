@@ -51,6 +51,7 @@ SPORTS_CALENDAR_PUBLIC_API_BASE_URL=https://api.sports-calendar.com
 
 1. `SPORTS_CALENDAR_API_BASE_URL` 用于服务端取数。
 2. `SPORTS_CALENDAR_PUBLIC_API_BASE_URL` 用于生成用户订阅用的 ICS 地址。
+3. 当前代码在生产环境下即使没有显式配置这两个变量，也会默认回退到 `https://api.sports-calendar.com`，避免 Worker 误打到 `localhost:8080`。
 
 本地预览时，可在 `web/` 下创建 `.dev.vars`，内容可参考 `web/.dev.vars.example`。
 

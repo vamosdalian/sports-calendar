@@ -83,24 +83,29 @@ export type SeasonPageData = {
   season: Season;
 };
 
-const apiBaseUrl = process.env.SPORTS_CALENDAR_API_BASE_URL ?? "http://localhost:8080";
+const defaultApiBaseUrl = process.env.NODE_ENV === "production"
+  ? "https://api.sports-calendar.com"
+  : "http://localhost:8080";
+const apiBaseUrl = process.env.SPORTS_CALENDAR_API_BASE_URL ?? defaultApiBaseUrl;
 const publicApiBaseUrl = process.env.SPORTS_CALENDAR_PUBLIC_API_BASE_URL ?? apiBaseUrl;
 const REVALIDATE_SECONDS = 3600;
 
 async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const requestUrl = `${apiBaseUrl}${path}`;
+  const response = await fetch(requestUrl, {
     next: { revalidate: REVALIDATE_SECONDS },
   });
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText} (${path})`);
+    throw new Error(await formatApiError(response, requestUrl));
   }
 
   return (await response.json()) as T;
 }
 
 async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | null> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const requestUrl = `${apiBaseUrl}${path}`;
+  const response = await fetch(requestUrl, {
     next: { revalidate: REVALIDATE_SECONDS },
   });
 
@@ -109,14 +114,15 @@ async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | n
   }
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText} (${path})`);
+    throw new Error(await formatApiError(response, requestUrl));
   }
 
   return (await response.json()) as SeasonDetailResponse;
 }
 
 async function fetchJsonOrNull<T>(path: string): Promise<T | null> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const requestUrl = `${apiBaseUrl}${path}`;
+  const response = await fetch(requestUrl, {
     next: { revalidate: REVALIDATE_SECONDS },
   });
 
@@ -125,10 +131,16 @@ async function fetchJsonOrNull<T>(path: string): Promise<T | null> {
   }
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText} (${path})`);
+    throw new Error(await formatApiError(response, requestUrl));
   }
 
   return (await response.json()) as T;
+}
+
+async function formatApiError(response: Response, requestUrl: string): Promise<string> {
+  const responseText = (await response.text()).replace(/\s+/g, " ").trim();
+  const snippet = responseText ? ` body=${JSON.stringify(responseText.slice(0, 240))}` : "";
+  return `API request failed: ${response.status} ${response.statusText} (${requestUrl})${snippet}`;
 }
 
 type LeaguesResponse = {
