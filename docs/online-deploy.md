@@ -315,6 +315,8 @@ SPORTS_CALENDAR_API_BASE_URL=https://api.sports-calendar.com
 SPORTS_CALENDAR_PUBLIC_API_BASE_URL=https://api.sports-calendar.com
 ```
 
+如果漏配这两个变量，当前 `web` 在生产环境会默认回退到 `https://api.sports-calendar.com`，但仍然建议显式配置，避免环境切换时行为不透明。
+
 ## 4.3 构建与部署
 
 按你的部署平台流水线执行 `web` 目录的构建与发布（示例）：
