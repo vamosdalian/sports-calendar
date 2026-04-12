@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { useAuth } from '@/components/use-auth'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,6 +19,7 @@ type EditSeasonDialogProps = {
 type SeasonFormState = {
 	slug: string
 	label: string
+	show: boolean
 	startYear: string
 	endYear: string
 	defaultMatchDurationMinutes: string
@@ -27,6 +29,7 @@ function mapSeasonToForm(season: AdminSeasonItem): SeasonFormState {
 	return {
 		slug: season.slug,
 		label: season.label,
+		show: season.show,
 		startYear: String(season.startYear),
 		endYear: String(season.endYear),
 		defaultMatchDurationMinutes: String(season.defaultMatchDurationMinutes),
@@ -35,7 +38,7 @@ function mapSeasonToForm(season: AdminSeasonItem): SeasonFormState {
 
 export function EditSeasonDialog({ season, open, onOpenChange, onSaved }: EditSeasonDialogProps) {
 	const { token } = useAuth()
-	const [form, setForm] = useState<SeasonFormState>({ slug: '', label: '', startYear: '', endYear: '', defaultMatchDurationMinutes: '120' })
+	const [form, setForm] = useState<SeasonFormState>({ slug: '', label: '', show: false, startYear: '', endYear: '', defaultMatchDurationMinutes: '120' })
 	const [pending, setPending] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
@@ -58,6 +61,7 @@ export function EditSeasonDialog({ season, open, onOpenChange, onSaved }: EditSe
 			await api.updateSeason(token, season.sportSlug, season.leagueSlug, season.slug, {
 				slug: form.slug,
 				label: form.label,
+				show: form.show,
 				startYear: Number(form.startYear),
 				endYear: Number(form.endYear),
 				defaultMatchDurationMinutes: Number(form.defaultMatchDurationMinutes),
@@ -81,6 +85,13 @@ export function EditSeasonDialog({ season, open, onOpenChange, onSaved }: EditSe
 					<div><Label htmlFor="edit-season-end-year">End year</Label><Input id="edit-season-end-year" required value={form.endYear} onChange={(event) => setForm((current) => ({ ...current, endYear: event.target.value }))} /></div>
 				</div>
 				<div><Label htmlFor="edit-season-duration">Duration minutes</Label><Input id="edit-season-duration" required value={form.defaultMatchDurationMinutes} onChange={(event) => setForm((current) => ({ ...current, defaultMatchDurationMinutes: event.target.value }))} /></div>
+				<div className="flex items-start gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-3">
+					<Checkbox id="edit-season-show" checked={form.show} onCheckedChange={(checked) => setForm((current) => ({ ...current, show: checked === true }))} />
+					<div className="space-y-1">
+						<Label htmlFor="edit-season-show">Show on public site</Label>
+						<p className="text-sm text-muted">Frontend users can only see this season after you enable this switch.</p>
+					</div>
+				</div>
 				{error ? <p className="text-sm text-danger">{error}</p> : null}
 				<div className="flex justify-end gap-3">
 					<Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>

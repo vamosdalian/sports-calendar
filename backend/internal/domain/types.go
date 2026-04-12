@@ -22,6 +22,7 @@ type SeasonReference struct {
 type LeagueReference struct {
 	LeagueSlug    string          `json:"leagueSlug"`
 	LeagueNames   LocalizedText   `json:"leagueNames"`
+	Show          bool            `json:"show"`
 	DefaultSeason SeasonReference `json:"defaultSeason"`
 }
 
@@ -94,6 +95,7 @@ type LeagueRecord struct {
 	SportSlug           string        `json:"sportSlug"`
 	Slug                string        `json:"slug"`
 	Name                LocalizedText `json:"name"`
+	Show                bool          `json:"show"`
 	SyncInterval        string        `json:"syncInterval"`
 	CalendarDescription LocalizedText `json:"calendarDescription"`
 	DataSourceNote      LocalizedText `json:"dataSourceNote"`
@@ -108,6 +110,7 @@ type SeasonRecord struct {
 	LeagueSlug                  string `json:"leagueSlug"`
 	Slug                        string `json:"slug"`
 	Label                       string `json:"label"`
+	Show                        bool   `json:"show"`
 	StartYear                   int    `json:"startYear"`
 	EndYear                     int    `json:"endYear"`
 	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`
@@ -132,6 +135,7 @@ type CreateLeagueInput struct {
 	SportSlug           string        `json:"sportSlug"`
 	Slug                string        `json:"slug"`
 	Name                LocalizedText `json:"name"`
+	Show                bool          `json:"show"`
 	SyncInterval        string        `json:"syncInterval"`
 	CalendarDescription LocalizedText `json:"calendarDescription"`
 	DataSourceNote      LocalizedText `json:"dataSourceNote"`
@@ -143,6 +147,7 @@ type UpdateLeagueInput struct {
 	CurrentSlug         string        `json:"-"`
 	Slug                string        `json:"slug"`
 	Name                LocalizedText `json:"name"`
+	Show                bool          `json:"show"`
 	SyncInterval        string        `json:"syncInterval"`
 	CalendarDescription LocalizedText `json:"calendarDescription"`
 	DataSourceNote      LocalizedText `json:"dataSourceNote"`
@@ -154,6 +159,7 @@ type CreateSeasonInput struct {
 	LeagueSlug                  string `json:"leagueSlug"`
 	Slug                        string `json:"slug"`
 	Label                       string `json:"label"`
+	Show                        bool   `json:"show"`
 	StartYear                   int    `json:"startYear"`
 	EndYear                     int    `json:"endYear"`
 	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`
@@ -165,6 +171,7 @@ type UpdateSeasonInput struct {
 	CurrentSlug                 string `json:"-"`
 	Slug                        string `json:"slug"`
 	Label                       string `json:"label"`
+	Show                        bool   `json:"show"`
 	StartYear                   int    `json:"startYear"`
 	EndYear                     int    `json:"endYear"`
 	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`

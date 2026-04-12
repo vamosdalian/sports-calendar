@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/use-auth'
 import { LocalizedFieldsEditor } from '@/components/localized-fields-editor'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,6 +21,7 @@ type EditLeagueDialogProps = {
 type LeagueFormState = {
 	id: string
 	slug: string
+	show: boolean
 	syncInterval: string
 	nameEntries: LocalizedFieldEntry[]
 	calendarDescriptionEntries: LocalizedFieldEntry[]
@@ -35,6 +37,7 @@ function mapLeagueToForm(league: LeagueItem): LeagueFormState {
 	return {
 		id: String(league.id),
 		slug: league.slug,
+		show: league.show,
 		syncInterval: league.syncInterval,
 		nameEntries: toEntries(league.name),
 		calendarDescriptionEntries: toEntries(league.calendarDescription),
@@ -48,6 +51,7 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 	const [form, setForm] = useState<LeagueFormState>({
 		id: '',
 		slug: '',
+		show: false,
 		syncInterval: '@daily',
 		nameEntries: [{ locale: 'en', value: '' }],
 		calendarDescriptionEntries: [],
@@ -76,6 +80,7 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 			await api.updateLeague(token, league.sportSlug, league.slug, {
 				slug: form.slug,
 				name: entriesToLocalizedText(form.nameEntries),
+				show: form.show,
 				syncInterval: form.syncInterval,
 				calendarDescription: entriesToLocalizedText(form.calendarDescriptionEntries),
 				dataSourceNote: entriesToLocalizedText(form.dataSourceNoteEntries),
@@ -97,6 +102,13 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 					<div><Label htmlFor="edit-league-id">TheSportsDB id</Label><Input disabled id="edit-league-id" value={form.id} /></div>
 					<div><Label htmlFor="edit-league-slug">Slug</Label><Input id="edit-league-slug" required value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} /></div>
 					<div><Label htmlFor="edit-league-sync">Sync interval</Label><Input id="edit-league-sync" required value={form.syncInterval} onChange={(event) => setForm((current) => ({ ...current, syncInterval: event.target.value }))} /></div>
+				</div>
+				<div className="flex items-start gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-3">
+					<Checkbox id="edit-league-show" checked={form.show} onCheckedChange={(checked) => setForm((current) => ({ ...current, show: checked === true }))} />
+					<div className="space-y-1">
+						<Label htmlFor="edit-league-show">Show on public site</Label>
+						<p className="text-sm text-muted">Turn this on only when the league should be visible to frontend users.</p>
+					</div>
 				</div>
 				<LocalizedFieldsEditor idPrefix="edit-league-name" label="Localized name" entries={form.nameEntries} onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))} required />
 				<LocalizedFieldsEditor idPrefix="edit-league-calendar-description" label="Calendar description" entries={form.calendarDescriptionEntries} onChange={(calendarDescriptionEntries) => setForm((current) => ({ ...current, calendarDescriptionEntries }))} />

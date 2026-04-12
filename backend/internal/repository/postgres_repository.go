@@ -160,17 +160,19 @@ func (r *PostgresRepository) CreateLeague(ctx context.Context, input domain.Crea
 			sport_id,
 			slug,
 			name,
+			show,
 			sync_interval,
 			calendar_description,
 			data_source_note,
 			notes
 		)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, $7::jsonb, $8::jsonb)
-		RETURNING id, slug, name, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
-	`, input.ID, sportID, input.Slug, encodeLocalizedText(input.Name), input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
+		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb)
+		RETURNING id, slug, name, show, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
+	`, input.ID, sportID, input.Slug, encodeLocalizedText(input.Name), input.Show, input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
 		&record.ID,
 		&record.Slug,
 		&nameRaw,
+		&record.Show,
 		&record.SyncInterval,
 		&calendarDescriptionRaw,
 		&dataSourceNoteRaw,
@@ -210,17 +212,19 @@ func (r *PostgresRepository) UpdateLeague(ctx context.Context, input domain.Upda
 		UPDATE leagues
 		SET slug = $3,
 			name = $4::jsonb,
-			sync_interval = $5,
-			calendar_description = $6::jsonb,
-			data_source_note = $7::jsonb,
-			notes = $8::jsonb,
+			show = $5,
+			sync_interval = $6,
+			calendar_description = $7::jsonb,
+			data_source_note = $8::jsonb,
+			notes = $9::jsonb,
 			updated_at = NOW()
 		WHERE sport_id = $1 AND slug = $2
-		RETURNING id, slug, name, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
-	`, sportID, input.CurrentSlug, input.Slug, encodeLocalizedText(input.Name), input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
+		RETURNING id, slug, name, show, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
+	`, sportID, input.CurrentSlug, input.Slug, encodeLocalizedText(input.Name), input.Show, input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
 		&record.ID,
 		&record.Slug,
 		&nameRaw,
+		&record.Show,
 		&record.SyncInterval,
 		&calendarDescriptionRaw,
 		&dataSourceNoteRaw,
@@ -303,16 +307,18 @@ func (r *PostgresRepository) CreateSeason(ctx context.Context, input domain.Crea
 			league_id,
 			slug,
 			label,
+			show,
 			start_year,
 			end_year,
 			default_match_duration_minutes
 		)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, slug, label, start_year, end_year, default_match_duration_minutes, created_at, updated_at
-	`, leagueID, input.Slug, input.Label, input.StartYear, input.EndYear, input.DefaultMatchDurationMinutes).Scan(
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, slug, label, show, start_year, end_year, default_match_duration_minutes, created_at, updated_at
+	`, leagueID, input.Slug, input.Label, input.Show, input.StartYear, input.EndYear, input.DefaultMatchDurationMinutes).Scan(
 		&record.ID,
 		&record.Slug,
 		&record.Label,
+		&record.Show,
 		&record.StartYear,
 		&record.EndYear,
 		&record.DefaultMatchDurationMinutes,
@@ -344,16 +350,18 @@ func (r *PostgresRepository) UpdateSeason(ctx context.Context, input domain.Upda
 		UPDATE seasons
 		SET slug = $3,
 			label = $4,
-			start_year = $5,
-			end_year = $6,
-			default_match_duration_minutes = $7,
+			show = $5,
+			start_year = $6,
+			end_year = $7,
+			default_match_duration_minutes = $8,
 			updated_at = NOW()
 		WHERE league_id = $1 AND slug = $2
-		RETURNING id, slug, label, start_year, end_year, default_match_duration_minutes, created_at, updated_at
-	`, leagueID, input.CurrentSlug, input.Slug, input.Label, input.StartYear, input.EndYear, input.DefaultMatchDurationMinutes).Scan(
+		RETURNING id, slug, label, show, start_year, end_year, default_match_duration_minutes, created_at, updated_at
+	`, leagueID, input.CurrentSlug, input.Slug, input.Label, input.Show, input.StartYear, input.EndYear, input.DefaultMatchDurationMinutes).Scan(
 		&record.ID,
 		&record.Slug,
 		&record.Label,
+		&record.Show,
 		&record.StartYear,
 		&record.EndYear,
 		&record.DefaultMatchDurationMinutes,
@@ -556,16 +564,17 @@ func (r *PostgresRepository) DeleteMatch(ctx context.Context, input domain.Delet
 
 func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT s.slug, s.name, l.slug, l.name, se.slug, se.label
+		SELECT s.slug, s.name, l.slug, l.name, l.show, se.slug, se.label
 		FROM sports s
 		JOIN leagues l ON l.sport_id = s.id
 		JOIN LATERAL (
 			SELECT slug, label
 			FROM seasons
-			WHERE league_id = l.id
+			WHERE league_id = l.id AND show = TRUE
 			ORDER BY start_year DESC, end_year DESC, slug DESC
 			LIMIT 1
 		) se ON TRUE
+		WHERE l.show = TRUE
 		ORDER BY s.slug ASC, l.slug ASC
 	`)
 	if err != nil {
@@ -582,10 +591,11 @@ func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDir
 			sportNamesRaw  []byte
 			leagueSlug     string
 			leagueNamesRaw []byte
+			leagueShow     bool
 			seasonSlug     string
 			seasonLabel    string
 		)
-		if scanErr := rows.Scan(&sportSlug, &sportNamesRaw, &leagueSlug, &leagueNamesRaw, &seasonSlug, &seasonLabel); scanErr != nil {
+		if scanErr := rows.Scan(&sportSlug, &sportNamesRaw, &leagueSlug, &leagueNamesRaw, &leagueShow, &seasonSlug, &seasonLabel); scanErr != nil {
 			return nil, "", fmt.Errorf("scan leagues row: %w", scanErr)
 		}
 
@@ -603,6 +613,7 @@ func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDir
 		items[sportIndex].Leagues = append(items[sportIndex].Leagues, domain.LeagueReference{
 			LeagueSlug:  leagueSlug,
 			LeagueNames: decodeLocalizedText(leagueNamesRaw),
+			Show:        leagueShow,
 			DefaultSeason: domain.SeasonReference{
 				Slug:  seasonSlug,
 				Label: seasonLabel,
@@ -632,7 +643,7 @@ func (r *PostgresRepository) ListLeagueSeasons(ctx context.Context, sportSlug, l
 		SELECT l.id, s.name, l.name, GREATEST(s.updated_at, l.updated_at)
 		FROM leagues l
 		JOIN sports s ON s.id = l.sport_id
-		WHERE s.slug = $1 AND l.slug = $2
+		WHERE s.slug = $1 AND l.slug = $2 AND l.show = TRUE
 	`, sportSlug, leagueSlug).Scan(
 		&leagueID,
 		&sportNamesRaw,
@@ -649,7 +660,7 @@ func (r *PostgresRepository) ListLeagueSeasons(ctx context.Context, sportSlug, l
 	seasonRows, err := r.pool.Query(ctx, `
 		SELECT slug, label, updated_at
 		FROM seasons
-		WHERE league_id = $1
+		WHERE league_id = $1 AND show = TRUE
 		ORDER BY start_year DESC, end_year DESC, slug DESC
 	`, leagueID)
 	if err != nil {
@@ -703,7 +714,7 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 		SELECT l.id, s.name, l.name, l.calendar_description, l.data_source_note, l.notes, GREATEST(s.updated_at, l.updated_at)
 		FROM leagues l
 		JOIN sports s ON s.id = l.sport_id
-		WHERE s.slug = $1 AND l.slug = $2
+		WHERE s.slug = $1 AND l.slug = $2 AND l.show = TRUE
 	`, sportSlug, leagueSlug).Scan(
 		&leagueID,
 		&sportNamesRaw,
@@ -732,7 +743,7 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 	err = r.pool.QueryRow(ctx, `
 		SELECT id, slug, label, default_match_duration_minutes, updated_at
 		FROM seasons
-		WHERE league_id = $1 AND slug = $2
+		WHERE league_id = $1 AND slug = $2 AND show = TRUE
 	`, leagueID, seasonSlug).Scan(
 		&selected.id,
 		&selected.slug,

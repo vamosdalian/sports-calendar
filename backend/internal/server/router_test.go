@@ -65,6 +65,7 @@ func newFakeRepository() *fakeRepository {
 				SportSlug:    "football",
 				Slug:         "csl",
 				Name:         domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+				Show:         true,
 				SyncInterval: "@daily",
 				CreatedAt:    now,
 				UpdatedAt:    now,
@@ -77,6 +78,7 @@ func newFakeRepository() *fakeRepository {
 				LeagueSlug:                  "csl",
 				Slug:                        "2026",
 				Label:                       "2026",
+				Show:                        true,
 				StartYear:                   2026,
 				EndYear:                     2026,
 				DefaultMatchDurationMinutes: 120,
@@ -144,6 +146,16 @@ func (r *fakeSyncRunner) SyncLeague(_ context.Context, target domain.LeagueSyncT
 }
 
 func (r *fakeRepository) ListLeagues(_ context.Context) ([]domain.SportDirectoryItem, string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	league, exists := r.leaguesBySlug["csl"]
+	if !exists || !league.Show {
+		return nil, "2026-03-10T00:00:00Z", nil
+	}
+	season, exists := r.seasonsByKey[seasonKey("football", "csl", "2026")]
+	if !exists || !season.Show {
+		return nil, "2026-03-10T00:00:00Z", nil
+	}
 	return []domain.SportDirectoryItem{
 		{
 			SportSlug:  "football",
@@ -152,6 +164,7 @@ func (r *fakeRepository) ListLeagues(_ context.Context) ([]domain.SportDirectory
 				{
 					LeagueSlug:    "csl",
 					LeagueNames:   domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+					Show:          true,
 					DefaultSeason: domain.SeasonReference{Slug: "2026", Label: "2026"},
 				},
 			},
@@ -160,7 +173,14 @@ func (r *fakeRepository) ListLeagues(_ context.Context) ([]domain.SportDirectory
 }
 
 func (r *fakeRepository) ListLeagueSeasons(_ context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error) {
-	if sportSlug != "football" || leagueSlug != "csl" {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	league, exists := r.leaguesBySlug[leagueSlug]
+	if !exists || league.SportSlug != sportSlug || !league.Show {
+		return domain.LeagueSeasons{}, domain.ErrNotFound
+	}
+	season, exists := r.seasonsByKey[seasonKey(sportSlug, leagueSlug, "2026")]
+	if !exists || !season.Show {
 		return domain.LeagueSeasons{}, domain.ErrNotFound
 	}
 	return domain.LeagueSeasons{
@@ -168,7 +188,7 @@ func (r *fakeRepository) ListLeagueSeasons(_ context.Context, sportSlug, leagueS
 		SportNames:  domain.LocalizedText{"en": "Football", "zh": "足球"},
 		LeagueSlug:  "csl",
 		LeagueNames: domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
-		Seasons:     []domain.SeasonReference{{Slug: "2026", Label: "2026"}, {Slug: "2025", Label: "2025"}},
+		Seasons:     []domain.SeasonReference{{Slug: "2026", Label: "2026"}},
 		UpdatedAt:   "2026-03-10T00:00:00Z",
 	}, nil
 }
@@ -176,7 +196,12 @@ func (r *fakeRepository) ListLeagueSeasons(_ context.Context, sportSlug, leagueS
 func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if sportSlug != "football" || leagueSlug != "csl" || seasonSlug != "2026" {
+	league, exists := r.leaguesBySlug[leagueSlug]
+	if !exists || league.SportSlug != sportSlug || !league.Show || seasonSlug != "2026" {
+		return domain.SeasonDetail{}, domain.ErrNotFound
+	}
+	season, exists := r.seasonsByKey[seasonKey(sportSlug, leagueSlug, seasonSlug)]
+	if !exists || !season.Show {
 		return domain.SeasonDetail{}, domain.ErrNotFound
 	}
 	matches := []domain.Match{
@@ -280,6 +305,7 @@ func (r *fakeRepository) ListAdminLeagues(_ context.Context, sportSlug string) (
 			SportSlug:           league.SportSlug,
 			Slug:                league.Slug,
 			Name:                league.Name,
+			Show:                league.Show,
 			SyncInterval:        league.SyncInterval,
 			CalendarDescription: league.CalendarDescription,
 			DataSourceNote:      league.DataSourceNote,
@@ -308,6 +334,7 @@ func (r *fakeRepository) ListAdminSeasons(_ context.Context, sportSlug, leagueSl
 			LeagueSlug:                  season.LeagueSlug,
 			Slug:                        season.Slug,
 			Label:                       season.Label,
+			Show:                        season.Show,
 			StartYear:                   season.StartYear,
 			EndYear:                     season.EndYear,
 			DefaultMatchDurationMinutes: season.DefaultMatchDurationMinutes,
@@ -367,6 +394,7 @@ func (r *fakeRepository) CreateLeague(_ context.Context, input domain.CreateLeag
 		SportSlug:           input.SportSlug,
 		Slug:                input.Slug,
 		Name:                input.Name,
+		Show:                input.Show,
 		SyncInterval:        input.SyncInterval,
 		CalendarDescription: input.CalendarDescription,
 		DataSourceNote:      input.DataSourceNote,
@@ -452,6 +480,7 @@ func (r *fakeRepository) UpdateLeague(_ context.Context, input domain.UpdateLeag
 	}
 	record.Slug = input.Slug
 	record.Name = input.Name
+	record.Show = input.Show
 	record.SyncInterval = input.SyncInterval
 	record.CalendarDescription = input.CalendarDescription
 	record.DataSourceNote = input.DataSourceNote
@@ -506,6 +535,7 @@ func (r *fakeRepository) CreateSeason(_ context.Context, input domain.CreateSeas
 		LeagueSlug:                  input.LeagueSlug,
 		Slug:                        input.Slug,
 		Label:                       input.Label,
+		Show:                        input.Show,
 		StartYear:                   input.StartYear,
 		EndYear:                     input.EndYear,
 		DefaultMatchDurationMinutes: input.DefaultMatchDurationMinutes,
@@ -534,6 +564,7 @@ func (r *fakeRepository) UpdateSeason(_ context.Context, input domain.UpdateSeas
 	}
 	record.Slug = input.Slug
 	record.Label = input.Label
+	record.Show = input.Show
 	record.StartYear = input.StartYear
 	record.EndYear = input.EndYear
 	record.DefaultMatchDurationMinutes = input.DefaultMatchDurationMinutes
@@ -753,8 +784,60 @@ func TestLeagueSeasonsLocalized(t *testing.T) {
 		t.Fatalf("expected leagueName in localized response")
 	}
 	seasons, ok := payload["seasons"].([]any)
-	if !ok || len(seasons) != 2 {
+	if !ok || len(seasons) != 1 {
 		t.Fatalf("expected seasons in response")
+	}
+}
+
+func TestHiddenLeagueNotListedPublicly(t *testing.T) {
+	router, repo, _ := testRouter(t)
+	repo.mu.Lock()
+	league := repo.leaguesBySlug["csl"]
+	league.Show = false
+	repo.leaguesBySlug["csl"] = league
+	repo.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/leagues", nil)
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	items, ok := payload["items"].([]any)
+	if !ok {
+		t.Fatalf("expected items array")
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected hidden league to be omitted, got %#v", items)
+	}
+}
+
+func TestHiddenSeasonReturnsNotFoundPublicly(t *testing.T) {
+	router, repo, _ := testRouter(t)
+	repo.mu.Lock()
+	season := repo.seasonsByKey[seasonKey("football", "csl", "2026")]
+	season.Show = false
+	repo.seasonsByKey[seasonKey("football", "csl", "2026")] = season
+	repo.mu.Unlock()
+
+	seasonsRecorder := httptest.NewRecorder()
+	seasonsRequest := httptest.NewRequest(http.MethodGet, "/api/football/csl/seasons", nil)
+	router.ServeHTTP(seasonsRecorder, seasonsRequest)
+	if seasonsRecorder.Code != http.StatusNotFound {
+		t.Fatalf("unexpected seasons status: %d body=%s", seasonsRecorder.Code, seasonsRecorder.Body.String())
+	}
+
+	detailRecorder := httptest.NewRecorder()
+	detailRequest := httptest.NewRequest(http.MethodGet, "/api/football/csl/2026", nil)
+	router.ServeHTTP(detailRecorder, detailRequest)
+	if detailRecorder.Code != http.StatusNotFound {
+		t.Fatalf("unexpected season detail status: %d body=%s", detailRecorder.Code, detailRecorder.Body.String())
 	}
 }
 

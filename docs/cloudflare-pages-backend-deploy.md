@@ -122,6 +122,9 @@ Your server (Go API + PostgreSQL)
 
 数据库至少需要初始化 `database/init/001_postgres_init.sql`。
 
+后端启动时会自动执行程序内 migration，并使用 `schema_migrations` 记录版本。
+如果数据库是由旧版初始化 SQL 建出来的，升级到新版本后第一次启动会自动回填 baseline 并补齐缺失 migration。
+
 如果你用容器方式，可以先把 PostgreSQL 起起来，再导入初始化 SQL。
 
 示例思路：

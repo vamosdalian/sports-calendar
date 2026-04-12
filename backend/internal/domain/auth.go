@@ -54,6 +54,7 @@ type AdminLeagueItem struct {
 	SportSlug           string        `json:"sportSlug"`
 	Slug                string        `json:"slug"`
 	Name                LocalizedText `json:"name"`
+	Show                bool          `json:"show"`
 	SyncInterval        string        `json:"syncInterval"`
 	CalendarDescription LocalizedText `json:"calendarDescription"`
 	DataSourceNote      LocalizedText `json:"dataSourceNote"`
@@ -74,6 +75,7 @@ type AdminSeasonItem struct {
 	LeagueSlug                  string `json:"leagueSlug"`
 	Slug                        string `json:"slug"`
 	Label                       string `json:"label"`
+	Show                        bool   `json:"show"`
 	StartYear                   int    `json:"startYear"`
 	EndYear                     int    `json:"endYear"`
 	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`

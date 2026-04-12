@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { useAuth } from '@/components/use-auth'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,6 +21,7 @@ type AddSeasonDialogProps = {
 type SeasonFormState = {
 	slug: string
 	label: string
+	show: boolean
 	startYear: string
 	endYear: string
 	defaultMatchDurationMinutes: string
@@ -28,6 +30,7 @@ type SeasonFormState = {
 const emptySeasonForm: SeasonFormState = {
 	slug: '',
 	label: '',
+	show: false,
 	startYear: '',
 	endYear: '',
 	defaultMatchDurationMinutes: '120',
@@ -83,6 +86,7 @@ export function AddSeasonDialog({ sportSlug, leagueSlug, open, onOpenChange, onC
 		setForm({
 			slug: item.suggestedSlug,
 			label: item.label,
+			show: false,
 			startYear: item.startYear ? String(item.startYear) : '',
 			endYear: item.endYear ? String(item.endYear) : '',
 			defaultMatchDurationMinutes: '120',
@@ -102,6 +106,7 @@ export function AddSeasonDialog({ sportSlug, leagueSlug, open, onOpenChange, onC
 				leagueSlug,
 				slug: form.slug,
 				label: form.label,
+				show: form.show,
 				startYear: Number(form.startYear),
 				endYear: Number(form.endYear),
 				defaultMatchDurationMinutes: Number(form.defaultMatchDurationMinutes),
@@ -153,6 +158,13 @@ export function AddSeasonDialog({ sportSlug, leagueSlug, open, onOpenChange, onC
 					<div className="rounded-2xl border border-line/70 bg-shell/55 px-4 py-3 text-sm text-muted">
 						<p className="font-medium text-ink">Derived source value</p>
 						<p className="mt-1">{selectedSeasonValue || 'Choose a remote season to prefill this form.'}</p>
+					</div>
+				</div>
+				<div className="flex items-start gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-3">
+					<Checkbox id="season-show-dialog" checked={form.show} onCheckedChange={(checked) => setForm((current) => ({ ...current, show: checked === true }))} />
+					<div className="space-y-1">
+						<Label htmlFor="season-show-dialog">Show on public site</Label>
+						<p className="text-sm text-muted">Leave this off until the season has passed your backend review and is ready for users.</p>
 					</div>
 				</div>
 				{error ? <p className="text-sm text-danger">{error}</p> : null}

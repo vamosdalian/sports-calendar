@@ -250,7 +250,7 @@ func (s *Service) ListLeagues(ctx context.Context) (LeaguesResponse, error) {
 	for _, item := range items {
 		leagues := make([]domain.LeagueReference, 0, len(item.Leagues))
 		for _, league := range item.Leagues {
-			if league.DefaultSeason.Slug == "" {
+			if !league.Show || league.DefaultSeason.Slug == "" {
 				continue
 			}
 			leagues = append(leagues, league)
