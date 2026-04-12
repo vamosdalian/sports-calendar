@@ -130,8 +130,13 @@ npm run deploy
 
 更稳妥的做法是把构建和部署拆开：
 
-1. Build command: `npm run build`
+1. Build command: `npm run build:worker`
 2. Deploy command: `npx opennextjs-cloudflare deploy`
+
+注意：
+
+1. `npm run build` 只会执行 Next.js 自己的构建，不会生成 OpenNext 需要的 `.open-next/` 产物。
+2. `opennextjs-cloudflare deploy` 依赖前一步已经存在 `.open-next` 编译结果，否则就会报 `Could not find compiled Open Next config, did you run the build command?`。
 
 但如果直接使用 Workers 的 Next.js 自动识别能力，通常也可以按当前 `package.json` 脚本执行。
 
@@ -162,6 +167,7 @@ npm run deploy
 ```bash
 cd /Users/lmc10232/project/sports-calendar/web
 npm run build
+npm run build:worker
 npm run preview
 npm run deploy
 npm run cf-typegen
