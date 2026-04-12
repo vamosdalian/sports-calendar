@@ -135,9 +135,8 @@ npm run deploy
 
 注意：
 
-1. 这里不能把 Build command 写成 `npm run build`。
-2. `npm run build` 只会执行 Next.js 自己的构建，不会生成 OpenNext 需要的 `.open-next/` 产物。
-3. `opennextjs-cloudflare deploy` 依赖前一步已经存在 `.open-next` 编译结果，否则就会报 `Could not find compiled Open Next config, did you run the build command?`。
+1. `npm run build` 只会执行 Next.js 自己的构建，不会生成 OpenNext 需要的 `.open-next/` 产物。
+2. `opennextjs-cloudflare deploy` 依赖前一步已经存在 `.open-next` 编译结果，否则就会报 `Could not find compiled Open Next config, did you run the build command?`。
 
 但如果直接使用 Workers 的 Next.js 自动识别能力，通常也可以按当前 `package.json` 脚本执行。
 
