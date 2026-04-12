@@ -110,7 +110,7 @@ sudo mkdir -p /opt/sports-calendar/{config,database/init}
 
 ## 3.3 生产配置文件
 
-在服务器创建 `/opt/sports-calendar/config/config.prod.yaml`：
+先参考仓库里的 `backend/config/config.example.yaml`，再在服务器创建 `/opt/sports-calendar/config/config.prod.yaml`：
 
 ```yaml
 server:

@@ -25,7 +25,7 @@ go version
 - Backend: `backend/` (Gin + PostgreSQL + go-ical)
 - Admin frontend: `admin/` (Vite + React + Tailwind)
 - Database init SQL: `database/init/001_postgres_init.sql`, `database/init/002_auth_init.sql`, `database/init/003_add_show_flags.sql`
-- Local backend config: `backend/config/config.local.yaml`
+- Local backend config: copy `backend/config/config.example.yaml` to `backend/config/config.local.yaml`
 
 ## 3. Backend Local Testing
 
@@ -79,10 +79,14 @@ Use local config (not container config):
 
 ```bash
 cd backend
+cp ./config/config.example.yaml ./config/config.local.yaml
+# edit ./config/config.local.yaml for your local DB and secrets
 go run ./cmd/api -config ./config/config.local.yaml
 ```
 
 Default address: `http://localhost:8080`
+
+`backend/config/config.local.yaml` is ignored by Git. Start from `backend/config/config.example.yaml` and then edit your local copy.
 
 The backend now reads PostgreSQL connection settings from `backend/config/config.local.yaml`:
 
