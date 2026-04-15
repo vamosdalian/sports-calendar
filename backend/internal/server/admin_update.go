@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -96,6 +97,28 @@ func (h *Handler) updateLeague(c *gin.Context) {
 	payload, err := h.service.UpdateLeague(c.Request.Context(), input)
 	if err != nil {
 		handleServiceError(c, err, "update_league_failed", "update league failed")
+		return
+	}
+	c.JSON(http.StatusOK, payload)
+}
+
+func (h *Handler) updateTeam(c *gin.Context) {
+	var input domain.UpdateTeamInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	teamID, err := strconv.ParseInt(c.Param("teamID"), 10, 64)
+	if err != nil || teamID <= 0 {
+		httputil.JSONError(c, http.StatusBadRequest, "invalid_argument", "team id must be a positive integer")
+		return
+	}
+	input.SportSlug = c.Param("sport")
+	input.LeagueSlug = c.Param("league")
+	input.TeamID = teamID
+	payload, err := h.service.UpdateTeam(c.Request.Context(), input)
+	if err != nil {
+		handleServiceError(c, err, "update_team_failed", "update team failed")
 		return
 	}
 	c.JSON(http.StatusOK, payload)

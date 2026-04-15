@@ -248,6 +248,33 @@ func (r *PostgresRepository) UpdateLeague(ctx context.Context, input domain.Upda
 	return record, nil
 }
 
+func (r *PostgresRepository) UpdateTeam(ctx context.Context, input domain.UpdateTeamInput) (domain.AdminTeamItem, error) {
+	leagueID, err := r.lookupLeagueID(ctx, input.SportSlug, input.LeagueSlug)
+	if err != nil {
+		return domain.AdminTeamItem{}, err
+	}
+
+	var (
+		item    domain.AdminTeamItem
+		nameRaw []byte
+	)
+	err = r.pool.QueryRow(ctx, `
+		UPDATE teams
+		SET name = $3::jsonb,
+		    updated_at = NOW()
+		WHERE league_id = $1 AND id = $2
+		RETURNING id, slug, name
+	`, leagueID, input.TeamID, encodeLocalizedText(input.Name)).Scan(&item.ID, &item.Slug, &nameRaw)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.AdminTeamItem{}, domain.ErrNotFound
+		}
+		return domain.AdminTeamItem{}, mapWriteError("update team", err)
+	}
+	item.Name = decodeLocalizedText(nameRaw)
+	return item, nil
+}
+
 func (r *PostgresRepository) DeleteLeague(ctx context.Context, input domain.DeleteLeagueInput) error {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {

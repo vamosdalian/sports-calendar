@@ -106,6 +106,9 @@ export function LeaguesPage() {
 								<DropdownMenuItem asChild>
 									<Link to={`/sports/${sportSlug}/leagues/${league.slug}/seasons`}>Open seasons</Link>
 								</DropdownMenuItem>
+								<DropdownMenuItem asChild>
+									<Link to={`/sports/${sportSlug}/leagues/${league.slug}/teams`}>Edit teams</Link>
+								</DropdownMenuItem>
 								<DropdownMenuItem onSelect={() => setEditingLeague(league)}>Edit</DropdownMenuItem>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem

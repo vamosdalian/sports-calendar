@@ -498,6 +498,26 @@ func (r *fakeRepository) UpdateLeague(_ context.Context, input domain.UpdateLeag
 	return record, nil
 }
 
+func (r *fakeRepository) UpdateTeam(_ context.Context, input domain.UpdateTeamInput) (domain.AdminTeamItem, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := input.SportSlug + "/" + input.LeagueSlug
+	teams, exists := r.teamsByLeague[key]
+	if !exists {
+		return domain.AdminTeamItem{}, domain.ErrNotFound
+	}
+	for index, team := range teams {
+		if team.ID != input.TeamID {
+			continue
+		}
+		team.Name = input.Name
+		teams[index] = team
+		r.teamsByLeague[key] = teams
+		return team, nil
+	}
+	return domain.AdminTeamItem{}, domain.ErrNotFound
+}
+
 func (r *fakeRepository) DeleteLeague(_ context.Context, input domain.DeleteLeagueInput) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -958,6 +978,67 @@ func TestListAdminTeams(t *testing.T) {
 	items, ok := payload["items"].([]any)
 	if !ok || len(items) != 2 {
 		t.Fatalf("expected 2 teams, got %#v", payload["items"])
+	}
+}
+
+func TestUpdateTeam(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/football/csl/teams/10001", bytes.NewBufferString(`{"name":{"en":"Beijing FC","zh":"北京队"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload["id"] != float64(10001) {
+		t.Fatalf("expected team id=10001, got %#v", payload["id"])
+	}
+	name, ok := payload["name"].(map[string]any)
+	if !ok || name["zh"] != "北京队" {
+		t.Fatalf("expected updated localized name, got %#v", payload["name"])
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	teams := repo.teamsByLeague["football/csl"]
+	if teams[0].Name["en"] != "Beijing FC" {
+		t.Fatalf("expected stored english name update, got %#v", teams[0].Name)
+	}
+}
+
+func TestUpdateTeamInvalidID(t *testing.T) {
+	router, _, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/football/csl/teams/not-a-number", bytes.NewBufferString(`{"name":{"en":"Beijing FC"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestUpdateTeamNotFound(t *testing.T) {
+	router, _, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/football/csl/teams/99999", bytes.NewBufferString(`{"name":{"en":"Missing Team"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 

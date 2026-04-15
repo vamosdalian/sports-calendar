@@ -461,7 +461,93 @@ Creates a season for an existing sport + league.
 - `404` when the target sport + league does not exist.
 - `409` when the season slug already exists under the league.
 
-## 13. DELETE /api/admin/:sport/:league/seasons/:season
+## 13. GET /api/admin/:sport/:league/teams
+
+Protected admin endpoint. Requires `Authorization: Bearer <token>`.
+
+Lists all teams for one league in the admin platform.
+
+### Request
+
+- Method: `GET`
+- Headers:
+  - `Authorization: Bearer <token>`
+- Path params:
+  - `sport` (string)
+  - `league` (string)
+
+### Response 200
+
+```json
+{
+  "sportSlug": "football",
+  "leagueSlug": "csl",
+  "items": [
+    {
+      "id": 10001,
+      "slug": "beijing-guoan",
+      "name": {
+        "en": "Beijing Guoan",
+        "zh": "北京国安"
+      }
+    }
+  ],
+  "updatedAt": "2026-03-16T08:00:00Z"
+}
+```
+
+### Error responses
+
+- `400` when `sport` or `league` is empty.
+- `401` when bearer token is missing or invalid.
+- `404` when the target sport + league does not exist.
+
+## 14. PUT /api/admin/:sport/:league/teams/:teamID
+
+Protected admin endpoint. Requires `Authorization: Bearer <token>`.
+
+Updates the localized display name for one team in a league.
+
+### Request
+
+- Method: `PUT`
+- Headers:
+  - `Authorization: Bearer <token>`
+- Path params:
+  - `sport` (string)
+  - `league` (string)
+  - `teamID` (integer)
+- Body:
+
+```json
+{
+  "name": {
+    "en": "Beijing Guoan",
+    "zh": "北京国安"
+  }
+}
+```
+
+### Response 200
+
+```json
+{
+  "id": 10001,
+  "slug": "beijing-guoan",
+  "name": {
+    "en": "Beijing Guoan",
+    "zh": "北京国安"
+  }
+}
+```
+
+### Error responses
+
+- `400` when `teamID` is invalid or `name.en` is missing.
+- `401` when bearer token is missing or invalid.
+- `404` when the target sport + league + team combination does not exist.
+
+## 15. DELETE /api/admin/:sport/:league/seasons/:season
 
 Protected admin endpoint. Requires `Authorization: Bearer <token>`.
 
@@ -483,6 +569,6 @@ No response body.
 
 - `404` when the season does not exist.
 
-## 14. GET /healthz
+## 16. GET /healthz
 
 Simple health check endpoint.

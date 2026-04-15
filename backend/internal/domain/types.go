@@ -177,6 +177,13 @@ type UpdateSeasonInput struct {
 	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`
 }
 
+type UpdateTeamInput struct {
+	SportSlug  string        `json:"-"`
+	LeagueSlug string        `json:"-"`
+	TeamID     int64         `json:"-"`
+	Name       LocalizedText `json:"name"`
+}
+
 type DeleteSeasonInput struct {
 	SportSlug  string
 	LeagueSlug string
