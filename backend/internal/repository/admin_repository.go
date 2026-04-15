@@ -51,7 +51,7 @@ func (r *PostgresRepository) ListAdminSports(ctx context.Context) (domain.AdminS
 
 func (r *PostgresRepository) ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT l.id, l.slug, l.name, l.sync_interval, l.calendar_description, l.data_source_note, l.notes, l.created_at, l.updated_at
+		SELECT l.id, l.slug, l.name, l.show, l.sync_interval, l.calendar_description, l.data_source_note, l.notes, l.created_at, l.updated_at
 		FROM leagues l
 		JOIN sports s ON s.id = l.sport_id
 		WHERE s.slug = $1
@@ -74,7 +74,7 @@ func (r *PostgresRepository) ListAdminLeagues(ctx context.Context, sportSlug str
 			createdAt              time.Time
 			updatedAt              time.Time
 		)
-		if scanErr := rows.Scan(&item.ID, &item.Slug, &nameRaw, &item.SyncInterval, &calendarDescriptionRaw, &dataSourceNoteRaw, &notesRaw, &createdAt, &updatedAt); scanErr != nil {
+		if scanErr := rows.Scan(&item.ID, &item.Slug, &nameRaw, &item.Show, &item.SyncInterval, &calendarDescriptionRaw, &dataSourceNoteRaw, &notesRaw, &createdAt, &updatedAt); scanErr != nil {
 			return domain.AdminLeaguesResponse{}, fmt.Errorf("scan admin league: %w", scanErr)
 		}
 		item.SportSlug = sportSlug
@@ -107,7 +107,7 @@ func (r *PostgresRepository) ListAdminLeagues(ctx context.Context, sportSlug str
 
 func (r *PostgresRepository) ListAdminSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT se.id, se.slug, se.label, se.start_year, se.end_year, se.default_match_duration_minutes, se.created_at, se.updated_at
+		SELECT se.id, se.slug, se.label, se.show, se.start_year, se.end_year, se.default_match_duration_minutes, se.created_at, se.updated_at
 		FROM seasons se
 		JOIN leagues l ON l.id = se.league_id
 		JOIN sports s ON s.id = l.sport_id
@@ -127,7 +127,7 @@ func (r *PostgresRepository) ListAdminSeasons(ctx context.Context, sportSlug, le
 			createdAt time.Time
 			updatedAt time.Time
 		)
-		if scanErr := rows.Scan(&item.ID, &item.Slug, &item.Label, &item.StartYear, &item.EndYear, &item.DefaultMatchDurationMinutes, &createdAt, &updatedAt); scanErr != nil {
+		if scanErr := rows.Scan(&item.ID, &item.Slug, &item.Label, &item.Show, &item.StartYear, &item.EndYear, &item.DefaultMatchDurationMinutes, &createdAt, &updatedAt); scanErr != nil {
 			return domain.AdminSeasonsResponse{}, fmt.Errorf("scan admin season: %w", scanErr)
 		}
 		item.SportSlug = sportSlug

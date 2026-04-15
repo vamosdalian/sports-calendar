@@ -90,6 +90,25 @@ func (s *Service) UpdateLeague(ctx context.Context, input domain.UpdateLeagueInp
 	return record, nil
 }
 
+func (s *Service) UpdateTeam(ctx context.Context, input domain.UpdateTeamInput) (domain.AdminTeamItem, error) {
+	input.SportSlug = normalizeSlug(input.SportSlug)
+	input.LeagueSlug = normalizeSlug(input.LeagueSlug)
+	input.Name = trimLocalizedText(input.Name)
+	if input.SportSlug == "" {
+		return domain.AdminTeamItem{}, invalidArgument("sportSlug is required")
+	}
+	if input.LeagueSlug == "" {
+		return domain.AdminTeamItem{}, invalidArgument("leagueSlug is required")
+	}
+	if input.TeamID <= 0 {
+		return domain.AdminTeamItem{}, invalidArgument("teamID must be a positive integer")
+	}
+	if err := validateLocalizedText(input.Name, "team name"); err != nil {
+		return domain.AdminTeamItem{}, err
+	}
+	return s.repo.UpdateTeam(ctx, input)
+}
+
 func (s *Service) UpdateSeason(ctx context.Context, input domain.UpdateSeasonInput) (SeasonRecord, error) {
 	input.SportSlug = normalizeSlug(input.SportSlug)
 	input.LeagueSlug = normalizeSlug(input.LeagueSlug)

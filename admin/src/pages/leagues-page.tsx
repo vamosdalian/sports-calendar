@@ -7,6 +7,7 @@ import { ConfirmActionDialog } from '@/components/confirm-action-dialog'
 import { EditLeagueDialog } from '@/components/edit-league-dialog'
 import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
@@ -92,17 +93,21 @@ export function LeaguesPage() {
 							{ id: 'id', header: 'ID', cell: (league) => league.id.toString(), cellClassName: 'w-20' },
 							{ id: 'slug', header: 'Slug', cell: (league) => <span className="font-mono text-xs">{league.slug}</span> },
 							{ id: 'name', header: 'Name', cell: (league) => pickLocalizedPreview(league.name) },
+							{ id: 'show', header: 'Public', cell: (league) => <Badge variant={league.show ? 'secondary' : 'outline'}>{league.show ? 'Shown' : 'Hidden'}</Badge> },
 							{ id: 'syncInterval', header: 'Sync', cell: (league) => league.syncInterval, cellClassName: 'text-muted-foreground' },
 						]}
 						rows={leagues}
 						getRowId={(league) => league.slug}
-						getSearchText={(league) => `${league.slug} ${pickLocalizedPreview(league.name)} ${league.syncInterval}`}
+						getSearchText={(league) => `${league.slug} ${pickLocalizedPreview(league.name)} ${league.syncInterval} ${league.show ? 'shown visible' : 'hidden draft'}`}
 						searchPlaceholder="Filter leagues..."
 						emptyMessage="No leagues found."
 						renderRowActions={(league) => (
 							<>
 								<DropdownMenuItem asChild>
 									<Link to={`/sports/${sportSlug}/leagues/${league.slug}/seasons`}>Open seasons</Link>
+								</DropdownMenuItem>
+								<DropdownMenuItem asChild>
+									<Link to={`/sports/${sportSlug}/leagues/${league.slug}/teams`}>Edit teams</Link>
 								</DropdownMenuItem>
 								<DropdownMenuItem onSelect={() => setEditingLeague(league)}>Edit</DropdownMenuItem>
 								<DropdownMenuSeparator />

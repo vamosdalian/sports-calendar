@@ -8,6 +8,7 @@ import { ConfirmActionDialog } from '@/components/confirm-action-dialog'
 import { EditSeasonDialog } from '@/components/edit-season-dialog'
 import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
@@ -139,12 +140,13 @@ export function SeasonsPage() {
 							columns={[
 								{ id: 'slug', header: 'Slug', cell: (season) => <span className="font-mono text-xs">{season.slug}</span>, headerClassName: 'min-w-40' },
 								{ id: 'label', header: 'Label', cell: (season) => season.label },
+								{ id: 'show', header: 'Public', cell: (season) => <Badge variant={season.show ? 'secondary' : 'outline'}>{season.show ? 'Shown' : 'Hidden'}</Badge> },
 								{ id: 'years', header: 'Years', cell: (season) => `${season.startYear}-${season.endYear}`, cellClassName: 'text-muted-foreground' },
 								{ id: 'duration', header: 'Duration', cell: (season) => `${season.defaultMatchDurationMinutes} min`, cellClassName: 'text-muted-foreground' },
 							]}
 							rows={seasons}
 							getRowId={(season) => season.slug}
-							getSearchText={(season) => `${season.slug} ${season.label} ${season.startYear} ${season.endYear}`}
+							getSearchText={(season) => `${season.slug} ${season.label} ${season.startYear} ${season.endYear} ${season.show ? 'shown visible' : 'hidden draft'}`}
 							searchPlaceholder="Filter seasons..."
 							emptyMessage="No seasons found."
 							onRowClick={(season) => {

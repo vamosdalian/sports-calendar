@@ -24,8 +24,8 @@ go version
 - Frontend: `web/` (Next.js App Router)
 - Backend: `backend/` (Gin + PostgreSQL + go-ical)
 - Admin frontend: `admin/` (Vite + React + Tailwind)
-- Database init SQL: `database/init/001_postgres_init.sql`, `database/init/002_auth_init.sql`
-- Local backend config: `backend/config/config.local.yaml`
+- Database init SQL: `database/init/001_postgres_init.sql`, `database/init/002_auth_init.sql`, `database/init/003_add_show_flags.sql`
+- Local backend config: copy `backend/config/config.example.yaml` to `backend/config/config.local.yaml`
 
 ## 3. Backend Local Testing
 
@@ -49,6 +49,9 @@ Useful checks:
 docker logs sports-calendar-postgres
 docker exec -it sports-calendar-postgres psql -U sports_calendar -d sports_calendar -c '\dt'
 ```
+
+后端启动时还会自动执行程序内 migration，并使用 `schema_migrations` 记录版本。
+如果数据库是旧版本但已经有历史表结构，启动时会先识别现状并回填 baseline，再自动补齐缺失变更。
 
 Expected tables:
 
@@ -76,10 +79,14 @@ Use local config (not container config):
 
 ```bash
 cd backend
+cp ./config/config.example.yaml ./config/config.local.yaml
+# edit ./config/config.local.yaml for your local DB and secrets
 go run ./cmd/api -config ./config/config.local.yaml
 ```
 
 Default address: `http://localhost:8080`
+
+`backend/config/config.local.yaml` is ignored by Git. Start from `backend/config/config.example.yaml` and then edit your local copy.
 
 The backend now reads PostgreSQL connection settings from `backend/config/config.local.yaml`:
 

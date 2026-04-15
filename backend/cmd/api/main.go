@@ -14,6 +14,7 @@ import (
 
 	"github.com/vamosdalian/sports-calendar/backend/internal/auth"
 	"github.com/vamosdalian/sports-calendar/backend/internal/config"
+	"github.com/vamosdalian/sports-calendar/backend/internal/migrations"
 	"github.com/vamosdalian/sports-calendar/backend/internal/repository"
 	"github.com/vamosdalian/sports-calendar/backend/internal/server"
 	"github.com/vamosdalian/sports-calendar/backend/internal/service"
@@ -43,6 +44,12 @@ func main() {
 	defer cancel()
 	if err := pool.Ping(pingCtx); err != nil {
 		logger.WithError(err).Fatal("ping postgres")
+	}
+
+	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer migrationCancel()
+	if err := migrations.Run(migrationCtx, pool, logger); err != nil {
+		logger.WithError(err).Fatal("run database migrations")
 	}
 
 	repo, err := repository.NewPostgresRepository(pool)

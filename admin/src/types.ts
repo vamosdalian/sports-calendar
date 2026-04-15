@@ -34,6 +34,7 @@ export type LeagueItem = {
 	sportSlug: string
 	slug: string
 	name: LocalizedText
+	show: boolean
 	syncInterval: string
 	calendarDescription: LocalizedText
 	dataSourceNote: LocalizedText
@@ -54,6 +55,7 @@ export type AdminSeasonItem = {
 	leagueSlug: string
 	slug: string
 	label: string
+	show: boolean
 	startYear: number
 	endYear: number
 	defaultMatchDurationMinutes: number

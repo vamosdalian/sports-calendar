@@ -223,6 +223,8 @@ backend/coverage/
 backend/tmp/
 backend/.env*
 !backend/.env.example
+backend/config/config.*.yaml
+!backend/config/config.example.yaml
 
 # OS
 .DS_Store

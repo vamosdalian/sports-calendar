@@ -10,6 +10,7 @@ import { LoginPage } from '@/pages/login-page'
 import { MatchesPage } from '@/pages/matches-page'
 import { SeasonsPage } from '@/pages/seasons-page'
 import { SportsPage } from '@/pages/sports-page'
+import { TeamsPage } from '@/pages/teams-page'
 
 export default function App() {
 	return (
@@ -27,6 +28,7 @@ export default function App() {
 					<Route index element={<DashboardPage />} />
 					<Route path="sports" element={<SportsPage />} />
 					<Route path="sports/:sportSlug/leagues" element={<LeaguesPage />} />
+					<Route path="sports/:sportSlug/leagues/:leagueSlug/teams" element={<TeamsPage />} />
 					<Route path="sports/:sportSlug/leagues/:leagueSlug/seasons" element={<SeasonsPage />} />
 					<Route path="sports/:sportSlug/leagues/:leagueSlug/seasons/:seasonSlug/matches" element={<MatchesPage />} />
 				</Route>

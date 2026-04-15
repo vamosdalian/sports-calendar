@@ -86,6 +86,9 @@ export const api = {
 	listAdminTeams(token: string, sportSlug: string, leagueSlug: string) {
 		return request<AdminTeamsResponse>(`/api/admin/${sportSlug}/${leagueSlug}/teams`, { token })
 	},
+	updateTeam(token: string, sportSlug: string, leagueSlug: string, teamID: number, payload: { name: Record<string, string> }) {
+		return request(`/api/admin/${sportSlug}/${leagueSlug}/teams/${teamID}`, { method: 'PUT', token, body: JSON.stringify(payload) })
+	},
 	listSeasons(sportSlug: string, leagueSlug: string) {
 		return request<LeagueSeasonsResponse>(`/api/${sportSlug}/${leagueSlug}/seasons`)
 	},

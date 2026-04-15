@@ -1,19 +1,23 @@
 server:
   port: 8080
+
 rateLimit:
   requestsPerSecond: 8
   burst: 16
+
 database:
-  host: localhost
+  host: CHANGE_ME_DB_HOST
   port: 5432
   dbname: sports_calendar
   user: sports_calendar
-  password: sports_calendar
+  password: CHANGE_ME_DB_PASSWORD
   sslmode: disable
+
 theSportsDB:
   baseURL: https://www.thesportsdb.com
-  apiKey: 123
+  apiKey: CHANGE_ME_THESPORTSDB_KEY
   timeoutSeconds: 15
+
 adminAuth:
-  secret: abcdef
+  secret: CHANGE_ME_LONG_RANDOM_SECRET
   tokenTTLMinutes: 30

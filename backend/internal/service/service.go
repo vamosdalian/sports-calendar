@@ -34,6 +34,7 @@ type repository interface {
 	DeleteSport(ctx context.Context, input domain.DeleteSportInput) error
 	CreateLeague(ctx context.Context, input domain.CreateLeagueInput) (domain.LeagueRecord, error)
 	UpdateLeague(ctx context.Context, input domain.UpdateLeagueInput) (domain.LeagueRecord, error)
+	UpdateTeam(ctx context.Context, input domain.UpdateTeamInput) (domain.AdminTeamItem, error)
 	DeleteLeague(ctx context.Context, input domain.DeleteLeagueInput) error
 	CreateSeason(ctx context.Context, input domain.CreateSeasonInput) (domain.SeasonRecord, error)
 	UpdateSeason(ctx context.Context, input domain.UpdateSeasonInput) (domain.SeasonRecord, error)
@@ -250,7 +251,7 @@ func (s *Service) ListLeagues(ctx context.Context) (LeaguesResponse, error) {
 	for _, item := range items {
 		leagues := make([]domain.LeagueReference, 0, len(item.Leagues))
 		for _, league := range item.Leagues {
-			if league.DefaultSeason.Slug == "" {
+			if !league.Show || league.DefaultSeason.Slug == "" {
 				continue
 			}
 			leagues = append(leagues, league)

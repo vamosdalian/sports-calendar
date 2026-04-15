@@ -16,6 +16,7 @@ type localizedSportDirectoryItem struct {
 type localizedLeagueReference struct {
 	LeagueSlug    string                  `json:"leagueSlug"`
 	LeagueName    string                  `json:"leagueName"`
+	Show          bool                    `json:"show"`
 	DefaultSeason service.SeasonReference `json:"defaultSeason"`
 }
 
@@ -77,6 +78,7 @@ func localizeLeaguesResponse(payload service.LeaguesResponse, locale string) loc
 			leagues = append(leagues, localizedLeagueReference{
 				LeagueSlug:    league.LeagueSlug,
 				LeagueName:    pickLocalizedText(league.LeagueNames, locale),
+				Show:          league.Show,
 				DefaultSeason: league.DefaultSeason,
 			})
 		}
