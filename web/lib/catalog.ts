@@ -309,9 +309,37 @@ export function formatMatchLocation(match: Match) {
   return [match.venue, match.city, match.country].filter(Boolean).join(", ");
 }
 
-export function getSeasonSubscriptionUrl(sportSlug: string, leagueSlug: string, seasonSlug: string) {
+type SeasonSubscriptionUrlOptions = {
+  locale?: Locale;
+  teamSlug?: string;
+};
+
+export function getSeasonFeedUrl(
+  sportSlug: string,
+  leagueSlug: string,
+  seasonSlug: string,
+  options: SeasonSubscriptionUrlOptions = {},
+) {
   const icsUrl = `${publicApiBaseUrl}/ics/${encodeURIComponent(sportSlug)}/${encodeURIComponent(leagueSlug)}/${encodeURIComponent(seasonSlug)}/matches.ics`;
-  return icsUrl.replace(/^https?:\/\//, "webcal://");
+  const query = new URLSearchParams();
+  if (options.locale) {
+    query.set("lang", options.locale);
+  }
+  if (options.teamSlug) {
+    query.set("team", options.teamSlug);
+  }
+
+  const queryString = query.toString();
+  return queryString ? `${icsUrl}?${queryString}` : icsUrl;
+}
+
+export function getSeasonSubscriptionUrl(
+  sportSlug: string,
+  leagueSlug: string,
+  seasonSlug: string,
+  options: SeasonSubscriptionUrlOptions = {},
+) {
+  return getSeasonFeedUrl(sportSlug, leagueSlug, seasonSlug, options).replace(/^https?:\/\//, "webcal://");
 }
 
 function resolveDefaultSeason(

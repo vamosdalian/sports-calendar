@@ -289,19 +289,54 @@ func (s *Service) GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, se
 	return detail, nil
 }
 
-func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) ([]byte, error) {
+func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, seasonSlug, locale, teamSlug string) ([]byte, error) {
 	detail, err := s.GetLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug)
 	if err != nil {
 		return nil, err
+	}
+	teamNames := domain.LocalizedText(nil)
+	filteredMatches := detail.Matches
+	if teamSlug != "" {
+		var found bool
+		filteredMatches, teamNames, found = filterMatchesByTeam(detail.Matches, teamSlug)
+		if !found {
+			return nil, ErrNotFound
+		}
 	}
 	return ics.BuildCalendar(ics.CalendarPayload{
 		SportSlug:                   detail.SportSlug,
 		LeagueSlug:                  detail.LeagueSlug,
 		LeagueNames:                 detail.LeagueNames,
+		Locale:                      locale,
 		SeasonLabel:                 detail.SeasonLabel,
 		DefaultMatchDurationMinutes: detail.DefaultMatchDurationMinutes,
-		Matches:                     detail.Matches,
+		Matches:                     filteredMatches,
+		TeamSlug:                    teamSlug,
+		TeamNames:                   teamNames,
 	}, time.Now().UTC())
+}
+
+func filterMatchesByTeam(matches []domain.Match, teamSlug string) ([]domain.Match, domain.LocalizedText, bool) {
+	filtered := make([]domain.Match, 0, len(matches))
+	var teamNames domain.LocalizedText
+
+	for _, match := range matches {
+		if match.HomeTeam != nil && match.HomeTeam.Slug == teamSlug {
+			filtered = append(filtered, match)
+			if teamNames == nil {
+				teamNames = match.HomeTeam.Names
+			}
+			continue
+		}
+		if match.AwayTeam != nil && match.AwayTeam.Slug == teamSlug {
+			filtered = append(filtered, match)
+			if teamNames == nil {
+				teamNames = match.AwayTeam.Names
+			}
+		}
+	}
+
+	return filtered, teamNames, len(filtered) > 0
 }
 
 func groupMatches(matches []domain.Match) []domain.MatchGroup {

@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -255,10 +256,17 @@ func (m Match) DisplayTitle(locale string) string {
 		homeName := PickLocalized(m.HomeTeam.Names, locale)
 		awayName := PickLocalized(m.AwayTeam.Names, locale)
 		if homeName != "" && awayName != "" {
-			return fmt.Sprintf("%s vs %s", homeName, awayName)
+			return fmt.Sprintf("%s%s%s", homeName, versusSeparator(locale), awayName)
 		}
 	}
 	return m.ID
+}
+
+func versusSeparator(locale string) string {
+	if strings.HasPrefix(locale, "zh") {
+		return " 对阵 "
+	}
+	return " vs "
 }
 
 func PickLocalized(value LocalizedText, locale string) string {
