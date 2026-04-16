@@ -60,7 +60,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   const year = extractPrimaryYear(data.season.slug, data.season.label);
   const pageTitle = t("seasonTitle", { leagueName, year });
   const weekLabels = t.raw("weekDays") as string[];
-  const subscriptionUrl = getSeasonSubscriptionUrl(sportSlug, leagueSlug, seasonSlug);
+  const subscriptionUrl = getSeasonSubscriptionUrl(sportSlug, leagueSlug, seasonSlug, { locale });
   const teamOptions = buildTeamOptions(data.season.matches, locale);
 
   return (

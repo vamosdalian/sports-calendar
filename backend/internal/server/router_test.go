@@ -939,6 +939,56 @@ func TestICSFeedByTeam(t *testing.T) {
 	}
 }
 
+func TestICSFeedByLocale(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics?lang=zh", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "NAME:中超 2026") {
+		t.Fatalf("expected localized calendar name body=%s", body)
+	}
+	if !strings.Contains(body, "SUMMARY:北京国安 对阵 上海申花") {
+		t.Fatalf("expected localized summary body=%s", body)
+	}
+	if !strings.Contains(body, "轮次: 第1轮") || !strings.Contains(body, "状态: 已安排") {
+		t.Fatalf("expected localized description body=%s", body)
+	}
+	if !strings.Contains(body, "csl-2026-r1-three-towns-haifa@sports-calendar.com") {
+		t.Fatalf("expected non-team locale feed to keep all matches body=%s", body)
+	}
+}
+
+func TestICSFeedByLocaleAndTeam(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics?lang=zh&team=beijing-guoan", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Content-Disposition"); !strings.Contains(got, "csl-2026-beijing-guoan.ics") {
+		t.Fatalf("expected team-specific filename, got %q", got)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "NAME:中超 2026 - 北京国安") {
+		t.Fatalf("expected localized team calendar name body=%s", body)
+	}
+	if !strings.Contains(body, "SUMMARY:北京国安 对阵 上海申花") {
+		t.Fatalf("expected localized team summary body=%s", body)
+	}
+	if strings.Contains(body, "csl-2026-r1-three-towns-haifa@sports-calendar.com") {
+		t.Fatalf("expected team+locale feed to stay filtered body=%s", body)
+	}
+}
+
 func TestICSFeedByTeamNotFound(t *testing.T) {
 	router, _, _ := testRouter(t)
 	recorder := httptest.NewRecorder()

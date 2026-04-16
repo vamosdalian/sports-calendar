@@ -111,8 +111,9 @@ func (h *Handler) getLeagueSeason(c *gin.Context) {
 }
 
 func (h *Handler) getSeasonICS(c *gin.Context) {
+	locale := normalizeLocale(c.Query("lang"))
 	teamSlug := c.Query("team")
-	content, err := h.service.BuildSeasonICS(c.Request.Context(), c.Param("sport"), c.Param("league"), c.Param("season"), teamSlug)
+	content, err := h.service.BuildSeasonICS(c.Request.Context(), c.Param("sport"), c.Param("league"), c.Param("season"), locale, teamSlug)
 	if err != nil {
 		if err == service.ErrNotFound {
 			httputil.JSONError(c, http.StatusNotFound, "not_found", "season feed not found")

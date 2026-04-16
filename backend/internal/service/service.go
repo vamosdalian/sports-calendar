@@ -289,7 +289,7 @@ func (s *Service) GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, se
 	return detail, nil
 }
 
-func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, seasonSlug, teamSlug string) ([]byte, error) {
+func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, seasonSlug, locale, teamSlug string) ([]byte, error) {
 	detail, err := s.GetLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug)
 	if err != nil {
 		return nil, err
@@ -307,6 +307,7 @@ func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, sea
 		SportSlug:                   detail.SportSlug,
 		LeagueSlug:                  detail.LeagueSlug,
 		LeagueNames:                 detail.LeagueNames,
+		Locale:                      locale,
 		SeasonLabel:                 detail.SeasonLabel,
 		DefaultMatchDurationMinutes: detail.DefaultMatchDurationMinutes,
 		Matches:                     filteredMatches,

@@ -57,9 +57,7 @@ export function SeasonCalendarContent({
     ? matches.filter((match) => matchIncludesTeam(match, selectedTeamSlug))
     : matches;
   const filteredGroups = buildMatchGroups(filteredMatches);
-  const subscriptionUrl = selectedTeamSlug
-    ? `${subscriptionBaseUrl}?team=${encodeURIComponent(selectedTeamSlug)}`
-    : subscriptionBaseUrl;
+  const subscriptionUrl = buildSubscriptionUrl(subscriptionBaseUrl, selectedTeamSlug);
 
   useEffect(() => {
     if (!rawTeamSlug || selectedTeamSlug) {
@@ -237,4 +235,18 @@ function matchIncludesTeam(match: Match, teamSlug: string) {
 
 function formatMatchLocation(match: Match) {
   return [match.venue, match.city, match.country].filter(Boolean).join(", ");
+}
+
+function buildSubscriptionUrl(baseUrl: string, teamSlug: string) {
+  const [path, existingQuery = ""] = baseUrl.split("?", 2);
+  const searchParams = new URLSearchParams(existingQuery);
+
+  if (teamSlug) {
+    searchParams.set("team", teamSlug);
+  } else {
+    searchParams.delete("team");
+  }
+
+  const query = searchParams.toString();
+  return query ? `${path}?${query}` : path;
 }

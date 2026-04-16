@@ -6,6 +6,7 @@ type CalendarPayload struct {
 	SportSlug                   string
 	LeagueSlug                  string
 	LeagueNames                 domain.LocalizedText
+	Locale                      string
 	SeasonLabel                 string
 	DefaultMatchDurationMinutes int
 	TeamSlug                    string
