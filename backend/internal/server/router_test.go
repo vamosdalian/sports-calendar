@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -94,7 +95,7 @@ func newFakeRepository() *fakeRepository {
 		},
 		manualMatches: map[string][]domain.Match{},
 		seasonMatches: map[string]int{
-			"football/csl/2026": 1,
+			"football/csl/2026": 2,
 		},
 		usersByEmail: map[string]fakeUser{},
 	}
@@ -215,6 +216,17 @@ func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlu
 			Country:  domain.LocalizedText{"en": "China", "zh": "中国"},
 			HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
 			AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
+		},
+		{
+			ID:       "csl-2026-r1-three-towns-haifa",
+			Round:    domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
+			StartsAt: "2026-03-15T11:35:00Z",
+			Status:   "scheduled",
+			Venue:    domain.LocalizedText{"en": "Wuhan Sports Center", "zh": "武汉体育中心"},
+			City:     domain.LocalizedText{"en": "Wuhan", "zh": "武汉"},
+			Country:  domain.LocalizedText{"en": "China", "zh": "中国"},
+			HomeTeam: &domain.Team{Slug: "wuhan-three-towns", Names: domain.LocalizedText{"en": "Wuhan Three Towns", "zh": "武汉三镇"}},
+			AwayTeam: &domain.Team{Slug: "dalian-yingbo-haifa", Names: domain.LocalizedText{"en": "Dalian Yingbo Haifa", "zh": "大连英博海发"}},
 		},
 	}
 	matches = append(matches, r.manualMatches[seasonKey(sportSlug, leagueSlug, seasonSlug)]...)
@@ -904,6 +916,39 @@ func TestICSFeed(t *testing.T) {
 	if len(recorder.Body.Bytes()) == 0 {
 		t.Fatalf("expected calendar body")
 	}
+	if body := recorder.Body.String(); !strings.Contains(body, "csl-2026-r1-guoan-shenhua@sports-calendar.com") || !strings.Contains(body, "csl-2026-r1-three-towns-haifa@sports-calendar.com") {
+		t.Fatalf("expected all season matches in feed body=%s", body)
+	}
+}
+
+func TestICSFeedByTeam(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics?team=beijing-guoan", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Content-Disposition"); !strings.Contains(got, "csl-2026-beijing-guoan.ics") {
+		t.Fatalf("expected team-specific filename, got %q", got)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "csl-2026-r1-guoan-shenhua@sports-calendar.com") || strings.Contains(body, "csl-2026-r1-three-towns-haifa@sports-calendar.com") {
+		t.Fatalf("expected filtered team feed body=%s", body)
+	}
+}
+
+func TestICSFeedByTeamNotFound(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics?team=unknown-team", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
 }
 
 func TestCreateSport(t *testing.T) {
@@ -1112,7 +1157,7 @@ func TestUpdateMatch(t *testing.T) {
 		HomeTeam:   fakeMatchTeam(repo.teamsByLeague["football/csl"], domain.UnknownTeamID),
 		AwayTeam:   fakeMatchTeam(repo.teamsByLeague["football/csl"], 10002),
 	}}
-	repo.seasonMatches[seasonKey("football", "csl", "2026")] = 2
+	repo.seasonMatches[seasonKey("football", "csl", "2026")] = 3
 	repo.mu.Unlock()
 
 	recorder := httptest.NewRecorder()
@@ -1197,7 +1242,7 @@ func TestDeleteMatch(t *testing.T) {
 		HomeTeam:   fakeMatchTeam(repo.teamsByLeague["football/csl"], domain.UnknownTeamID),
 		AwayTeam:   fakeMatchTeam(repo.teamsByLeague["football/csl"], 10002),
 	}}
-	repo.seasonMatches[seasonKey("football", "csl", "2026")] = 2
+	repo.seasonMatches[seasonKey("football", "csl", "2026")] = 3
 	repo.mu.Unlock()
 
 	recorder := httptest.NewRecorder()
@@ -1215,9 +1260,9 @@ func TestDeleteMatch(t *testing.T) {
 		repo.mu.Unlock()
 		t.Fatalf("expected manual matches to be deleted")
 	}
-	if repo.seasonMatches[seasonKey("football", "csl", "2026")] != 1 {
+	if repo.seasonMatches[seasonKey("football", "csl", "2026")] != 2 {
 		repo.mu.Unlock()
-		t.Fatalf("expected season match count decremented to 1, got %d", repo.seasonMatches[seasonKey("football", "csl", "2026")])
+		t.Fatalf("expected season match count decremented to 2, got %d", repo.seasonMatches[seasonKey("football", "csl", "2026")])
 	}
 	repo.mu.Unlock()
 
@@ -1242,8 +1287,8 @@ func TestDeleteMatch(t *testing.T) {
 		t.Fatalf("expected group object")
 	}
 	matches, ok := firstGroup["matches"].([]any)
-	if !ok || len(matches) != 1 {
-		t.Fatalf("expected only synced match to remain, got %#v", firstGroup["matches"])
+	if !ok || len(matches) != 2 {
+		t.Fatalf("expected only synced matches to remain, got %#v", firstGroup["matches"])
 	}
 }
 

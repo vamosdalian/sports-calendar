@@ -13,7 +13,7 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 	calendar := ical.NewCalendar()
 	calendar.Props.SetText(ical.PropProductID, "-//sports-calendar//season-feed//EN")
 	calendar.Props.SetText(ical.PropVersion, "2.0")
-	calendar.Props.SetText(ical.PropName, fmt.Sprintf("%s %s", domain.PickLocalized(detail.LeagueNames, "en"), detail.SeasonLabel))
+	calendar.Props.SetText(ical.PropName, buildCalendarName(detail))
 
 	for _, match := range detail.Matches {
 		event := ical.NewEvent()
@@ -34,7 +34,11 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		event.Props.SetText(ical.PropStatus, normalizeStatus(match.Status))
 
 		categories := ical.NewProp(ical.PropCategories)
-		categories.SetTextList([]string{detail.SportSlug, detail.LeagueSlug})
+		categoryValues := []string{detail.SportSlug, detail.LeagueSlug}
+		if detail.TeamSlug != "" {
+			categoryValues = append(categoryValues, detail.TeamSlug)
+		}
+		categories.SetTextList(categoryValues)
 		event.Props.Set(categories)
 
 		calendar.Children = append(calendar.Children, event.Component)
@@ -68,4 +72,18 @@ func normalizeStatus(status string) string {
 	default:
 		return "CONFIRMED"
 	}
+}
+
+func buildCalendarName(detail CalendarPayload) string {
+	leagueName := domain.PickLocalized(detail.LeagueNames, "en")
+	if detail.TeamSlug == "" {
+		return fmt.Sprintf("%s %s", leagueName, detail.SeasonLabel)
+	}
+
+	teamName := domain.PickLocalized(detail.TeamNames, "en")
+	if teamName == "" {
+		teamName = detail.TeamSlug
+	}
+
+	return fmt.Sprintf("%s %s - %s", leagueName, detail.SeasonLabel, teamName)
 }

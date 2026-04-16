@@ -309,9 +309,10 @@ export function formatMatchLocation(match: Match) {
   return [match.venue, match.city, match.country].filter(Boolean).join(", ");
 }
 
-export function getSeasonSubscriptionUrl(sportSlug: string, leagueSlug: string, seasonSlug: string) {
+export function getSeasonSubscriptionUrl(sportSlug: string, leagueSlug: string, seasonSlug: string, teamSlug?: string) {
   const icsUrl = `${publicApiBaseUrl}/ics/${encodeURIComponent(sportSlug)}/${encodeURIComponent(leagueSlug)}/${encodeURIComponent(seasonSlug)}/matches.ics`;
-  return icsUrl.replace(/^https?:\/\//, "webcal://");
+  const teamQuery = teamSlug ? `?team=${encodeURIComponent(teamSlug)}` : "";
+  return `${icsUrl}${teamQuery}`.replace(/^https?:\/\//, "webcal://");
 }
 
 function resolveDefaultSeason(

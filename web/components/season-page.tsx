@@ -4,12 +4,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { getLeagueSeasons, getLeagues, getSeasonPageData, getSeasonSubscriptionUrl, formatMatchLocation, type Match } from "../lib/catalog";
+import { getLeagueSeasons, getLeagues, getSeasonPageData, getSeasonSubscriptionUrl, type Match } from "../lib/catalog";
 import { locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
-import { LocalizedMatchTime } from "./localized-match-time";
-import { LocalizedMonthCalendars } from "./localized-month-calendars";
+import { SeasonCalendarContent } from "./season-calendar-content";
 
 type SeasonPageProps = {
   locale: Locale;
@@ -62,6 +61,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   const pageTitle = t("seasonTitle", { leagueName, year });
   const weekLabels = t.raw("weekDays") as string[];
   const subscriptionUrl = getSeasonSubscriptionUrl(sportSlug, leagueSlug, seasonSlug);
+  const teamOptions = buildTeamOptions(data.season.matches, locale);
 
   return (
     <div>
@@ -86,61 +86,19 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
         </aside>
 
         <section className="bg-panel px-5 py-6 text-ink sm:px-6 lg:rounded-r-panel lg:py-8">
-          <section>
-            <div className="mb-4 flex justify-end">
-              <a
-                href={subscriptionUrl}
-                className="inline-flex items-center rounded-full bg-header px-4 py-2 text-sm font-medium text-white transition hover:bg-header/90"
-              >
-                {t("subscribeLabel")}
-              </a>
-            </div>
-            <LocalizedMonthCalendars
-              locale={locale}
-              matches={data.season.matches}
-              seasonSlug={data.season.slug}
-              weekLabels={weekLabels}
-            />
-          </section>
-
-          <InfoSection title={t("leagueCalendarLabel")}>
-            <div className="space-y-4 text-sm text-ink/75">
-              {data.season.groups.map((group, index) => (
-                <details
-                  key={group.key}
-                  className="group w-full rounded-3xl bg-white/25 px-4 py-4"
-                  open={index === 0}
-                >
-                  <summary className="flex w-full cursor-pointer list-none items-center text-sm font-medium text-ink">
-                    <span className="flex items-center gap-3">
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 16 16"
-                        className="h-4 w-4 shrink-0 text-ink/60 transition group-open:rotate-90"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M6 3.5L10.5 8L6 12.5" />
-                      </svg>
-                      <span>{group.label}</span>
-                    </span>
-                  </summary>
-                  <ul className="mt-3 w-full space-y-2">
-                    {group.matches.map((match) => (
-                      <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
-                        <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
-                        <span className="mx-2 text-ink/45">/</span>
-                        <MatchSummary match={match} />
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ))}
-            </div>
-          </InfoSection>
+          <SeasonCalendarContent
+            allTeamsLabel={t("allTeamsLabel")}
+            leagueCalendarLabel={t("leagueCalendarLabel")}
+            locale={locale}
+            matches={data.season.matches}
+            noMatchesLabel={t("noMatches")}
+            seasonSlug={data.season.slug}
+            subscribeLabel={t("subscribeLabel")}
+            subscriptionBaseUrl={subscriptionUrl}
+            teamFilterLabel={t("teamFilterLabel")}
+            teamOptions={teamOptions}
+            weekLabels={weekLabels}
+          />
 
           <InfoSection title={t("leagueDescriptionLabel")}>
             <p className="text-base leading-7 text-ink/75">{data.season.calendarDescription}</p>
@@ -166,32 +124,6 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   );
 }
 
-function MatchSummary({ match }: { match: Match }) {
-  const location = formatMatchLocation(match);
-
-  return (
-    <>
-      <span>
-        {match.homeTeam && match.awayTeam ? (
-          <>
-            <strong className="font-semibold text-ink">{match.homeTeam.name}</strong>
-            <span className="text-ink/65"> vs </span>
-            <strong className="font-semibold text-ink">{match.awayTeam.name}</strong>
-          </>
-        ) : (
-          <span>{match.title || match.id}</span>
-        )}
-      </span>
-      {location ? (
-        <>
-          <span className="mx-2 text-ink/45">/</span>
-          <span className="text-ink/72">{location}</span>
-        </>
-      ) : null}
-    </>
-  );
-}
-
 function InfoSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mt-6 bg-transparent p-0">
@@ -213,4 +145,22 @@ function extractPrimaryYear(seasonSlug: string, seasonLabel: string): string {
   }
 
   return seasonLabel;
+}
+
+function buildTeamOptions(matches: Match[], locale: Locale) {
+  const teamsBySlug = new Map<string, string>();
+
+  for (const match of matches) {
+    if (match.homeTeam?.slug && match.homeTeam.name) {
+      teamsBySlug.set(match.homeTeam.slug, match.homeTeam.name);
+    }
+    if (match.awayTeam?.slug && match.awayTeam.name) {
+      teamsBySlug.set(match.awayTeam.slug, match.awayTeam.name);
+    }
+  }
+
+  const collator = new Intl.Collator(locale, { sensitivity: "base" });
+  return Array.from(teamsBySlug.entries(), ([slug, name]) => ({ slug, name })).sort((left, right) =>
+    collator.compare(left.name, right.name),
+  );
 }

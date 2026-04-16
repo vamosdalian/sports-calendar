@@ -28,6 +28,8 @@
   "noCompetitionsInYear": "No competitions available for the selected year.",
   "noCompetitions": "No competitions available right now.",
   "homeFooter": "All available competitions",
+  "teamFilterLabel": "Choose team",
+  "allTeamsLabel": "All teams",
   "subscribeLabel": "Subscribe",
   "weekDays": ["S", "M", "T", "W", "T", "F", "S"],
   "seasonTitle": "{leagueName} {year} Season Calendar",
