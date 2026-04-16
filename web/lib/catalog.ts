@@ -314,7 +314,7 @@ type SeasonSubscriptionUrlOptions = {
   teamSlug?: string;
 };
 
-export function getSeasonSubscriptionUrl(
+export function getSeasonFeedUrl(
   sportSlug: string,
   leagueSlug: string,
   seasonSlug: string,
@@ -330,8 +330,16 @@ export function getSeasonSubscriptionUrl(
   }
 
   const queryString = query.toString();
-  const url = queryString ? `${icsUrl}?${queryString}` : icsUrl;
-  return url.replace(/^https?:\/\//, "webcal://");
+  return queryString ? `${icsUrl}?${queryString}` : icsUrl;
+}
+
+export function getSeasonSubscriptionUrl(
+  sportSlug: string,
+  leagueSlug: string,
+  seasonSlug: string,
+  options: SeasonSubscriptionUrlOptions = {},
+) {
+  return getSeasonFeedUrl(sportSlug, leagueSlug, seasonSlug, options).replace(/^https?:\/\//, "webcal://");
 }
 
 function resolveDefaultSeason(

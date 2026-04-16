@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { getLeagueSeasons, getLeagues, getSeasonPageData, getSeasonSubscriptionUrl, type Match } from "../lib/catalog";
+import { getLeagueSeasons, getLeagues, getSeasonFeedUrl, getSeasonPageData, getSeasonSubscriptionUrl, type Match } from "../lib/catalog";
 import { locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
@@ -61,6 +61,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   const pageTitle = t("seasonTitle", { leagueName, year });
   const weekLabels = t.raw("weekDays") as string[];
   const subscriptionUrl = getSeasonSubscriptionUrl(sportSlug, leagueSlug, seasonSlug, { locale });
+  const subscriptionCopyUrl = getSeasonFeedUrl(sportSlug, leagueSlug, seasonSlug, { locale });
   const teamOptions = buildTeamOptions(data.season.matches, locale);
 
   return (
@@ -92,9 +93,12 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             locale={locale}
             matches={data.season.matches}
             noMatchesLabel={t("noMatches")}
+            copySubscriptionLinkLabel={t("copySubscriptionLinkLabel")}
             seasonSlug={data.season.slug}
             subscribeLabel={t("subscribeLabel")}
             subscriptionBaseUrl={subscriptionUrl}
+            subscriptionCopyBaseUrl={subscriptionCopyUrl}
+            subscriptionLinkCopiedLabel={t("subscriptionLinkCopiedLabel")}
             teamFilterLabel={t("teamFilterLabel")}
             teamOptions={teamOptions}
             weekLabels={weekLabels}

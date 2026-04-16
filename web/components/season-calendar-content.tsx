@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -22,6 +22,7 @@ type MatchGroup = {
 
 type SeasonCalendarContentProps = {
   allTeamsLabel: string;
+  copySubscriptionLinkLabel: string;
   leagueCalendarLabel: string;
   locale: Locale;
   matches: Match[];
@@ -29,6 +30,8 @@ type SeasonCalendarContentProps = {
   seasonSlug: string;
   subscribeLabel: string;
   subscriptionBaseUrl: string;
+  subscriptionCopyBaseUrl: string;
+  subscriptionLinkCopiedLabel: string;
   teamFilterLabel: string;
   teamOptions: TeamOption[];
   weekLabels: string[];
@@ -36,6 +39,7 @@ type SeasonCalendarContentProps = {
 
 export function SeasonCalendarContent({
   allTeamsLabel,
+  copySubscriptionLinkLabel,
   leagueCalendarLabel,
   locale,
   matches,
@@ -43,6 +47,8 @@ export function SeasonCalendarContent({
   seasonSlug,
   subscribeLabel,
   subscriptionBaseUrl,
+  subscriptionCopyBaseUrl,
+  subscriptionLinkCopiedLabel,
   teamFilterLabel,
   teamOptions,
   weekLabels,
@@ -50,6 +56,9 @@ export function SeasonCalendarContent({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const search = searchParams.toString();
   const rawTeamSlug = searchParams.get("team") ?? "";
   const selectedTeamSlug = teamOptions.some((option) => option.slug === rawTeamSlug) ? rawTeamSlug : "";
@@ -58,6 +67,7 @@ export function SeasonCalendarContent({
     : matches;
   const filteredGroups = buildMatchGroups(filteredMatches);
   const subscriptionUrl = buildSubscriptionUrl(subscriptionBaseUrl, selectedTeamSlug);
+  const subscriptionCopyUrl = buildSubscriptionUrl(subscriptionCopyBaseUrl, selectedTeamSlug);
 
   useEffect(() => {
     if (!rawTeamSlug || selectedTeamSlug) {
@@ -70,6 +80,40 @@ export function SeasonCalendarContent({
     const nextUrl = nextSearch ? `${pathname}?${nextSearch}` : pathname;
     router.replace(nextUrl);
   }, [pathname, rawTeamSlug, router, search, selectedTeamSlug]);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMenuOpen]);
+
+  async function handleCopySubscriptionLink() {
+    const didCopy = await copyText(subscriptionCopyUrl);
+    if (!didCopy) {
+      return;
+    }
+
+    setCopyState("copied");
+  }
 
   return (
     <>
@@ -118,12 +162,56 @@ export function SeasonCalendarContent({
             </svg>
           </div>
 
-          <a
-            href={subscriptionUrl}
-            className="inline-flex h-10 items-center rounded-full bg-header px-4 py-2 text-sm font-medium text-white transition hover:bg-header/90"
-          >
-            {subscribeLabel}
-          </a>
+          <div className="relative inline-flex" ref={menuRef}>
+            <a
+              href={subscriptionUrl}
+              className="inline-flex h-10 items-center rounded-l-full bg-header px-4 py-2 text-sm font-medium text-white transition hover:bg-header/90"
+            >
+              {subscribeLabel}
+            </a>
+            <button
+              type="button"
+              aria-label={copySubscriptionLinkLabel}
+              aria-expanded={isMenuOpen}
+              className="inline-flex h-10 items-center rounded-r-full bg-header px-3 text-white transition hover:bg-header/90"
+              onClick={() => {
+                setIsMenuOpen((current) => {
+                  const next = !current;
+                  if (next) {
+                    setCopyState("idle");
+                  }
+                  return next;
+                });
+              }}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 16 16"
+                className={`h-4 w-4 transition ${isMenuOpen ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4.5 6.5L8 10l3.5-3.5" />
+              </svg>
+            </button>
+
+            {isMenuOpen ? (
+              <div className="absolute right-0 top-full z-10 mt-1 min-w-[220px] overflow-hidden rounded-2xl bg-header shadow-[0_18px_40px_rgba(17,24,39,0.18)]">
+                <button
+                  type="button"
+                  className="flex w-full items-center px-4 py-3 text-left text-sm font-medium text-white transition hover:bg-header/90"
+                  onClick={() => {
+                    void handleCopySubscriptionLink();
+                  }}
+                >
+                  <span>{copyState === "copied" ? subscriptionLinkCopiedLabel : copySubscriptionLinkLabel}</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <LocalizedMonthCalendars locale={locale} matches={filteredMatches} seasonSlug={seasonSlug} weekLabels={weekLabels} />
@@ -249,4 +337,33 @@ function buildSubscriptionUrl(baseUrl: string, teamSlug: string) {
 
   const query = searchParams.toString();
   return query ? `${path}?${query}` : path;
+}
+
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      return copyTextWithSelection(value);
+    }
+  }
+
+  return copyTextWithSelection(value);
+}
+
+function copyTextWithSelection(value: string) {
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "absolute";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  try {
+    return document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textarea);
+  }
 }

@@ -31,6 +31,8 @@
   "teamFilterLabel": "Choose team",
   "allTeamsLabel": "All teams",
   "subscribeLabel": "Subscribe",
+  "copySubscriptionLinkLabel": "Copy subscription link",
+  "subscriptionLinkCopiedLabel": "Subscription link copied",
   "weekDays": ["S", "M", "T", "W", "T", "F", "S"],
   "seasonTitle": "{leagueName} {year} Season Calendar",
   "metaDescriptionHome": "Season calendar directory for football and racing.",
