@@ -202,7 +202,7 @@ export function SeasonCalendarContent({
               <div className="absolute right-0 top-full z-10 mt-1 min-w-[220px] overflow-hidden rounded-2xl bg-header shadow-[0_18px_40px_rgba(17,24,39,0.18)]">
                 <button
                   type="button"
-                  className="flex w-full items-center px-4 py-3 text-left text-sm font-medium text-white transition hover:bg-header/90"
+                  className="flex w-full items-center bg-header px-4 py-3 text-left text-sm font-medium text-white transition hover:brightness-110"
                   onClick={() => {
                     void handleCopySubscriptionLink();
                   }}
