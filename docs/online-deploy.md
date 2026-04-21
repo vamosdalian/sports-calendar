@@ -96,17 +96,11 @@ sudo usermod -aG docker $USER
 ## 3.2 目录准备
 
 ```bash
-sudo mkdir -p /opt/sports-calendar/{config,database/init}
+sudo mkdir -p /opt/sports-calendar/config
 ```
 
-将仓库中的 SQL 初始化文件复制到服务器：
-
-1. `database/init/001_postgres_init.sql`
-2. `database/init/002_auth_init.sql`
-3. `database/init/003_add_show_flags.sql`
-
 后端启动时会自动执行程序内 migration，并写入 `schema_migrations`。
-如果线上数据库是在旧版本 SQL 基础上创建的，第一次升级启动时会自动识别已有结构并回填版本，再补齐后续 migration，不需要手工执行升级 SQL。
+如果线上数据库是在旧版本表结构基础上创建的，第一次升级启动时会自动识别已有结构并回填版本，再补齐后续 migration，不需要手工执行升级 SQL。
 
 ## 3.3 生产配置文件
 
@@ -180,7 +174,6 @@ docker run -d \
   -e POSTGRES_USER=sports_calendar \
   -e POSTGRES_PASSWORD=CHANGE_ME_DB_PASSWORD \
   -v sports-calendar-postgres-data:/var/lib/postgresql/data \
-  -v /opt/sports-calendar/database/init:/docker-entrypoint-initdb.d:ro \
   postgres:16
 
 docker run -d \

@@ -48,7 +48,7 @@ export function SeasonsPage() {
 		setSeasons(response.items)
 		const firstSeasonSlug = response.items[0]?.slug
 		if (firstSeasonSlug) {
-			setLeagueMetadata(await api.getSeasonDetail(sportSlug, leagueSlug, firstSeasonSlug))
+			setLeagueMetadata(await api.getAdminSeasonDetail(token, sportSlug, leagueSlug, firstSeasonSlug))
 		} else {
 			setLeagueMetadata(null)
 		}

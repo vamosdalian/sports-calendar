@@ -20,6 +20,10 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
+	router.Use(func(c *gin.Context) {
+		c.Set("logger", logger)
+		c.Next()
+	})
 	router.Use(requestLogger(logger))
 	router.Use(rateLimitMiddleware(limiter))
 	handler := &Handler{service: svc}
@@ -40,6 +44,7 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	admin.GET("/thesportsdb/sports", handler.listTheSportsDBSports)
 	admin.GET("/:sport/leagues", handler.listAdminLeagues)
 	admin.GET("/:sport/:league/seasons", handler.listAdminSeasons)
+	admin.GET("/:sport/:league/seasons/:season", handler.getAdminLeagueSeason)
 	admin.GET("/:sport/:league/teams", handler.listAdminTeams)
 	admin.GET("/:sport/thesportsdb/leagues", handler.listTheSportsDBLeagues)
 	admin.GET("/thesportsdb/leagues/:leagueID", handler.lookupTheSportsDBLeague)
@@ -253,6 +258,16 @@ func rateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
 }
 
 func handleServiceError(c *gin.Context, err error, internalCode, defaultMessage string) {
+	if loggerValue, ok := c.Get("logger"); ok {
+		if logger, ok := loggerValue.(*logrus.Logger); ok && logger != nil {
+			logger.WithError(err).WithFields(logrus.Fields{
+				"method":        c.Request.Method,
+				"path":          c.Request.URL.Path,
+				"internal_code": internalCode,
+			}).Error("request failed")
+		}
+	}
+
 	switch {
 	case errors.Is(err, service.ErrInvalidArgument):
 		httputil.JSONError(c, http.StatusBadRequest, "invalid_argument", err.Error())

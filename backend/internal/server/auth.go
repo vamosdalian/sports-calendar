@@ -76,6 +76,15 @@ func (h *Handler) listAdminSeasons(c *gin.Context) {
 	c.JSON(http.StatusOK, payload)
 }
 
+func (h *Handler) getAdminLeagueSeason(c *gin.Context) {
+	payload, err := h.service.GetAdminLeagueSeason(c.Request.Context(), c.Param("sport"), c.Param("league"), c.Param("season"))
+	if err != nil {
+		handleServiceError(c, err, "get_admin_season_failed", "get admin season failed")
+		return
+	}
+	c.JSON(http.StatusOK, localizeSeasonDetail(payload, normalizeLocale(c.Query("lang"))))
+}
+
 func adminAuthMiddleware(svc *service.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := bearerToken(c.GetHeader("Authorization"))

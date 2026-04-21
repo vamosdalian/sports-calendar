@@ -113,7 +113,7 @@ func (s *Service) UpdateSeason(ctx context.Context, input domain.UpdateSeasonInp
 	input.SportSlug = normalizeSlug(input.SportSlug)
 	input.LeagueSlug = normalizeSlug(input.LeagueSlug)
 	input.CurrentSlug = strings.TrimSpace(input.CurrentSlug)
-	input.Slug = strings.TrimSpace(input.Slug)
+	input.Slug = strings.TrimSpace(input.CurrentSlug)
 	input.Label = strings.TrimSpace(input.Label)
 	if input.SportSlug == "" {
 		return SeasonRecord{}, invalidArgument("sportSlug is required")

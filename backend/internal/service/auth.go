@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/mail"
+	"sort"
 	"strings"
 	"time"
 
@@ -130,4 +131,32 @@ func (s *Service) ListAdminTeams(ctx context.Context, sportSlug, leagueSlug stri
 		return domain.AdminTeamsResponse{}, invalidArgument("league slug is required")
 	}
 	return s.repo.ListAdminTeams(ctx, sportSlug, leagueSlug)
+}
+
+func (s *Service) GetAdminLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
+	sportSlug = normalizeSlug(sportSlug)
+	leagueSlug = normalizeSlug(leagueSlug)
+	seasonSlug = strings.TrimSpace(seasonSlug)
+	if sportSlug == "" {
+		return domain.SeasonDetail{}, invalidArgument("sport slug is required")
+	}
+	if leagueSlug == "" {
+		return domain.SeasonDetail{}, invalidArgument("league slug is required")
+	}
+	if seasonSlug == "" {
+		return domain.SeasonDetail{}, invalidArgument("season slug is required")
+	}
+	detail, err := s.repo.GetAdminLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug)
+	if err != nil {
+		return domain.SeasonDetail{}, err
+	}
+	matches := append([]domain.Match(nil), detail.Matches...)
+	sort.Slice(matches, func(i, j int) bool {
+		left, _ := matches[i].StartTime()
+		right, _ := matches[j].StartTime()
+		return left.Before(right)
+	})
+	detail.Matches = matches
+	detail.Groups = groupMatches(matches)
+	return detail, nil
 }

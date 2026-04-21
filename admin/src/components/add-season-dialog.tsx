@@ -148,7 +148,7 @@ export function AddSeasonDialog({ sportSlug, leagueSlug, open, onOpenChange, onC
 					</Select>
 				</div>
 				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-					<div><Label htmlFor="season-slug-dialog">Slug</Label><Input id="season-slug-dialog" required value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} /></div>
+					<div><Label htmlFor="season-slug-dialog">Slug</Label><Input id="season-slug-dialog" readOnly value={form.slug} /></div>
 					<div><Label htmlFor="season-label-dialog">Label</Label><Input id="season-label-dialog" required value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} /></div>
 					<div><Label htmlFor="season-start-dialog">Start year</Label><Input id="season-start-dialog" required value={form.startYear} onChange={(event) => setForm((current) => ({ ...current, startYear: event.target.value }))} /></div>
 					<div><Label htmlFor="season-end-dialog">End year</Label><Input id="season-end-dialog" required value={form.endYear} onChange={(event) => setForm((current) => ({ ...current, endYear: event.target.value }))} /></div>

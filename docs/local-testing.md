@@ -24,14 +24,13 @@ go version
 - Frontend: `web/` (Next.js App Router)
 - Backend: `backend/` (Gin + PostgreSQL + go-ical)
 - Admin frontend: `admin/` (Vite + React + Tailwind)
-- Database init SQL: `database/init/001_postgres_init.sql`, `database/init/002_auth_init.sql`, `database/init/003_add_show_flags.sql`
 - Local backend config: copy `backend/config/config.example.yaml` to `backend/config/config.local.yaml`
 
 ## 3. Backend Local Testing
 
 ### 3.1 Start PostgreSQL 16 locally
 
-Use a fresh local PostgreSQL container with the init SQL mounted into `docker-entrypoint-initdb.d`:
+Use a fresh local PostgreSQL container:
 
 ```bash
 docker run --name sports-calendar-postgres \
@@ -39,7 +38,6 @@ docker run --name sports-calendar-postgres \
 	-e POSTGRES_USER=sports_calendar \
 	-e POSTGRES_PASSWORD=sports_calendar \
 	-p 5432:5432 \
-	-v /Users/lmc10232/project/sports-calendar/database/init:/docker-entrypoint-initdb.d \
 	-d postgres:16
 ```
 
@@ -50,7 +48,7 @@ docker logs sports-calendar-postgres
 docker exec -it sports-calendar-postgres psql -U sports_calendar -d sports_calendar -c '\dt'
 ```
 
-后端启动时还会自动执行程序内 migration，并使用 `schema_migrations` 记录版本。
+后端启动时会自动执行程序内 migration，并使用 `schema_migrations` 记录版本。
 如果数据库是旧版本但已经有历史表结构，启动时会先识别现状并回填 baseline，再自动补齐缺失变更。
 
 Expected tables:
@@ -61,8 +59,6 @@ Expected tables:
 - `teams`
 - `matches`
 - `users`
-
-The init SQL inserts a minimal `football / csl / 2026` seed dataset so the API can be smoke-tested immediately.
 
 ### 3.2 Run unit tests
 
