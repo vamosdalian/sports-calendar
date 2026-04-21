@@ -33,6 +33,8 @@
   "subscribeLabel": "Subscribe",
   "copySubscriptionLinkLabel": "Copy subscription link",
   "subscriptionLinkCopiedLabel": "Subscription link copied",
+  "contactUsLabel": "Contact us",
+  "contactEmailAriaLabel": "Send email to support@sports-calendar.com",
   "weekDays": ["S", "M", "T", "W", "T", "F", "S"],
   "seasonTitle": "{leagueName} {year} Season Calendar",
   "metaDescriptionHome": "Season calendar directory for football and racing.",
