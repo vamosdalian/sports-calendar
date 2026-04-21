@@ -30,13 +30,29 @@
 3. `web/open-next.config.ts`
 4. `web/wrangler.jsonc`
 5. `web/.dev.vars.example`
+6. `web/public/_headers`
 
 同时：
 
 1. `web/proxy.ts` 已切换为 `web/middleware.ts`
 2. `package.json` 新增了 `preview`、`deploy` 和 `cf-typegen` 脚本
+3. OpenNext 已配置为 `R2 incremental cache + DO queue`
 
 这样做的原因是：当前 OpenNext/Cloudflare 不支持 Next 16 的 Node runtime proxy，但支持 Edge middleware。
+
+## 当前缓存方案
+
+当前 `web/` 已不再使用 OpenNext 默认的 dummy incremental cache，而是切换为：
+
+1. `R2` 持久化 Next 的 ISR / fetch cache
+2. `Durable Object queue` 协调 time-based revalidation
+3. `regional cache` 减少热点区域重复回源到 R2
+4. `enableCacheInterception` 让已缓存的 ISR/SSG 页面尽量绕过完整 Next 启动链路
+
+此外：
+
+1. `/_next/static/*` 通过 `web/public/_headers` 显式设置为 `Cache-Control: public,max-age=31536000,immutable`
+2. 页面和数据本身仍由应用代码中的 `revalidate = 3600` 与 `fetch(..., { next: { revalidate: 3600 } })` 控制再验证周期
 
 ## 环境变量
 
@@ -54,6 +70,29 @@ SPORTS_CALENDAR_PUBLIC_API_BASE_URL=https://api.sports-calendar.com
 3. 当前代码在生产环境下即使没有显式配置这两个变量，也会默认回退到 `https://api.sports-calendar.com`，避免 Worker 误打到 `localhost:8080`。
 
 本地预览时，可在 `web/` 下创建 `.dev.vars`，内容可参考 `web/.dev.vars.example`。
+
+如果你想自定义 R2 中的缓存前缀，也可以加：
+
+```env
+NEXT_INC_CACHE_R2_PREFIX=incremental-cache
+```
+
+## 首次准备 Cloudflare 资源
+
+在首次部署前，先创建 OpenNext 使用的 R2 bucket：
+
+```bash
+cd /Users/lmc10232/project/sports-calendar/web
+npx wrangler r2 bucket create sports-calendar-web-cache
+```
+
+当前 `wrangler.jsonc` 已配置以下绑定：
+
+1. `NEXT_INC_CACHE_R2_BUCKET`
+2. `NEXT_CACHE_DO_QUEUE`
+3. `WORKER_SELF_REFERENCE`
+
+其中 `DOQueueHandler` 会在首次部署时按 `migrations` 自动创建。
 
 ## 本地验证
 
@@ -162,6 +201,26 @@ npm run deploy
 3. 打开任意赛季页是否能正常取到 API 数据。
 4. `/sitemap.xml` 是否包含赛季路径。
 5. 订阅按钮生成的 `webcal://` 链接是否指向你的正式 API 域名。
+6. 同一路径连续访问两次时，TTFB 是否明显下降。
+7. 关键响应头里是否能看到 Cloudflare 缓存命中迹象，例如 `cf-cache-status`。
+
+## 如何确认缓存真的生效
+
+上线后可以直接用 `curl -I` 验证：
+
+```bash
+curl -I https://sports-calendar.com/en/
+curl -I https://sports-calendar.com/en/soccer/fifa-world-cup/2026/
+curl -I https://sports-calendar.com/_next/static/<build-id>/_buildManifest.js
+```
+
+重点看这几项：
+
+1. HTML/ISR 页面：
+   第一次通常是 `MISS` 或 `DYNAMIC`，再次请求应更接近 `HIT` / 更低 TTFB
+2. `/_next/static/*`：
+   应返回长缓存头 `Cache-Control: public,max-age=31536000,immutable`
+3. 如果你在 Worker 日志里仍看到每次请求都重新拉后端 API，说明 ISR/data cache 仍未命中，需要继续排查 R2 绑定或 revalidate 行为
 
 ## 常用命令
 
