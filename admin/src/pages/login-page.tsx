@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { useAuth } from '@/components/use-auth'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 
@@ -28,10 +28,6 @@ export function LoginPage() {
 	const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 	const form = useForm<AuthFormValues>({
 		resolver: zodResolver(authSchema),
-		defaultValues: {
-			email: 'admin@example.com',
-			password: 'secret123',
-		},
 	})
 
 	const redirectPath = useMemo(() => ((location.state as { from?: string } | null)?.from) || '/', [location.state])
@@ -84,7 +80,6 @@ export function LoginPage() {
 				<Card className="border-white/60 bg-card/92 shadow-[0_32px_100px_rgba(15,23,42,0.12)] backdrop-blur">
 					<CardHeader>
 						<CardTitle>{mode === 'login' ? 'Admin login' : 'Bootstrap first admin'}</CardTitle>
-						<CardDescription>{mode === 'login' ? 'Enter the admin email and password to access protected catalog APIs.' : 'This registration path only works before the first admin exists.'}</CardDescription>
 					</CardHeader>
 					<CardContent>
 						<Form {...form}>
@@ -96,7 +91,7 @@ export function LoginPage() {
 										<FormItem>
 											<FormLabel>Email</FormLabel>
 											<FormControl>
-												<Input autoComplete="email" placeholder="admin@example.com" type="email" {...field} />
+												<Input autoComplete="off" type="email" {...field} />
 											</FormControl>
 											<FormMessage />
 										</FormItem>
@@ -109,7 +104,7 @@ export function LoginPage() {
 										<FormItem>
 											<FormLabel>Password</FormLabel>
 											<FormControl>
-												<Input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="Enter your password" type="password" {...field} />
+												<Input autoComplete="off" type="password" {...field} />
 											</FormControl>
 											<FormMessage />
 										</FormItem>
