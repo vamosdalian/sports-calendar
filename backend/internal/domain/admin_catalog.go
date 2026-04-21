@@ -42,6 +42,25 @@ type AdminExternalSeasonOption struct {
 	EndYear       int    `json:"endYear"`
 }
 
+type AdminLocaleItem struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
+}
+
+type AdminLocalesResponse struct {
+	Items []AdminLocaleItem `json:"items"`
+}
+
+type CreateAdminLocaleInput struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
+}
+
+type UpdateAdminLocaleInput struct {
+	Code  string `json:"-"`
+	Label string `json:"label"`
+}
+
 type AdminTeamItem struct {
 	ID   int64         `json:"id"`
 	Slug string        `json:"slug"`

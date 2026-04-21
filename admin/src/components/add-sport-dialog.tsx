@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { useAuth } from '@/components/use-auth'
 import { LocalizedFieldsEditor } from '@/components/localized-fields-editor'
 import { Button } from '@/components/ui/button'
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
-import { entriesFromText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
+import { createEmptyLocalizedEntry, entriesFromText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
 import type { ExternalSportOption } from '@/types'
 
 type AddSportDialogProps = {
@@ -31,6 +32,7 @@ const emptyForm: SportFormState = {
 
 export function AddSportDialog({ open, onOpenChange, onCreated }: AddSportDialogProps) {
 	const { token } = useAuth()
+	const { locales, loading: localesLoading, error: localesError, preferredLocaleCode } = useAdminLocales()
 	const [options, setOptions] = useState<ExternalSportOption[]>([])
 	const [selectedID, setSelectedID] = useState('')
 	const [form, setForm] = useState<SportFormState>(emptyForm)
@@ -61,7 +63,7 @@ export function AddSportDialog({ open, onOpenChange, onCreated }: AddSportDialog
 					return
 				}
 				setOptions([])
-				setForm(emptyForm)
+				setForm({ ...emptyForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
 				setError(caught instanceof Error ? caught.message : 'load failed')
 			})
 			.finally(() => {
@@ -72,14 +74,14 @@ export function AddSportDialog({ open, onOpenChange, onCreated }: AddSportDialog
 		return () => {
 			active = false
 		}
-	}, [open, token])
+	}, [locales, open, token])
 
 	function applySelection(item: ExternalSportOption) {
 		setSelectedID(String(item.id))
 		setForm({
 			id: String(item.id),
 			slug: item.suggestedSlug,
-			nameEntries: entriesFromText(item.name),
+			nameEntries: entriesFromText(item.name, preferredLocaleCode),
 		})
 	}
 
@@ -98,7 +100,7 @@ export function AddSportDialog({ open, onOpenChange, onCreated }: AddSportDialog
 			})
 			await onCreated()
 			onOpenChange(false)
-			setForm(emptyForm)
+			setForm({ ...emptyForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
 			setSelectedID('')
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : 'create failed')
@@ -143,13 +145,16 @@ export function AddSportDialog({ open, onOpenChange, onCreated }: AddSportDialog
 					label="Localized name"
 					description="The selection fills an english name by default. You can add or edit locales before saving."
 					entries={form.nameEntries}
+					localeOptions={locales}
 					onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))}
+					loading={localesLoading}
+					error={localesError}
 					required
 				/>
 				{error ? <p className="text-sm text-danger">{error}</p> : null}
 				<div className="flex justify-end gap-3">
 					<Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>
-					<Button disabled={pending || loading} type="submit">{pending ? 'Creating...' : 'Create sport'}</Button>
+					<Button disabled={pending || loading || localesLoading || !!localesError || locales.length === 0} type="submit">{pending ? 'Creating...' : 'Create sport'}</Button>
 				</div>
 			</form>
 		</Dialog>

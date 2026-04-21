@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { useAuth } from '@/components/use-auth'
 import { LocalizedFieldsEditor } from '@/components/localized-fields-editor'
 import { Button } from '@/components/ui/button'
@@ -9,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
-import { entriesFromText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
+import { createEmptyLocalizedEntry, entriesFromText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
 import type { ExternalLeagueOption, ExternalLeagueLookup } from '@/types'
 
 type AddLeagueDialogProps = {
@@ -43,6 +44,7 @@ const emptyLeagueForm: LeagueFormState = {
 
 export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: AddLeagueDialogProps) {
 	const { token } = useAuth()
+	const { locales, loading: localesLoading, error: localesError, preferredLocaleCode } = useAdminLocales()
 	const [options, setOptions] = useState<ExternalLeagueOption[]>([])
 	const [selectedID, setSelectedID] = useState('')
 	const [lookup, setLookup] = useState<ExternalLeagueLookup | null>(null)
@@ -75,7 +77,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 					return
 				}
 				setOptions([])
-				setForm(emptyLeagueForm)
+				setForm({ ...emptyLeagueForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
 				setError(caught instanceof Error ? caught.message : 'load failed')
 			})
 			.finally(() => {
@@ -86,7 +88,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 		return () => {
 			active = false
 		}
-	}, [open, sportSlug, token])
+	}, [locales, open, sportSlug, token])
 
 	useEffect(() => {
 		if (!open || !token || !selectedID) {
@@ -106,9 +108,9 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 					slug: response.suggestedSlug,
 					show: false,
 					syncInterval: response.syncInterval || '@daily',
-					nameEntries: entriesFromText(response.name),
-					calendarDescriptionEntries: entriesFromText(response.calendarDescription),
-					dataSourceNoteEntries: entriesFromText(response.dataSourceNote),
+					nameEntries: entriesFromText(response.name, preferredLocaleCode),
+					calendarDescriptionEntries: entriesFromText(response.calendarDescription, preferredLocaleCode),
+					dataSourceNoteEntries: entriesFromText(response.dataSourceNote, preferredLocaleCode),
 					notesEntries: [],
 				})
 			})
@@ -117,7 +119,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 					return
 				}
 				setLookup(null)
-				setForm(emptyLeagueForm)
+				setForm({ ...emptyLeagueForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
 				setError(caught instanceof Error ? caught.message : 'lookup failed')
 			})
 			.finally(() => {
@@ -128,7 +130,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 		return () => {
 			active = false
 		}
-	}, [open, selectedID, token])
+	}, [locales, open, preferredLocaleCode, selectedID, token])
 
 	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -153,7 +155,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 			onOpenChange(false)
 			setLookup(null)
 			setSelectedID('')
-			setForm(emptyLeagueForm)
+			setForm({ ...emptyLeagueForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : 'create failed')
 		} finally {
@@ -204,7 +206,10 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 					label="Localized name"
 					description="The lookup fills an english value. You can add more locales if needed."
 					entries={form.nameEntries}
+					localeOptions={locales}
 					onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))}
+					loading={localesLoading}
+					error={localesError}
 					required
 				/>
 				<LocalizedFieldsEditor
@@ -212,26 +217,35 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 					label="Calendar description"
 					description="Suggested from TheSportsDB league lookup."
 					entries={form.calendarDescriptionEntries}
+					localeOptions={locales}
 					onChange={(calendarDescriptionEntries) => setForm((current) => ({ ...current, calendarDescriptionEntries }))}
+					loading={localesLoading}
+					error={localesError}
 				/>
 				<LocalizedFieldsEditor
 					idPrefix="dialog-league-data-source"
 					label="Data source note"
 					description="Suggested source note used by the public season detail view."
 					entries={form.dataSourceNoteEntries}
+					localeOptions={locales}
 					onChange={(dataSourceNoteEntries) => setForm((current) => ({ ...current, dataSourceNoteEntries }))}
+					loading={localesLoading}
+					error={localesError}
 				/>
 				<LocalizedFieldsEditor
 					idPrefix="dialog-league-notes"
 					label="Notes"
 					description="Optional internal notes. This remains fully manual."
 					entries={form.notesEntries}
+					localeOptions={locales}
 					onChange={(notesEntries) => setForm((current) => ({ ...current, notesEntries }))}
+					loading={localesLoading}
+					error={localesError}
 				/>
 				{error ? <p className="text-sm text-danger">{error}</p> : null}
 				<div className="flex justify-end gap-3">
 					<Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>
-					<Button disabled={pending || loadingOptions || loadingLookup || !selectedID} type="submit">{pending ? 'Creating...' : 'Create league'}</Button>
+					<Button disabled={pending || loadingOptions || loadingLookup || !selectedID || localesLoading || !!localesError || locales.length === 0} type="submit">{pending ? 'Creating...' : 'Create league'}</Button>
 				</div>
 			</form>
 		</Dialog>

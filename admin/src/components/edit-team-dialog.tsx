@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { LocalizedFieldsEditor } from '@/components/localized-fields-editor'
 import { useAuth } from '@/components/use-auth'
 import { Button } from '@/components/ui/button'
@@ -7,7 +8,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
-import { entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
+import { entriesFromLocalizedText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
 import type { AdminTeamItem } from '@/types'
 
 type EditTeamDialogProps = {
@@ -25,21 +26,17 @@ type TeamFormState = {
 	nameEntries: LocalizedFieldEntry[]
 }
 
-function toEntries(value: Record<string, string>) {
-	const entries = Object.entries(value).map(([locale, text]) => ({ locale, value: text }))
-	return entries.length > 0 ? entries : [{ locale: 'en', value: '' }]
-}
-
-function mapTeamToForm(team: AdminTeamItem): TeamFormState {
+function mapTeamToForm(team: AdminTeamItem, locales: Parameters<typeof entriesFromLocalizedText>[1]): TeamFormState {
 	return {
 		id: String(team.id),
 		slug: team.slug,
-		nameEntries: toEntries(team.name),
+		nameEntries: entriesFromLocalizedText(team.name, locales),
 	}
 }
 
 export function EditTeamDialog({ team, sportSlug, leagueSlug, open, onOpenChange, onSaved }: EditTeamDialogProps) {
 	const { token } = useAuth()
+	const { locales, loading: localesLoading, error: localesError } = useAdminLocales()
 	const [form, setForm] = useState<TeamFormState>({
 		id: '',
 		slug: '',
@@ -52,9 +49,9 @@ export function EditTeamDialog({ team, sportSlug, leagueSlug, open, onOpenChange
 		if (!open || !team) {
 			return
 		}
-		setForm(mapTeamToForm(team))
+		setForm(mapTeamToForm(team, locales))
 		setError(null)
-	}, [open, team])
+	}, [locales, open, team])
 
 	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -83,11 +80,11 @@ export function EditTeamDialog({ team, sportSlug, leagueSlug, open, onOpenChange
 					<div><Label htmlFor="edit-team-id">Team id</Label><Input disabled id="edit-team-id" value={form.id} /></div>
 					<div><Label htmlFor="edit-team-slug">Slug</Label><Input disabled id="edit-team-slug" value={form.slug} /></div>
 				</div>
-				<LocalizedFieldsEditor idPrefix="edit-team-name" label="Localized name" entries={form.nameEntries} onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))} required />
+				<LocalizedFieldsEditor idPrefix="edit-team-name" label="Localized name" entries={form.nameEntries} localeOptions={locales} onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))} loading={localesLoading} error={localesError} required />
 				{error ? <p className="text-sm text-danger">{error}</p> : null}
 				<div className="flex justify-end gap-3">
 					<Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>
-					<Button disabled={pending} type="submit">{pending ? 'Saving...' : 'Save team'}</Button>
+					<Button disabled={pending || localesLoading || !!localesError || locales.length === 0} type="submit">{pending ? 'Saving...' : 'Save team'}</Button>
 				</div>
 			</form>
 		</Dialog>

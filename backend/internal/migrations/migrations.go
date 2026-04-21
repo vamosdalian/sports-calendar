@@ -19,9 +19,10 @@ type migration struct {
 }
 
 type schemaState struct {
-	hasCoreTables bool
-	hasUsersTable bool
-	hasShowFlags  bool
+	hasCoreTables   bool
+	hasUsersTable   bool
+	hasShowFlags    bool
+	hasAdminLocales bool
 }
 
 var allMigrations = []migration{
@@ -114,6 +115,21 @@ var allMigrations = []migration{
 			`ALTER TABLE seasons ADD COLUMN IF NOT EXISTS show BOOLEAN NOT NULL DEFAULT FALSE`,
 			`CREATE INDEX IF NOT EXISTS idx_leagues_show ON leagues (show)`,
 			`CREATE INDEX IF NOT EXISTS idx_seasons_show ON seasons (show)`,
+		},
+	},
+	{
+		version: 4,
+		name:    "admin_locales",
+		statements: []string{
+			`CREATE TABLE IF NOT EXISTS admin_locales (
+			    code TEXT PRIMARY KEY,
+			    label TEXT NOT NULL,
+			    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+			`INSERT INTO admin_locales (code, label)
+			 VALUES ('en', 'English'), ('zh', '中文')
+			 ON CONFLICT (code) DO NOTHING`,
 		},
 	},
 }
@@ -276,10 +292,15 @@ func inspectSchemaState(ctx context.Context, tx pgx.Tx) (schemaState, error) {
 	if err != nil {
 		return schemaState{}, err
 	}
+	hasAdminLocales, err := tableExists(ctx, tx, "admin_locales")
+	if err != nil {
+		return schemaState{}, err
+	}
 	return schemaState{
-		hasCoreTables: hasCoreTables,
-		hasUsersTable: hasUsersTable,
-		hasShowFlags:  leagueShow && seasonShow,
+		hasCoreTables:   hasCoreTables,
+		hasUsersTable:   hasUsersTable,
+		hasShowFlags:    leagueShow && seasonShow,
+		hasAdminLocales: hasAdminLocales,
 	}, nil
 }
 
@@ -319,6 +340,9 @@ func baselineVersions(state schemaState) []int64 {
 	}
 	if state.hasShowFlags {
 		versions = append(versions, 3)
+	}
+	if state.hasAdminLocales {
+		versions = append(versions, 4)
 	}
 	sort.Slice(versions, func(i, j int) bool {
 		return versions[i] < versions[j]

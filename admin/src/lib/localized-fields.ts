@@ -1,8 +1,16 @@
-import type { LocalizedText } from '@/types'
+import type { AdminLocaleItem, LocalizedText } from '@/types'
 
 export type LocalizedFieldEntry = {
 	locale: string
 	value: string
+}
+
+export function getPreferredLocaleCode(locales: AdminLocaleItem[]) {
+	return locales.find((item) => item.code === 'en')?.code ?? locales[0]?.code ?? 'en'
+}
+
+export function createEmptyLocalizedEntry(locales: AdminLocaleItem[]): LocalizedFieldEntry {
+	return { locale: getPreferredLocaleCode(locales), value: '' }
 }
 
 export function entriesToLocalizedText(entries: LocalizedFieldEntry[]): LocalizedText {
@@ -34,4 +42,12 @@ export function entriesFromText(value: string, locale = 'en'): LocalizedFieldEnt
 		return []
 	}
 	return [{ locale, value: trimmed }]
+}
+
+export function entriesFromLocalizedText(value: LocalizedText | undefined, locales: AdminLocaleItem[]) {
+	if (!value) {
+		return [createEmptyLocalizedEntry(locales)]
+	}
+	const entries = Object.entries(value).map(([locale, text]) => ({ locale, value: text }))
+	return entries.length > 0 ? entries : [createEmptyLocalizedEntry(locales)]
 }

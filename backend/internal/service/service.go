@@ -24,12 +24,16 @@ type repository interface {
 	GetAdminLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error)
 	GetSeasonSyncTarget(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error)
 	ListAdminSports(ctx context.Context) (domain.AdminSportsResponse, error)
+	ListAdminLocales(ctx context.Context) (domain.AdminLocalesResponse, error)
 	ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error)
 	ListAdminSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error)
 	ListAdminTeams(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminTeamsResponse, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateUser(ctx context.Context, email, passwordHash string) (domain.UserRecord, error)
 	GetUserByEmail(ctx context.Context, email string) (domain.UserRecord, string, error)
+	CreateAdminLocale(ctx context.Context, input domain.CreateAdminLocaleInput) (domain.AdminLocaleItem, error)
+	UpdateAdminLocale(ctx context.Context, input domain.UpdateAdminLocaleInput) (domain.AdminLocaleItem, error)
+	DeleteAdminLocale(ctx context.Context, code string) error
 	CreateSport(ctx context.Context, input domain.CreateSportInput) (domain.SportRecord, error)
 	UpdateSport(ctx context.Context, input domain.UpdateSportInput) (domain.SportRecord, error)
 	DeleteSport(ctx context.Context, input domain.DeleteSportInput) error
@@ -419,6 +423,10 @@ func trimLocalizedText(value domain.LocalizedText) domain.LocalizedText {
 		trimmed[key] = text
 	}
 	return trimmed
+}
+
+func normalizeLocaleCode(value string) string {
+	return strings.TrimSpace(strings.ToLower(value))
 }
 
 func validateLocalizedText(value domain.LocalizedText, field string) error {

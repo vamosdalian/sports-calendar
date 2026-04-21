@@ -101,6 +101,10 @@ func (s *Service) ListAdminSports(ctx context.Context) (domain.AdminSportsRespon
 	return s.repo.ListAdminSports(ctx)
 }
 
+func (s *Service) ListAdminLocales(ctx context.Context) (domain.AdminLocalesResponse, error) {
+	return s.repo.ListAdminLocales(ctx)
+}
+
 func (s *Service) ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error) {
 	sportSlug = normalizeSlug(sportSlug)
 	if sportSlug == "" {

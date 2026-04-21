@@ -1,5 +1,7 @@
 import { API_BASE_URL } from '@/lib/config'
 import type {
+	AdminLocaleItem,
+	AdminLocalesResponse,
 	AdminLeaguesResponse,
 	AdminSeasonsResponse,
 	AdminTeamsResponse,
@@ -46,6 +48,18 @@ export const api = {
 	},
 	refresh(token: string) {
 		return request<AuthTokenResponse>('/api/auth/refresh', { method: 'POST', token })
+	},
+	listAdminLocales(token: string) {
+		return request<AdminLocalesResponse>('/api/admin/locales', { token })
+	},
+	createAdminLocale(token: string, payload: { code: string; label: string }) {
+		return request<AdminLocaleItem>('/api/admin/locales', { method: 'POST', token, body: JSON.stringify(payload) })
+	},
+	updateAdminLocale(token: string, code: string, payload: { label: string }) {
+		return request<AdminLocaleItem>(`/api/admin/locales/${encodeURIComponent(code)}`, { method: 'PUT', token, body: JSON.stringify(payload) })
+	},
+	deleteAdminLocale(token: string, code: string) {
+		return request(`/api/admin/locales/${encodeURIComponent(code)}`, { method: 'DELETE', token })
 	},
 	listSports(token: string) {
 		return request<SportsResponse>('/api/admin/sports', { token })
