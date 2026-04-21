@@ -1,137 +1,160 @@
-# 体育赛事日历（sports-calendar）
+# sports-calendar
 
-本项目提供体育赛事订阅日历服务，当前内置 **CSL 中超联赛**，并支持扩展到其他联赛。
+Sports Calendar is the codebase behind the `sports-calendar.com` product.
 
-## 功能范围
+It is used to publish sports season pages, provide ICS subscription feeds, and maintain competition data through an internal admin system.
 
-1. 提供多联赛 `ics` 订阅文件（当前已配置 CSL）。
-2. 每个队伍输出两份日历：
-   - 比赛日历
-   - 比赛 + 抢票提醒日历
-3. 数据目录统一使用：
-   - `JSON`：联赛元信息（`data/leagues.json`）
-   - `CSV`：赛程数据（`data/*_fixtures.csv`）
-4. 使用 `script/generate_ics.py` 从 JSON + CSV 生成并更新 `calendar/`。
-5. Backend 发布通过 GitHub Release 触发 GitHub Actions 自动构建并推送到 GHCR；静态日历文件仍可按需手工生成。
+The active application structure is:
 
-## 目录结构
+- `web/`: public website
+- `backend/`: API and ICS service
+- `admin/`: internal management console
+
+The previous root-level static site and Python-based generation flow are no longer part of the active architecture.
+
+## Application
+
+This project powers the Sports Calendar product.
+
+- Public website: `https://sports-calendar.com`
+- Public API domain: `https://api.sports-calendar.com`
+
+The product is intended to let users:
+
+- browse sports, leagues, and seasons
+- view season schedules in a calendar-oriented layout
+- subscribe to season match feeds through ICS
+- access localized season pages
+
+The repository contains the full application stack required to operate the service:
+
+- `web/`: the public website used by end users
+- `backend/`: the API and ICS service used by the website and integrations
+- `admin/`: the internal management console used to maintain data
+
+## Repository Layout
 
 ```text
 sports-calendar/
-├── assets/
-│   └── site.css
-├── calendar/                     # 生成后的 ICS 文件
-├── data/
-│   ├── leagues.json              # 联赛元信息（前端 + 脚本共用）
-│   └── csl_fixtures.csv          # 赛程数据
-├── script/
-│   └── generate_ics.py           # 生成 ICS 的脚本
-├── .nojekyll
-├── index.html                    # GitHub Pages 首页（订阅入口）
-├── requirements.txt
-└── README.md
+├── admin/                      # Internal admin application
+├── backend/                    # API, persistence, sync, and ICS generation
+├── docs/                       # API, local testing, deployment and release docs
+├── web/                        # Public website
+├── LICENSE
+├── README.md
+└── skills-lock.json
 ```
 
-## 数据说明
+## Applications
 
-### `data/leagues.json`
+### `web/`
 
-`leagues` 数组中每个联赛至少包含：
-- `id`
-- `name`
-- `displayName`（前端展示名，可选）
-- `season`
-- `timezone`
-- `filePrefix`
-- `source_file`
-- `calendar_name_template`
-- `calendar_with_ticket_name_template`
-- `calendar_description`
-- `teams`（每项含 `code` 与 `name`）
+The public website for `sports-calendar.com`. It serves localized league and season pages such as:
 
-可选字段：
-- `prodid`
-- `match_summary_template`
-- `match_description_template`
-- `match_category`
-- `ticket_summary_template`
-- `ticket_description_template`
-- `ticket_duration_minutes`
-- `ticket_category`
-- `ticket_location`
+- `/zh/football/csl/2026/index.html`
+- `/en/football/csl/2026/index.html`
 
-### `data/*_fixtures.csv`
+It is responsible for:
 
-字段：
-- `match_id`
-- `round`
-- `kickoff`
-- `home_team`
-- `away_team`
-- `stadium`
-- `city`
-- `ticket_open`
-- `ticket_url`
-- `ticket_channel`（售票方式，如"小程序"）
-- `status`
+- homepage and league discovery
+- localized season pages
+- public-facing navigation and SEO pages
+- linking users to ICS subscriptions
 
-时间字段使用 ISO-8601，例如：`2026-03-06T19:35:00+08:00`。
+### `backend/`
 
-## 使用方式
+The service behind `api.sports-calendar.com`.
 
-1. 安装依赖
+It is responsible for:
+
+- public API responses
+- admin APIs
+- authentication
+- database access
+- season ICS generation
+- scheduled data synchronization hooks
+
+### `admin/`
+
+The internal data management application.
+
+It is responsible for:
+
+- managing sports, leagues, seasons, teams, and matches
+- maintaining localized content
+- operating the structured data used by the public website and ICS feeds
+
+## Requirements
+
+Recommended local setup:
+
+- Node.js `>= 20.9.0`
+- npm `>= 10`
+- Go `1.25.x`
+- Docker
+- PostgreSQL 16
+
+## Quick Start
+
+Start PostgreSQL:
 
 ```bash
-pip install -r requirements.txt
+docker run --name sports-calendar-postgres \
+  -e POSTGRES_DB=sports_calendar \
+  -e POSTGRES_USER=sports_calendar \
+  -e POSTGRES_PASSWORD=sports_calendar \
+  -p 5432:5432 \
+  -d postgres:16
 ```
 
-2. 生成全部已配置联赛
+Start the backend:
 
 ```bash
-python script/generate_ics.py
+cd backend
+cp ./config/config.example.yaml ./config/config.local.yaml
+go run ./cmd/api -config ./config/config.local.yaml
 ```
 
-3. 仅生成某个联赛
+Default address: `http://localhost:8080`
+
+Start the public web app:
 
 ```bash
-python script/generate_ics.py --league csl
+cd web
+npm install
+npm run dev
 ```
 
-4. 指定配置文件/输出目录
+Default address: `http://localhost:3000`
+
+Start the admin app:
 
 ```bash
-python script/generate_ics.py --config data/leagues.json --output-dir calendar
+cd admin
+npm install
+npm run dev
 ```
 
-## 输出文件命名
+Default address: `http://localhost:5174`
 
-每支球队输出两份：
-- `calendar/<filePrefix>_<team-code>.ics`
-- `calendar/<filePrefix>_<team-code>_with_ticket.ics`
+If the backend is not running on `http://localhost:8080`, set a custom API base URL:
 
-示例：
-- `calendar/csl_beijing-guoan.ics`
-- `calendar/csl_beijing-guoan_with_ticket.ics`
+```bash
+cd admin
+VITE_API_BASE_URL=http://localhost:8081 npm run dev
+```
 
-## 前端联赛选择与直达链接
+## Documentation
 
-首页默认不自动选择联赛，需要先点联赛列表。
+- Local development and smoke testing: [`docs/local-testing.md`](docs/local-testing.md)
+- API documentation: [`docs/api.md`](docs/api.md)
+- Public web deployment: [`docs/cloudflare-workers-web-deploy.md`](docs/cloudflare-workers-web-deploy.md)
+- Backend deployment: [`docs/cloudflare-pages-backend-deploy.md`](docs/cloudflare-pages-backend-deploy.md)
+- Online deployment notes: [`docs/online-deploy.md`](docs/online-deploy.md)
+- Zero-downtime release notes: [`docs/zero-downtime-release.md`](docs/zero-downtime-release.md)
 
-- 首页：`https://sports-calendar.com/`
-- 联赛直达：`https://sports-calendar.com/?league=csl`
+## Current State
 
-## 新增其他联赛
+This repository is in the refactored architecture phase. The active implementation lives in `web/`, `backend/`, and `admin/`.
 
-1. 在 `data/leagues.json` 里新增联赛对象（含球队列表与模板）。
-2. 在 `data/` 下新增对应 `source_file` 指向的 CSV。
-3. 执行：
-   - `python script/generate_ics.py --league <league-id>`
-4. 提交 `data/` 与 `calendar/` 更新。
-
-## GitHub Pages（vamosdalian/sports-calendar）
-
-1. 将代码推送到 `vamosdalian/sports-calendar`。
-2. 仓库 `Settings` -> `Pages`。
-3. 选择 `Deploy from a branch`。
-4. 分支选 `main`，目录选 `/ (root)`。
-5. 保存并等待发布。
+If you are updating project documentation or onboarding materials, treat those three directories as the source of truth rather than the legacy root-level static site structure.
