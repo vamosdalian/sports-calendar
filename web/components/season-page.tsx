@@ -119,9 +119,21 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
       </main>
 
       <footer className="mx-auto w-full max-w-[1200px] bg-header text-white">
-        <div className="flex flex-col gap-2 px-4 py-6 text-sm text-white/80 sm:px-6 lg:px-8">
-          <span>{t("siteName")}</span>
-          <span>{data.league.name} · {data.season.label}</span>
+        <div className="flex flex-col gap-4 px-4 py-6 text-sm text-white/80 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+          <div className="flex flex-col gap-2">
+            <span>{t("siteName")}</span>
+            <span>{data.league.name} · {data.season.label}</span>
+          </div>
+          <div className="text-left md:text-right">
+            <span>{t("contactUsLabel")}: </span>
+            <Link
+              aria-label={t("contactEmailAriaLabel")}
+              className="font-medium text-white underline underline-offset-2 transition hover:text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              href="mailto:support@sports-calendar.com"
+            >
+              support@sports-calendar.com
+            </Link>
+          </div>
         </div>
       </footer>
     </div>
