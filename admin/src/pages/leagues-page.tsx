@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { AddLeagueDialog } from '@/components/add-league-dialog'
 import { CatalogDataTable } from '@/components/catalog-data-table'
@@ -17,6 +17,7 @@ import type { LeagueItem } from '@/types'
 
 export function LeaguesPage() {
 	const { sportSlug = '' } = useParams()
+	const navigate = useNavigate()
 	const { token } = useAuth()
 	const { showToast } = useToast()
 	const [leagues, setLeagues] = useState<LeagueItem[]>([])
@@ -101,6 +102,9 @@ export function LeaguesPage() {
 						getSearchText={(league) => `${league.slug} ${pickLocalizedPreview(league.name)} ${league.syncInterval} ${league.show ? 'shown visible' : 'hidden draft'}`}
 						searchPlaceholder="Filter leagues..."
 						emptyMessage="No leagues found."
+						onRowClick={(league) => {
+							void navigate(`/sports/${sportSlug}/leagues/${league.slug}/seasons`)
+						}}
 						renderRowActions={(league) => (
 							<>
 								<DropdownMenuItem asChild>
