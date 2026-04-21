@@ -727,6 +727,14 @@ func (r *PostgresRepository) ListLeagueSeasons(ctx context.Context, sportSlug, l
 }
 
 func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
+	return r.getLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug, true)
+}
+
+func (r *PostgresRepository) GetAdminLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
+	return r.getLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug, false)
+}
+
+func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string, publicOnly bool) (domain.SeasonDetail, error) {
 	var (
 		leagueID               int64
 		sportNamesRaw          []byte
@@ -737,12 +745,15 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 		leagueUpdatedAt        time.Time
 	)
 
-	err := r.pool.QueryRow(ctx, `
+	leagueQuery := `
 		SELECT l.id, s.name, l.name, l.calendar_description, l.data_source_note, l.notes, GREATEST(s.updated_at, l.updated_at)
 		FROM leagues l
 		JOIN sports s ON s.id = l.sport_id
-		WHERE s.slug = $1 AND l.slug = $2 AND l.show = TRUE
-	`, sportSlug, leagueSlug).Scan(
+		WHERE s.slug = $1 AND l.slug = $2`
+	if publicOnly {
+		leagueQuery += ` AND l.show = TRUE`
+	}
+	err := r.pool.QueryRow(ctx, leagueQuery, sportSlug, leagueSlug).Scan(
 		&leagueID,
 		&sportNamesRaw,
 		&leagueNamesRaw,
@@ -767,11 +778,14 @@ func (r *PostgresRepository) GetLeagueSeason(ctx context.Context, sportSlug, lea
 	}
 
 	var selected seasonRecord
-	err = r.pool.QueryRow(ctx, `
+	seasonQuery := `
 		SELECT id, slug, label, default_match_duration_minutes, updated_at
 		FROM seasons
-		WHERE league_id = $1 AND slug = $2 AND show = TRUE
-	`, leagueID, seasonSlug).Scan(
+		WHERE league_id = $1 AND slug = $2`
+	if publicOnly {
+		seasonQuery += ` AND show = TRUE`
+	}
+	err = r.pool.QueryRow(ctx, seasonQuery, leagueID, seasonSlug).Scan(
 		&selected.id,
 		&selected.slug,
 		&selected.label,
@@ -988,7 +1002,6 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			}
 			storedTeamIDs = append(storedTeamIDs, storedTeamID)
 		}
-
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO matches (
 				season_id,

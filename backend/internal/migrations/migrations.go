@@ -276,7 +276,6 @@ func inspectSchemaState(ctx context.Context, tx pgx.Tx) (schemaState, error) {
 	if err != nil {
 		return schemaState{}, err
 	}
-
 	return schemaState{
 		hasCoreTables: hasCoreTables,
 		hasUsersTable: hasUsersTable,

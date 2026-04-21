@@ -59,7 +59,6 @@ export function EditSeasonDialog({ season, open, onOpenChange, onSaved }: EditSe
 		setError(null)
 		try {
 			await api.updateSeason(token, season.sportSlug, season.leagueSlug, season.slug, {
-				slug: form.slug,
 				label: form.label,
 				show: form.show,
 				startYear: Number(form.startYear),
@@ -76,15 +75,17 @@ export function EditSeasonDialog({ season, open, onOpenChange, onSaved }: EditSe
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange} title="Edit season" description="Update the local season slug, label, year range, and default match duration.">
+		<Dialog open={open} onOpenChange={onOpenChange} title="Edit season" description="Season slug follows TheSportsDB season value and cannot be changed after creation.">
 			<form className="space-y-5" onSubmit={handleSubmit}>
 				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-					<div><Label htmlFor="edit-season-slug">Slug</Label><Input id="edit-season-slug" required value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} /></div>
+					<div><Label htmlFor="edit-season-slug">Slug</Label><Input id="edit-season-slug" readOnly value={form.slug} /></div>
 					<div><Label htmlFor="edit-season-label">Label</Label><Input id="edit-season-label" required value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} /></div>
 					<div><Label htmlFor="edit-season-start-year">Start year</Label><Input id="edit-season-start-year" required value={form.startYear} onChange={(event) => setForm((current) => ({ ...current, startYear: event.target.value }))} /></div>
 					<div><Label htmlFor="edit-season-end-year">End year</Label><Input id="edit-season-end-year" required value={form.endYear} onChange={(event) => setForm((current) => ({ ...current, endYear: event.target.value }))} /></div>
 				</div>
-				<div><Label htmlFor="edit-season-duration">Duration minutes</Label><Input id="edit-season-duration" required value={form.defaultMatchDurationMinutes} onChange={(event) => setForm((current) => ({ ...current, defaultMatchDurationMinutes: event.target.value }))} /></div>
+				<div className="grid gap-4 md:grid-cols-2">
+					<div><Label htmlFor="edit-season-duration">Duration minutes</Label><Input id="edit-season-duration" required value={form.defaultMatchDurationMinutes} onChange={(event) => setForm((current) => ({ ...current, defaultMatchDurationMinutes: event.target.value }))} /></div>
+				</div>
 				<div className="flex items-start gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-3">
 					<Checkbox id="edit-season-show" checked={form.show} onCheckedChange={(checked) => setForm((current) => ({ ...current, show: checked === true }))} />
 					<div className="space-y-1">

@@ -117,6 +117,9 @@ export const api = {
 	refreshSeasonSchedule(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string) {
 		return request(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}/refresh`, { method: 'POST', token })
 	},
+	getAdminSeasonDetail(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string) {
+		return request<SeasonDetailResponse>(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}`, { token })
+	},
 	getSeasonDetail(sportSlug: string, leagueSlug: string, seasonSlug: string) {
 		return request<SeasonDetailResponse>(`/api/${sportSlug}/${leagueSlug}/${seasonSlug}`)
 	},

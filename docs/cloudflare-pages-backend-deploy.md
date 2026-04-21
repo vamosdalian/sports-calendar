@@ -120,12 +120,12 @@ Your server (Go API + PostgreSQL)
 
 ### 2. 准备 PostgreSQL
 
-数据库至少需要初始化 `database/init/001_postgres_init.sql`。
+数据库不需要再手工执行仓库里的初始化 SQL。
 
 后端启动时会自动执行程序内 migration，并使用 `schema_migrations` 记录版本。
-如果数据库是由旧版初始化 SQL 建出来的，升级到新版本后第一次启动会自动回填 baseline 并补齐缺失 migration。
+如果数据库是由旧版表结构建出来的，升级到新版本后第一次启动会自动回填 baseline 并补齐缺失 migration。
 
-如果你用容器方式，可以先把 PostgreSQL 起起来，再导入初始化 SQL。
+如果你用容器方式，只需要先把 PostgreSQL 起起来即可。
 
 示例思路：
 
@@ -137,11 +137,6 @@ docker run -d \
   -e POSTGRES_PASSWORD=change-me \
   -p 5432:5432 \
   postgres:16
-
-docker exec -i sports-calendar-postgres psql \
-  -U sports_calendar \
-  -d sports_calendar \
-  < database/init/001_postgres_init.sql
 ```
 
 ### 3. 准备后端配置文件
@@ -195,7 +190,6 @@ docker run -d \
   -e POSTGRES_USER=sports_calendar \
   -e POSTGRES_PASSWORD=change-me \
   -v sports-calendar-postgres-data:/var/lib/postgresql/data \
-  -v /opt/sports-calendar/database/init:/docker-entrypoint-initdb.d:ro \
   postgres:16
 
 docker run -d \
@@ -213,7 +207,7 @@ docker run -d \
 1. API 只绑定在宿主机 `127.0.0.1:8080`。
 2. PostgreSQL 不暴露公网端口。
 3. API 通过 Docker 网络里的 `sports-calendar-postgres:5432` 访问数据库。
-4. PostgreSQL 初始化 SQL 会在空数据目录首次启动时自动执行。
+4. API 首次连接数据库时会自动执行程序内 migration。
 
 所以如果你走容器方案，配置文件里的数据库地址应该写成：
 

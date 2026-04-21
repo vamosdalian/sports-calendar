@@ -59,9 +59,12 @@ export function MatchesPage() {
 	const [deleteError, setDeleteError] = useState<string | null>(null)
 
 	const loadSeasonDetail = useCallback(async () => {
-		const response = await api.getSeasonDetail(sportSlug, leagueSlug, seasonSlug)
+		if (!token) {
+			return
+		}
+		const response = await api.getAdminSeasonDetail(token, sportSlug, leagueSlug, seasonSlug)
 		setDetail(response)
-	}, [leagueSlug, seasonSlug, sportSlug])
+	}, [leagueSlug, seasonSlug, sportSlug, token])
 
 	useEffect(() => {
 		if (!sportSlug || !leagueSlug || !seasonSlug) {

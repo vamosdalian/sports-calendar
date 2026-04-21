@@ -246,6 +246,47 @@ func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlu
 	}, nil
 }
 
+func (r *fakeRepository) GetAdminLeagueSeason(_ context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	league, exists := r.leaguesBySlug[leagueSlug]
+	if !exists || league.SportSlug != sportSlug || seasonSlug != "2026" {
+		return domain.SeasonDetail{}, domain.ErrNotFound
+	}
+	season, exists := r.seasonsByKey[seasonKey(sportSlug, leagueSlug, seasonSlug)]
+	if !exists {
+		return domain.SeasonDetail{}, domain.ErrNotFound
+	}
+	matches := []domain.Match{
+		{
+			ID:       "csl-2026-r1-guoan-shenhua",
+			Round:    domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
+			StartsAt: "2026-03-14T11:35:00Z",
+			Status:   "scheduled",
+			Venue:    domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
+			City:     domain.LocalizedText{"en": "Beijing", "zh": "北京"},
+			Country:  domain.LocalizedText{"en": "China", "zh": "中国"},
+			HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
+			AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
+		},
+	}
+	matches = append(matches, r.manualMatches[seasonKey(sportSlug, leagueSlug, seasonSlug)]...)
+	return domain.SeasonDetail{
+		SportSlug:                   "football",
+		SportNames:                  domain.LocalizedText{"en": "Football", "zh": "足球"},
+		LeagueSlug:                  leagueSlug,
+		LeagueNames:                 league.Name,
+		SeasonSlug:                  season.Slug,
+		SeasonLabel:                 season.Label,
+		DefaultMatchDurationMinutes: season.DefaultMatchDurationMinutes,
+		CalendarDescription:         league.CalendarDescription,
+		DataSourceNote:              league.DataSourceNote,
+		Notes:                       league.Notes,
+		Matches:                     matches,
+		UpdatedAt:                   "2026-03-10T00:00:00Z",
+	}, nil
+}
+
 func (r *fakeRepository) CreateSport(_ context.Context, input domain.CreateSportInput) (domain.SportRecord, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -594,7 +635,6 @@ func (r *fakeRepository) UpdateSeason(_ context.Context, input domain.UpdateSeas
 		}
 		delete(r.seasonsByKey, key)
 	}
-	record.Slug = input.Slug
 	record.Label = input.Label
 	record.Show = input.Show
 	record.StartYear = input.StartYear
@@ -870,6 +910,25 @@ func TestHiddenSeasonReturnsNotFoundPublicly(t *testing.T) {
 	router.ServeHTTP(detailRecorder, detailRequest)
 	if detailRecorder.Code != http.StatusNotFound {
 		t.Fatalf("unexpected season detail status: %d body=%s", detailRecorder.Code, detailRecorder.Body.String())
+	}
+}
+
+func TestHiddenSeasonReturnsDetailForAdmin(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	repo.mu.Lock()
+	season := repo.seasonsByKey[seasonKey("football", "csl", "2026")]
+	season.Show = false
+	repo.seasonsByKey[seasonKey("football", "csl", "2026")] = season
+	repo.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/football/csl/seasons/2026", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected admin season detail status: %d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 
