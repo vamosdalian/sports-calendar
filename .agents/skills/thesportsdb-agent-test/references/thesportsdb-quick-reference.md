@@ -90,6 +90,13 @@ X-API-KEY: <premium key>
 - Admin integration routes: `../../../backend/internal/server/admin_catalog.go`
 - Local config source: `../../../backend/config/config.local.yaml`
 
+
+## v2 Venue Lookup (Skill Test)
+
+- Endpoint: `/api/v2/json/lookup/venue/{idVenue}`
+- Auth: `X-API-KEY` header (test key: `125954` for skill testing)
+- Example: `curl -H "X-API-KEY: 125954" https://www.thesportsdb.com/api/v2/json/lookup/venue/12345`
+
 ## Repo v2 Endpoint Set
 
 These are the endpoints the repository effectively depends on today:
