@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { useAuth } from '@/components/use-auth'
 import { LocalizedFieldsEditor } from '@/components/localized-fields-editor'
 import { Button } from '@/components/ui/button'
@@ -8,7 +9,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
-import { entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
+import { entriesFromLocalizedText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
 import type { LeagueItem } from '@/types'
 
 type EditLeagueDialogProps = {
@@ -29,25 +30,22 @@ type LeagueFormState = {
 	notesEntries: LocalizedFieldEntry[]
 }
 
-function toEntries(value: Record<string, string>) {
-	return Object.entries(value).map(([locale, text]) => ({ locale, value: text }))
-}
-
-function mapLeagueToForm(league: LeagueItem): LeagueFormState {
+function mapLeagueToForm(league: LeagueItem, locales: Parameters<typeof entriesFromLocalizedText>[1]): LeagueFormState {
 	return {
 		id: String(league.id),
 		slug: league.slug,
 		show: league.show,
 		syncInterval: league.syncInterval,
-		nameEntries: toEntries(league.name),
-		calendarDescriptionEntries: toEntries(league.calendarDescription),
-		dataSourceNoteEntries: toEntries(league.dataSourceNote),
-		notesEntries: toEntries(league.notes),
+		nameEntries: entriesFromLocalizedText(league.name, locales),
+		calendarDescriptionEntries: entriesFromLocalizedText(league.calendarDescription, locales),
+		dataSourceNoteEntries: entriesFromLocalizedText(league.dataSourceNote, locales),
+		notesEntries: entriesFromLocalizedText(league.notes, locales),
 	}
 }
 
 export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLeagueDialogProps) {
 	const { token } = useAuth()
+	const { locales, loading: localesLoading, error: localesError } = useAdminLocales()
 	const [form, setForm] = useState<LeagueFormState>({
 		id: '',
 		slug: '',
@@ -65,9 +63,9 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 		if (!open || !league) {
 			return
 		}
-		setForm(mapLeagueToForm(league))
+		setForm(mapLeagueToForm(league, locales))
 		setError(null)
-	}, [league, open])
+	}, [league, locales, open])
 
 	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -110,14 +108,14 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 						<p className="text-sm text-muted">Turn this on only when the league should be visible to frontend users.</p>
 					</div>
 				</div>
-				<LocalizedFieldsEditor idPrefix="edit-league-name" label="Localized name" entries={form.nameEntries} onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))} required />
-				<LocalizedFieldsEditor idPrefix="edit-league-calendar-description" label="Calendar description" entries={form.calendarDescriptionEntries} onChange={(calendarDescriptionEntries) => setForm((current) => ({ ...current, calendarDescriptionEntries }))} />
-				<LocalizedFieldsEditor idPrefix="edit-league-data-source-note" label="Data source note" entries={form.dataSourceNoteEntries} onChange={(dataSourceNoteEntries) => setForm((current) => ({ ...current, dataSourceNoteEntries }))} />
-				<LocalizedFieldsEditor idPrefix="edit-league-notes" label="Notes" entries={form.notesEntries} onChange={(notesEntries) => setForm((current) => ({ ...current, notesEntries }))} />
+				<LocalizedFieldsEditor idPrefix="edit-league-name" label="Localized name" entries={form.nameEntries} localeOptions={locales} onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))} loading={localesLoading} error={localesError} required />
+				<LocalizedFieldsEditor idPrefix="edit-league-calendar-description" label="Calendar description" entries={form.calendarDescriptionEntries} localeOptions={locales} onChange={(calendarDescriptionEntries) => setForm((current) => ({ ...current, calendarDescriptionEntries }))} loading={localesLoading} error={localesError} />
+				<LocalizedFieldsEditor idPrefix="edit-league-data-source-note" label="Data source note" entries={form.dataSourceNoteEntries} localeOptions={locales} onChange={(dataSourceNoteEntries) => setForm((current) => ({ ...current, dataSourceNoteEntries }))} loading={localesLoading} error={localesError} />
+				<LocalizedFieldsEditor idPrefix="edit-league-notes" label="Notes" entries={form.notesEntries} localeOptions={locales} onChange={(notesEntries) => setForm((current) => ({ ...current, notesEntries }))} loading={localesLoading} error={localesError} />
 				{error ? <p className="text-sm text-danger">{error}</p> : null}
 				<div className="flex justify-end gap-3">
 					<Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>
-					<Button disabled={pending} type="submit">{pending ? 'Saving...' : 'Save league'}</Button>
+					<Button disabled={pending || localesLoading || !!localesError || locales.length === 0} type="submit">{pending ? 'Saving...' : 'Save league'}</Button>
 				</div>
 			</form>
 		</Dialog>

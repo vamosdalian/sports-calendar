@@ -28,6 +28,11 @@ func TestBaselineVersions(t *testing.T) {
 			state: schemaState{hasCoreTables: true, hasShowFlags: true},
 			want:  []int64{1, 3},
 		},
+		{
+			name:  "admin locales table present",
+			state: schemaState{hasCoreTables: true, hasUsersTable: true, hasShowFlags: true, hasAdminLocales: true},
+			want:  []int64{1, 2, 3, 4},
+		},
 	}
 
 	for _, test := range tests {

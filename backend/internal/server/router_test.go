@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +29,7 @@ type fakeRepository struct {
 	nextSeasonID  int64
 	nextUserID    int64
 	sportsBySlug  map[string]domain.SportRecord
+	adminLocales  map[string]domain.AdminLocaleItem
 	leaguesBySlug map[string]domain.LeagueRecord
 	seasonsByKey  map[string]domain.SeasonRecord
 	teamsByLeague map[string][]domain.AdminTeamItem
@@ -59,6 +61,10 @@ func newFakeRepository() *fakeRepository {
 				CreatedAt: now,
 				UpdatedAt: now,
 			},
+		},
+		adminLocales: map[string]domain.AdminLocaleItem{
+			"en": {Code: "en", Label: "English"},
+			"zh": {Code: "zh", Label: "中文"},
 		},
 		leaguesBySlug: map[string]domain.LeagueRecord{
 			"csl": {
@@ -99,6 +105,19 @@ func newFakeRepository() *fakeRepository {
 		},
 		usersByEmail: map[string]fakeUser{},
 	}
+}
+
+func (r *fakeRepository) ListAdminLocales(_ context.Context) (domain.AdminLocalesResponse, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	items := make([]domain.AdminLocaleItem, 0, len(r.adminLocales))
+	for _, item := range r.adminLocales {
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Code < items[j].Code
+	})
+	return domain.AdminLocalesResponse{Items: items}, nil
 }
 
 func testRouter(t *testing.T) (*gin.Engine, *fakeRepository, *auth.Manager) {
@@ -415,6 +434,39 @@ func (r *fakeRepository) CreateUser(_ context.Context, email, passwordHash strin
 	r.nextUserID++
 	r.usersByEmail[email] = fakeUser{record: record, passwordHash: passwordHash}
 	return record, nil
+}
+
+func (r *fakeRepository) CreateAdminLocale(_ context.Context, input domain.CreateAdminLocaleInput) (domain.AdminLocaleItem, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.adminLocales[input.Code]; exists {
+		return domain.AdminLocaleItem{}, domain.ErrConflict
+	}
+	item := domain.AdminLocaleItem{Code: input.Code, Label: input.Label}
+	r.adminLocales[input.Code] = item
+	return item, nil
+}
+
+func (r *fakeRepository) UpdateAdminLocale(_ context.Context, input domain.UpdateAdminLocaleInput) (domain.AdminLocaleItem, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	item, exists := r.adminLocales[input.Code]
+	if !exists {
+		return domain.AdminLocaleItem{}, domain.ErrNotFound
+	}
+	item.Label = input.Label
+	r.adminLocales[input.Code] = item
+	return item, nil
+}
+
+func (r *fakeRepository) DeleteAdminLocale(_ context.Context, code string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.adminLocales[code]; !exists {
+		return domain.ErrNotFound
+	}
+	delete(r.adminLocales, code)
+	return nil
 }
 
 func (r *fakeRepository) GetUserByEmail(_ context.Context, email string) (domain.UserRecord, string, error) {
@@ -1082,6 +1134,103 @@ func TestCreateSport(t *testing.T) {
 	}
 	if payload["id"] != float64(2) {
 		t.Fatalf("expected created sport id=2, got %#v", payload["id"])
+	}
+}
+
+func TestListAdminLocales(t *testing.T) {
+	router, _, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/locales", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload domain.AdminLocalesResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if len(payload.Items) != 2 {
+		t.Fatalf("expected 2 locale items, got %#v", payload.Items)
+	}
+	if payload.Items[0].Code != "en" || payload.Items[1].Code != "zh" {
+		t.Fatalf("unexpected locale order: %#v", payload.Items)
+	}
+}
+
+func TestCreateAdminLocale(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/locales", bytes.NewBufferString(`{"code":"ja","label":"日本語"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if repo.adminLocales["ja"].Label != "日本語" {
+		t.Fatalf("expected stored locale, got %#v", repo.adminLocales["ja"])
+	}
+}
+
+func TestCreateAdminLocaleConflict(t *testing.T) {
+	router, _, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/locales", bytes.NewBufferString(`{"code":"en","label":"English"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestUpdateAdminLocale(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/locales/zh", bytes.NewBufferString(`{"label":"简体中文"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if repo.adminLocales["zh"].Label != "简体中文" {
+		t.Fatalf("expected updated locale, got %#v", repo.adminLocales["zh"])
+	}
+}
+
+func TestDeleteAdminLocale(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/locales/zh", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if _, exists := repo.adminLocales["zh"]; exists {
+		t.Fatalf("expected locale zh to be deleted")
 	}
 }
 

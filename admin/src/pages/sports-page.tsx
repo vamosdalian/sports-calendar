@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { AddSportDialog } from '@/components/add-sport-dialog'
 import { CatalogDataTable } from '@/components/catalog-data-table'
@@ -15,6 +15,7 @@ import { pickLocalizedPreview } from '@/lib/localized-fields'
 import type { SportItem } from '@/types'
 
 export function SportsPage() {
+	const navigate = useNavigate()
 	const { token } = useAuth()
 	const { showToast } = useToast()
 	const [sports, setSports] = useState<SportItem[]>([])
@@ -95,6 +96,9 @@ export function SportsPage() {
 						getSearchText={(sport) => `${sport.slug} ${pickLocalizedPreview(sport.name)}`}
 						searchPlaceholder="Filter sports..."
 						emptyMessage="No sports found."
+						onRowClick={(sport) => {
+							void navigate(`/sports/${sport.slug}/leagues`)
+						}}
 						renderRowActions={(sport) => (
 							<>
 								<DropdownMenuItem asChild>

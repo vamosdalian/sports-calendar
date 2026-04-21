@@ -1,5 +1,14 @@
 export type LocalizedText = Record<string, string>
 
+export type AdminLocaleItem = {
+	code: string
+	label: string
+}
+
+export type AdminLocalesResponse = {
+	items: AdminLocaleItem[]
+}
+
 export type AuthTokenResponse = {
 	token: string
 	email: string

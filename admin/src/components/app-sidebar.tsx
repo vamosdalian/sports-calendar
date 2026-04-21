@@ -1,6 +1,6 @@
 "use client"
 
-import { CalendarRangeIcon, ChartNoAxesCombinedIcon, FlagIcon, LogOutIcon, ShieldCheckIcon } from "lucide-react"
+import { ChartNoAxesCombinedIcon, FlagIcon, LanguagesIcon, LogOutIcon, ShieldCheckIcon } from "lucide-react"
 import { Link, NavLink, useLocation } from "react-router-dom"
 
 import { useAuth } from "@/components/use-auth"
@@ -25,6 +25,12 @@ const navItems = [
     url: "/",
     icon: ChartNoAxesCombinedIcon,
     match: (pathname: string) => pathname === "/",
+  },
+  {
+    title: "Locales",
+    url: "/locales",
+    icon: LanguagesIcon,
+    match: (pathname: string) => pathname.startsWith("/locales"),
   },
   {
     title: "Sports",
@@ -73,20 +79,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup className="mt-auto">
-          <SidebarGroupLabel>Flow</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="rounded-lg border bg-muted/40 p-3 text-sm group-data-[collapsible=icon]:hidden">
-              <div className="flex items-center gap-2 font-medium text-foreground">
-                <CalendarRangeIcon className="size-4" />
-                <span>Catalog sequence</span>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Sports, then leagues, then seasons and fixture inspection.
-              </p>
-            </div>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
