@@ -88,15 +88,20 @@ If `backend/config/config.local.yaml` contains `theSportsDB.apiKey`, treat that 
 
 1. Identify the target object.
    Map the request to one of: sport, league, team, player, venue, event, season, standings, TV, highlights.
+   
+   **New: v2 venue lookup is supported.**
+   - Endpoint: `/api/v2/json/lookup/venue/{idVenue}`
+   - Auth: `X-API-KEY` header (test key: `125954` for skill testing)
+   - Example: `curl -H "X-API-KEY: 125954" https://www.thesportsdb.com/api/v2/json/lookup/venue/12345`
 
 2. Decide whether the task is documentation-only or needs a live check.
    If the user wants behavior, freshness, or actual payload confirmation, do a live check. Otherwise stay on docs and local OpenAPI.
 
 3. Choose the API version.
-   Use v1 with key `123` for public smoke tests. Use v2 only when premium access is available or specifically requested.
+   Use v1 with key `123` for public smoke tests. Use v2 for venue lookup (with test key `125954` for skill testing), or when premium access is available or specifically requested.
 
 4. Prefer the smallest endpoint that answers the question.
-   Search endpoints are for finding IDs. Lookup endpoints are for details by ID. Schedule endpoints are for upcoming or past events. Avoid broad list endpoints unless the user asked for a catalog.
+   Search endpoints are for finding IDs. Lookup endpoints are for details by ID. Schedule endpoints are for upcoming or past events. Venue lookup is supported via v2 `/lookup/venue/{idVenue}`. Avoid broad list endpoints unless the user asked for a catalog.
 
 5. If IDs are unknown, search first, then lookup.
    Example flow: `searchteams` or `search_all_leagues` to discover IDs, then `lookupteam` or `lookupleague` for details.
@@ -189,6 +194,7 @@ Prefer concise, reproducible outputs:
 
 - Summarize how to authenticate against TheSportsDB free API.
 - Test a live TheSportsDB v1 league lookup for league `4328`.
+- Test a live TheSportsDB v2 venue lookup for venue `12345` (use test key `125954`).
 - Validate the premium key from `backend/config/config.local.yaml` against v2.
 - Smoke test the repo's v2 league and season flow for league `4328`.
 - Find the right endpoint for next events in a league.
