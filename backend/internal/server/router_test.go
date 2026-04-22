@@ -37,10 +37,11 @@ type fakeRepository struct {
 	manualMatches map[string][]domain.Match
 	seasonMatches map[string]int
 	usersByEmail  map[string]fakeUser
-	syncedTargets []domain.LeagueSyncTarget
+	enqueuedTargets []domain.LeagueSyncTarget
+	queueSnapshot   domain.RefreshQueueSnapshot
 }
 
-type fakeSyncRunner struct {
+type fakeRefreshExecutor struct {
 	repo *fakeRepository
 }
 
@@ -145,7 +146,7 @@ func testRouter(t *testing.T) (*gin.Engine, *fakeRepository, *auth.Manager) {
 	logger.SetOutput(io.Discard)
 	repo := newFakeRepository()
 	svc := service.New(repo)
-	svc.SetSyncRunner(&fakeSyncRunner{repo: repo})
+	svc.SetRefreshExecutor(&fakeRefreshExecutor{repo: repo})
 	manager, err := auth.NewManager("test-secret", 30*time.Minute)
 	if err != nil {
 		t.Fatalf("create test token manager: %v", err)
@@ -175,13 +176,28 @@ func (r *fakeRepository) GetSeasonSyncTarget(_ context.Context, sportSlug, leagu
 	}, nil
 }
 
-func (r *fakeSyncRunner) SyncLeague(_ context.Context, target domain.LeagueSyncTarget) error {
+func (r *fakeRefreshExecutor) Enqueue(target domain.LeagueSyncTarget, source domain.RefreshRequestSource) domain.RefreshEnqueueResponse {
 	r.repo.mu.Lock()
 	defer r.repo.mu.Unlock()
-	r.repo.syncedTargets = append(r.repo.syncedTargets, target)
-	key := seasonKey("football", target.LeagueSlug, target.SeasonSlug)
-	r.repo.seasonMatches[key] = 2
-	return nil
+	r.repo.enqueuedTargets = append(r.repo.enqueuedTargets, target)
+	r.repo.queueSnapshot = domain.RefreshQueueSnapshot{
+		Queued: []domain.RefreshTask{{
+			LeagueID:    target.LeagueID,
+			LeagueSlug:  target.LeagueSlug,
+			SeasonID:    target.SeasonID,
+			SeasonSlug:  target.SeasonSlug,
+			RequestedAt: "2026-03-10T00:00:00Z",
+			Source:      source,
+		}},
+		Stats: domain.RefreshQueueStats{QueueLength: 1},
+	}
+	return domain.RefreshEnqueueResponse{Status: domain.RefreshEnqueueStatusQueued}
+}
+
+func (r *fakeRefreshExecutor) Snapshot() domain.RefreshQueueSnapshot {
+	r.repo.mu.Lock()
+	defer r.repo.mu.Unlock()
+	return r.repo.queueSnapshot
 }
 
 func (r *fakeRepository) ListLeagues(_ context.Context) ([]domain.SportDirectoryItem, string, error) {
@@ -1772,17 +1788,25 @@ func TestRefreshSeasonNow(t *testing.T) {
 
 	router.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusNoContent {
+	if recorder.Code != http.StatusAccepted {
 		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload["status"] != "queued" {
+		t.Fatalf("expected queued status, got %#v", payload["status"])
 	}
 
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
-	if len(repo.syncedTargets) != 1 {
-		t.Fatalf("expected one synced target, got %d", len(repo.syncedTargets))
+	if len(repo.enqueuedTargets) != 1 {
+		t.Fatalf("expected one enqueued target, got %d", len(repo.enqueuedTargets))
 	}
-	if repo.syncedTargets[0].SeasonSlug != "2026" {
-		t.Fatalf("expected synced season 2026, got %s", repo.syncedTargets[0].SeasonSlug)
+	if repo.enqueuedTargets[0].SeasonSlug != "2026" {
+		t.Fatalf("expected enqueued season 2026, got %s", repo.enqueuedTargets[0].SeasonSlug)
 	}
 }
 
@@ -1796,6 +1820,57 @@ func TestRefreshSeasonNowNotFound(t *testing.T) {
 
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestGetRefreshQueue(t *testing.T) {
+	router, repo, manager := testRouter(t)
+	repo.mu.Lock()
+	repo.queueSnapshot = domain.RefreshQueueSnapshot{
+		Running: &domain.RunningRefreshTask{
+			RefreshTask: domain.RefreshTask{
+				LeagueID:    1001,
+				LeagueSlug:  "csl",
+				SeasonID:    1,
+				SeasonSlug:  "2026",
+				RequestedAt: "2026-03-10T00:00:00Z",
+				Source:      domain.RefreshRequestSourceManual,
+			},
+			StartedAt: "2026-03-10T00:00:10Z",
+			Status:    domain.RefreshTaskStatusRunning,
+		},
+		Queued: []domain.RefreshTask{{
+			LeagueID:    1001,
+			LeagueSlug:  "csl",
+			SeasonID:    1,
+			SeasonSlug:  "2026",
+			RequestedAt: "2026-03-10T00:01:00Z",
+			Source:      domain.RefreshRequestSourceCron,
+		}},
+		Stats: domain.RefreshQueueStats{QueueLength: 1},
+	}
+	repo.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/refresh-queue", nil)
+	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload["running"] == nil {
+		t.Fatalf("expected running task in payload")
+	}
+	stats, ok := payload["stats"].(map[string]any)
+	if !ok || stats["queueLength"] != float64(1) {
+		t.Fatalf("expected queueLength 1, got %#v", payload["stats"])
 	}
 }
 

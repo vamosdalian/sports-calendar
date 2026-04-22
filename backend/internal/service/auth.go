@@ -141,6 +141,13 @@ func (s *Service) ListAdminVenues(ctx context.Context) (domain.AdminVenuesRespon
 	return s.repo.ListAdminVenues(ctx)
 }
 
+func (s *Service) GetRefreshQueueSnapshot(_ context.Context) (domain.RefreshQueueSnapshot, error) {
+	if s.executor == nil {
+		return domain.RefreshQueueSnapshot{}, invalidArgument("refresh executor is not configured")
+	}
+	return s.executor.Snapshot(), nil
+}
+
 func (s *Service) GetAdminLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
 	sportSlug = normalizeSlug(sportSlug)
 	leagueSlug = normalizeSlug(leagueSlug)

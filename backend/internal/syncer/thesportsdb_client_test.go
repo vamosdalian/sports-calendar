@@ -41,11 +41,12 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 						"idEvent":      "2267073",
 						"idHomeTeam":   "133602",
 						"idAwayTeam":   "134301",
-						"idVenue":      "9001",
 						"strHomeTeam":  "Liverpool",
 						"strAwayTeam":  "Bournemouth",
 						"intRound":     "1",
 						"strTimestamp": "2025-08-15T19:00:00",
+						"strVenue":     "Anfield",
+						"strCountry":   "England",
 						"strStatus":    "Match Finished",
 						"strPostponed": "no",
 					},
@@ -53,24 +54,52 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 						"idEvent":      "2267999",
 						"idHomeTeam":   "133602",
 						"idAwayTeam":   "134301",
-						"idVenue":      "9001",
 						"strHomeTeam":  "Liverpool",
 						"strAwayTeam":  "Bournemouth",
 						"intRound":     "2",
 						"dateEvent":    "2025-08-22",
 						"strTime":      "15:00:00",
+						"strVenue":     "Anfield",
+						"strCountry":   "England",
 						"strStatus":    "Not Started",
 						"strPostponed": "yes",
 					},
 				},
 			})
-		case "/api/v2/json/lookup/venue/9001":
+		case "/api/v2/json/lookup/event/2267073":
 			_ = json.NewEncoder(writer).Encode(map[string]any{
 				"lookup": []map[string]any{{
-					"idVenue":    "9001",
-					"strVenue":   "Anfield",
-					"strCity":    "Liverpool",
-					"strCountry": "England",
+					"idEvent":      "2267073",
+					"idHomeTeam":   "133602",
+					"idAwayTeam":   "134301",
+					"idVenue":      "9001",
+					"intRound":     "1",
+					"strTimestamp": "2025-08-15T19:00:00",
+					"strVenue":     "Anfield",
+					"strCity":      "Liverpool",
+					"strCountry":   "England",
+					"strStatus":    "Match Finished",
+					"strPostponed": "no",
+					"strHomeTeam":  "Liverpool",
+					"strAwayTeam":  "Bournemouth",
+				}},
+			})
+		case "/api/v2/json/lookup/event/2267999":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"lookup": []map[string]any{{
+					"idEvent":     "2267999",
+					"idHomeTeam":  "133602",
+					"idAwayTeam":  "134301",
+					"idVenue":     "9001",
+					"intRound":    "2",
+					"dateEvent":   "2025-08-22",
+					"strTime":     "15:00:00",
+					"strVenue":    "Anfield",
+					"strCountry":  "England",
+					"strStatus":   "Not Started",
+					"strPostponed":"yes",
+					"strHomeTeam": "Liverpool",
+					"strAwayTeam": "Bournemouth",
 				}},
 			})
 		default:
@@ -79,7 +108,7 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewTheSportsDBClient(server.URL, "test-key", 5*time.Second)
+	client, err := NewTheSportsDBClient(server.URL, "test-key", 5*time.Second, 10)
 	if err != nil {
 		t.Fatalf("create client: %v", err)
 	}

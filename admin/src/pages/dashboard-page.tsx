@@ -5,16 +5,24 @@ import {
 	CheckCircle2,
 	Database,
 	Flag,
+	LoaderCircle,
+	PlayCircle,
 	RefreshCw,
 	ShieldCheck,
 	TableProperties,
+	TimerReset,
+	TriangleAlert,
 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { useAuth } from '@/components/use-auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { api } from '@/lib/api'
+import type { RecentRefreshTask, RefreshQueueSnapshot } from '@/types'
 
 const metrics = [
 	{
@@ -90,7 +98,74 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
 	return 'default'
 }
 
+function refreshTaskStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+	if (status === 'running') {
+		return 'outline'
+	}
+	if (status === 'succeeded') {
+		return 'secondary'
+	}
+	if (status === 'failed') {
+		return 'destructive'
+	}
+	return 'default'
+}
+
+function formatTaskLabel(leagueSlug: string, seasonSlug: string) {
+	return `${leagueSlug} / ${seasonSlug}`
+}
+
+function formatRefreshSource(source: string) {
+	return source === 'cron' ? 'Cron' : 'Manual'
+}
+
+function renderRecentSummary(task: RecentRefreshTask) {
+	if (task.status === 'failed' && task.error) {
+		return task.error
+	}
+	return `Finished ${new Date(task.finishedAt).toLocaleString()}`
+}
+
 export function DashboardPage() {
+	const { token } = useAuth()
+	const [queue, setQueue] = useState<RefreshQueueSnapshot | null>(null)
+	const [queueError, setQueueError] = useState<string | null>(null)
+
+	const loadQueue = useCallback(async () => {
+		if (!token) {
+			return
+		}
+		const response = await api.getRefreshQueue(token)
+		setQueue(response)
+	}, [token])
+
+	useEffect(() => {
+		if (!token) {
+			return
+		}
+		let active = true
+		async function hydrate() {
+			try {
+				await loadQueue()
+				if (active) {
+					setQueueError(null)
+				}
+			} catch (caught) {
+				if (active) {
+					setQueueError(caught instanceof Error ? caught.message : 'load failed')
+				}
+			}
+		}
+		void hydrate()
+		const interval = window.setInterval(() => {
+			void hydrate()
+		}, 10000)
+		return () => {
+			active = false
+			window.clearInterval(interval)
+		}
+	}, [loadQueue, token])
+
 	return (
 		<div className="space-y-6">
 			<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -182,6 +257,102 @@ export function DashboardPage() {
 				</Card>
 
 				<div className="grid gap-4">
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between gap-3">
+								<div>
+									<CardTitle>Refresh queue</CardTitle>
+									<CardDescription>Current execution state for season refresh requests.</CardDescription>
+								</div>
+								<Button onClick={() => void loadQueue()} size="sm" type="button" variant="outline">
+									<RefreshCw />
+									<span>Reload</span>
+								</Button>
+							</div>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							{queueError ? <p className="text-sm text-danger">{queueError}</p> : null}
+							<div className="grid gap-3 sm:grid-cols-3">
+								<div className="rounded-lg border p-3">
+									<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Running</p>
+									<p className="mt-2 text-2xl font-semibold tabular-nums">{queue?.running ? '1' : '0'}</p>
+									<p className="mt-1 text-sm text-muted-foreground">{queue?.running ? formatTaskLabel(queue.running.leagueSlug, queue.running.seasonSlug) : 'No active refresh'}</p>
+								</div>
+								<div className="rounded-lg border p-3">
+									<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Queued</p>
+									<p className="mt-2 text-2xl font-semibold tabular-nums">{queue?.stats.queueLength ?? 0}</p>
+									<p className="mt-1 text-sm text-muted-foreground">{queue?.queued[0] ? formatTaskLabel(queue.queued[0].leagueSlug, queue.queued[0].seasonSlug) : 'Queue is empty'}</p>
+								</div>
+								<div className="rounded-lg border p-3">
+									<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Recent</p>
+									<p className="mt-2 text-2xl font-semibold tabular-nums">{queue?.recent.length ?? 0}</p>
+									<p className="mt-1 text-sm text-muted-foreground">{queue?.recent[0] ? queue.recent[0].status : 'No recent runs'}</p>
+								</div>
+							</div>
+							<div className="space-y-3">
+								<div className="rounded-lg border p-3">
+									<div className="flex items-center gap-2">
+										<PlayCircle className="size-4 text-primary" />
+										<p className="text-sm font-medium">Running task</p>
+									</div>
+									{queue?.running ? (
+										<div className="mt-3 space-y-2 text-sm">
+											<div className="flex items-center justify-between gap-3">
+												<p className="font-medium text-foreground">{formatTaskLabel(queue.running.leagueSlug, queue.running.seasonSlug)}</p>
+												<Badge variant={refreshTaskStatusVariant(queue.running.status)}>{queue.running.status}</Badge>
+											</div>
+											<p className="text-muted-foreground">Started {new Date(queue.running.startedAt).toLocaleString()} · {formatRefreshSource(queue.running.source)}</p>
+										</div>
+									) : (
+										<p className="mt-3 text-sm text-muted-foreground">No refresh is currently executing.</p>
+									)}
+								</div>
+								<div className="rounded-lg border p-3">
+									<div className="flex items-center gap-2">
+										<LoaderCircle className="size-4 text-primary" />
+										<p className="text-sm font-medium">Queued tasks</p>
+									</div>
+									{queue?.queued.length ? (
+										<div className="mt-3 space-y-2">
+											{queue.queued.slice(0, 3).map((task) => (
+												<div key={`${task.leagueId}-${task.seasonId}-${task.requestedAt}`} className="flex items-center justify-between gap-3 text-sm">
+													<div>
+														<p className="font-medium text-foreground">{formatTaskLabel(task.leagueSlug, task.seasonSlug)}</p>
+														<p className="text-muted-foreground">{formatRefreshSource(task.source)} · queued {new Date(task.requestedAt).toLocaleString()}</p>
+													</div>
+													<Badge variant="outline">Queued</Badge>
+												</div>
+											))}
+										</div>
+									) : (
+										<p className="mt-3 text-sm text-muted-foreground">No queued refresh requests.</p>
+									)}
+								</div>
+								<div className="rounded-lg border p-3">
+									<div className="flex items-center gap-2">
+										<TimerReset className="size-4 text-primary" />
+										<p className="text-sm font-medium">Recent results</p>
+									</div>
+									{queue?.recent.length ? (
+										<div className="mt-3 space-y-2">
+											{queue.recent.slice(0, 3).map((task) => (
+												<div key={`${task.leagueId}-${task.seasonId}-${task.finishedAt}`} className="flex items-start justify-between gap-3 text-sm">
+													<div>
+														<p className="font-medium text-foreground">{formatTaskLabel(task.leagueSlug, task.seasonSlug)}</p>
+														<p className="text-muted-foreground">{renderRecentSummary(task)}</p>
+													</div>
+													<Badge variant={refreshTaskStatusVariant(task.status)}>{task.status === 'failed' ? <TriangleAlert className="mr-1 size-3" /> : null}{task.status}</Badge>
+												</div>
+											))}
+										</div>
+									) : (
+										<p className="mt-3 text-sm text-muted-foreground">No completed refresh history yet.</p>
+									)}
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+
 					<Card>
 						<CardHeader>
 							<CardTitle>System status</CardTitle>

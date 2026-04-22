@@ -28,11 +28,11 @@ func (r *schedulerTestRunner) ListSyncTargets(_ context.Context) ([]domain.Leagu
 	return append([]domain.LeagueSyncTarget(nil), r.targets...), nil
 }
 
-func (r *schedulerTestRunner) SyncLeague(_ context.Context, target domain.LeagueSyncTarget) error {
+func (r *schedulerTestRunner) Enqueue(target domain.LeagueSyncTarget, _ domain.RefreshRequestSource) domain.RefreshEnqueueResponse {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.called = append(r.called, target)
-	return nil
+	return domain.RefreshEnqueueResponse{Status: domain.RefreshEnqueueStatusQueued}
 }
 
 func TestSchedulerRefreshReplacesTargets(t *testing.T) {
@@ -40,7 +40,7 @@ func TestSchedulerRefreshReplacesTargets(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(ioDiscard{})
 
-	scheduler, err := NewScheduler(logger, runner)
+	scheduler, err := NewScheduler(logger, runner, runner)
 	if err != nil {
 		t.Fatalf("create scheduler: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestSchedulerRefreshKeepsExistingTargetsOnError(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(ioDiscard{})
 
-	scheduler, err := NewScheduler(logger, runner)
+	scheduler, err := NewScheduler(logger, runner, runner)
 	if err != nil {
 		t.Fatalf("create scheduler: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestSchedulerStartDoesNotRunImmediateSync(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(ioDiscard{})
 
-	scheduler, err := NewScheduler(logger, runner)
+	scheduler, err := NewScheduler(logger, runner, runner)
 	if err != nil {
 		t.Fatalf("create scheduler: %v", err)
 	}

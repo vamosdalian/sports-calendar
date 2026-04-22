@@ -44,6 +44,7 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	admin.POST("/locales", handler.createAdminLocale)
 	admin.PUT("/locales/:code", handler.updateAdminLocale)
 	admin.DELETE("/locales/:code", handler.deleteAdminLocale)
+	admin.GET("/refresh-queue", handler.getRefreshQueue)
 	admin.GET("/sports", handler.listAdminSports)
 	admin.GET("/venues", handler.listAdminVenues)
 	admin.GET("/thesportsdb/sports", handler.listTheSportsDBSports)

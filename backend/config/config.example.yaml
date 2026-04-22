@@ -18,6 +18,9 @@ theSportsDB:
   apiKey: CHANGE_ME_THESPORTSDB_KEY
   timeoutSeconds: 15
 
+refreshExecutor:
+  qps: 1
+
 adminAuth:
   secret: CHANGE_ME_LONG_RANDOM_SECRET
   tokenTTLMinutes: 30

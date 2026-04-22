@@ -7,9 +7,9 @@ import (
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 )
 
-func (s *Service) RefreshSeasonNow(ctx context.Context, input domain.RefreshSeasonInput) error {
-	if s.runner == nil {
-		return invalidArgument("season sync runner is not configured")
+func (s *Service) RefreshSeasonNow(ctx context.Context, input domain.RefreshSeasonInput) (domain.RefreshEnqueueResponse, error) {
+	if s.executor == nil {
+		return domain.RefreshEnqueueResponse{}, invalidArgument("refresh executor is not configured")
 	}
 
 	input.SportSlug = normalizeSlug(input.SportSlug)
@@ -17,25 +17,21 @@ func (s *Service) RefreshSeasonNow(ctx context.Context, input domain.RefreshSeas
 	input.SeasonSlug = strings.TrimSpace(input.SeasonSlug)
 
 	if input.SportSlug == "" {
-		return invalidArgument("sportSlug is required")
+		return domain.RefreshEnqueueResponse{}, invalidArgument("sportSlug is required")
 	}
 	if input.LeagueSlug == "" {
-		return invalidArgument("leagueSlug is required")
+		return domain.RefreshEnqueueResponse{}, invalidArgument("leagueSlug is required")
 	}
 	if input.SeasonSlug == "" {
-		return invalidArgument("seasonSlug is required")
+		return domain.RefreshEnqueueResponse{}, invalidArgument("seasonSlug is required")
 	}
 
 	target, err := s.repo.GetSeasonSyncTarget(ctx, input.SportSlug, input.LeagueSlug, input.SeasonSlug)
 	if err != nil {
-		return err
+		return domain.RefreshEnqueueResponse{}, err
 	}
 
-	if err := s.runner.SyncLeague(ctx, target); err != nil {
-		return err
-	}
-
-	return nil
+	return s.executor.Enqueue(target, domain.RefreshRequestSourceManual), nil
 }
 
 func (s *Service) UpdateSport(ctx context.Context, input domain.UpdateSportInput) (SportRecord, error) {

@@ -12,6 +12,7 @@ import type {
 	ExternalSeasonsResponse,
 	ExternalSportsResponse,
 	LeagueSeasonsResponse,
+	RefreshQueueSnapshot,
 	SeasonDetailResponse,
 	SportsResponse,
 } from '@/types'
@@ -49,6 +50,9 @@ export const api = {
 	},
 	refresh(token: string) {
 		return request<AuthTokenResponse>('/api/auth/refresh', { method: 'POST', token })
+	},
+	getRefreshQueue(token: string) {
+		return request<RefreshQueueSnapshot>('/api/admin/refresh-queue', { token })
 	},
 	listAdminLocales(token: string) {
 		return request<AdminLocalesResponse>('/api/admin/locales', { token })

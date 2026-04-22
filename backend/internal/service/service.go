@@ -65,8 +65,9 @@ type syncScheduleRefresher interface {
 	Refresh(ctx context.Context) error
 }
 
-type syncRunner interface {
-	SyncLeague(ctx context.Context, target domain.LeagueSyncTarget) error
+type refreshExecutor interface {
+	Enqueue(target domain.LeagueSyncTarget, source domain.RefreshRequestSource) domain.RefreshEnqueueResponse
+	Snapshot() domain.RefreshQueueSnapshot
 }
 
 type Service struct {
@@ -74,7 +75,7 @@ type Service struct {
 	tokenManager tokenManager
 	provider     sportsDataProvider
 	refresher    syncScheduleRefresher
-	runner       syncRunner
+	executor     refreshExecutor
 }
 
 type SportDirectoryItem = domain.SportDirectoryItem
@@ -107,8 +108,8 @@ func (s *Service) SetSyncScheduleRefresher(refresher syncScheduleRefresher) {
 	_ = refresher.Refresh(refreshCtx)
 }
 
-func (s *Service) SetSyncRunner(runner syncRunner) {
-	s.runner = runner
+func (s *Service) SetRefreshExecutor(executor refreshExecutor) {
+	s.executor = executor
 }
 
 func (s *Service) refreshSyncSchedule() {

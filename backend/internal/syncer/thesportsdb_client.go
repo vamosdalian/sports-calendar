@@ -12,6 +12,8 @@ import (
 	"time"
 	"unicode"
 
+	"go.uber.org/ratelimit"
+
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 )
 
@@ -23,6 +25,7 @@ type TheSportsDBClient struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
+	limiter    ratelimit.Limiter
 }
 
 type leagueLookupResponse struct {
@@ -115,6 +118,10 @@ type scheduleResponse struct {
 	Schedule []scheduleItem `json:"schedule"`
 }
 
+type eventLookupResponse struct {
+	Lookup []eventLookupItem `json:"lookup"`
+}
+
 type scheduleItem struct {
 	EventID      string `json:"idEvent"`
 	HomeTeamID   string `json:"idHomeTeam"`
@@ -138,7 +145,27 @@ type scheduleItem struct {
 	AwayScore    string `json:"intAwayScore"`
 }
 
-func NewTheSportsDBClient(baseURL, apiKey string, timeout time.Duration) (*TheSportsDBClient, error) {
+type eventLookupItem struct {
+	EventID      string `json:"idEvent"`
+	HomeTeamID   string `json:"idHomeTeam"`
+	AwayTeamID   string `json:"idAwayTeam"`
+	VenueID      string `json:"idVenue"`
+	Round        string `json:"intRound"`
+	Timestamp    string `json:"strTimestamp"`
+	DateEvent    string `json:"dateEvent"`
+	TimeEvent    string `json:"strTime"`
+	Venue        string `json:"strVenue"`
+	City         string `json:"strCity"`
+	Country      string `json:"strCountry"`
+	Status       string `json:"strStatus"`
+	Postponed    string `json:"strPostponed"`
+	HomeTeamName string `json:"strHomeTeam"`
+	AwayTeamName string `json:"strAwayTeam"`
+	HomeScore    string `json:"intHomeScore"`
+	AwayScore    string `json:"intAwayScore"`
+}
+
+func NewTheSportsDBClient(baseURL, apiKey string, timeout time.Duration, qps int) (*TheSportsDBClient, error) {
 	trimmedBaseURL := strings.TrimRight(baseURL, "/")
 	if trimmedBaseURL == "" {
 		return nil, fmt.Errorf("theSportsDB baseURL is required")
@@ -149,6 +176,9 @@ func NewTheSportsDBClient(baseURL, apiKey string, timeout time.Duration) (*TheSp
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
+	if qps <= 0 {
+		qps = 1
+	}
 
 	return &TheSportsDBClient{
 		baseURL: trimmedBaseURL,
@@ -156,6 +186,7 @@ func NewTheSportsDBClient(baseURL, apiKey string, timeout time.Duration) (*TheSp
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		limiter: ratelimit.New(qps),
 	}, nil
 }
 
@@ -181,22 +212,6 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 		return domain.LeagueSnapshot{}, err
 	}
 
-	venueMap := map[int64]domain.VenueSyncRecord{}
-	for _, event := range schedulePayload.Schedule {
-		venueID, ok := parseOptionalInt64(event.VenueID)
-		if !ok {
-			continue
-		}
-		if _, exists := venueMap[venueID]; exists {
-			continue
-		}
-		venue, err := c.LookupVenue(ctx, venueID)
-		if err != nil {
-			return domain.LeagueSnapshot{}, fmt.Errorf("lookup venue %d: %w", venueID, err)
-		}
-		venueMap[venueID] = venue
-	}
-
 	teams := make([]domain.TeamSyncRecord, 0, len(teamsPayload.List))
 	for _, team := range teamsPayload.List {
 		if team.TeamID == "" || team.TeamName == "" {
@@ -215,39 +230,52 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 	}
 
 	matches := make([]domain.MatchSyncRecord, 0, len(schedulePayload.Schedule))
+	venueMap := map[int64]domain.VenueSyncRecord{}
 	for _, event := range schedulePayload.Schedule {
 		if event.EventID == "" || event.HomeTeamID == "" || event.AwayTeamID == "" {
 			continue
 		}
-		homeTeamID, err := strconv.ParseInt(strings.TrimSpace(event.HomeTeamID), 10, 64)
+		eventDetail, err := c.LookupEvent(ctx, event.EventID)
 		if err != nil {
-			return domain.LeagueSnapshot{}, fmt.Errorf("parse event %s home team id %q: %w", event.EventID, event.HomeTeamID, err)
+			continue
 		}
-		awayTeamID, err := strconv.ParseInt(strings.TrimSpace(event.AwayTeamID), 10, 64)
+		homeTeamID, err := strconv.ParseInt(strings.TrimSpace(eventDetail.HomeTeamID), 10, 64)
 		if err != nil {
-			return domain.LeagueSnapshot{}, fmt.Errorf("parse event %s away team id %q: %w", event.EventID, event.AwayTeamID, err)
+			return domain.LeagueSnapshot{}, fmt.Errorf("parse event %s home team id %q: %w", event.EventID, eventDetail.HomeTeamID, err)
 		}
-		startsAt, err := parseEventStart(event.Timestamp, event.DateEvent, event.TimeEvent)
+		awayTeamID, err := strconv.ParseInt(strings.TrimSpace(eventDetail.AwayTeamID), 10, 64)
+		if err != nil {
+			return domain.LeagueSnapshot{}, fmt.Errorf("parse event %s away team id %q: %w", event.EventID, eventDetail.AwayTeamID, err)
+		}
+		startsAt, err := parseEventStart(firstNonEmpty(eventDetail.Timestamp, event.Timestamp), firstNonEmpty(eventDetail.DateEvent, event.DateEvent), firstNonEmpty(eventDetail.TimeEvent, event.TimeEvent))
 		if err != nil {
 			return domain.LeagueSnapshot{}, fmt.Errorf("parse event %s start time: %w", event.EventID, err)
 		}
-		venueID, _ := parseOptionalInt64(event.VenueID)
+		venueID, _ := parseOptionalInt64(eventDetail.VenueID)
 		var venueRef *int64
 		if venueID > 0 {
 			venueCopy := venueID
 			venueRef = &venueCopy
+			if _, exists := venueMap[venueID]; !exists {
+				venueMap[venueID] = domain.VenueSyncRecord{
+					ID:      venueID,
+					Name:    englishText(firstNonEmpty(eventDetail.Venue, event.Venue)),
+					City:    englishText(eventDetail.City),
+					Country: englishText(firstNonEmpty(eventDetail.Country, event.Country)),
+				}
+			}
 		}
 		matches = append(matches, domain.MatchSyncRecord{
 			ExternalID: event.EventID,
 			Teams:      []int64{homeTeamID, awayTeamID},
 			TeamNames: []domain.LocalizedText{
-				englishText(event.HomeTeamName),
-				englishText(event.AwayTeamName),
+				englishText(firstNonEmpty(eventDetail.HomeTeamName, event.HomeTeamName)),
+				englishText(firstNonEmpty(eventDetail.AwayTeamName, event.AwayTeamName)),
 			},
-			Round:    roundText(event.Round),
+			Round:    roundText(firstNonEmpty(eventDetail.Round, event.Round)),
 			VenueID:  venueRef,
 			StartsAt: startsAt,
-			Status:   mapMatchStatus(event.Status, event.Postponed),
+			Status:   mapMatchStatus(firstNonEmpty(eventDetail.Status, event.Status), firstNonEmpty(eventDetail.Postponed, event.Postponed)),
 		})
 	}
 
@@ -411,7 +439,22 @@ func (c *TheSportsDBClient) LookupVenue(ctx context.Context, venueID int64) (dom
 	}, nil
 }
 
+func (c *TheSportsDBClient) LookupEvent(ctx context.Context, eventID string) (eventLookupItem, error) {
+	var payload eventLookupResponse
+	path := "/api/v2/json/lookup/event/" + url.PathEscape(strings.TrimSpace(eventID))
+	if err := c.getJSON(ctx, path, &payload); err != nil {
+		return eventLookupItem{}, err
+	}
+	if len(payload.Lookup) == 0 {
+		return eventLookupItem{}, fmt.Errorf("theSportsDB event %s not found", eventID)
+	}
+	return payload.Lookup[0], nil
+}
+
 func (c *TheSportsDBClient) getJSON(ctx context.Context, path string, destination any) error {
+	if c.limiter != nil {
+		c.limiter.Take()
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
 		return fmt.Errorf("build request %s: %w", path, err)
@@ -585,4 +628,13 @@ func splitLocation(value string) (string, string) {
 		country = strings.TrimSpace(parts[len(parts)-1])
 	}
 	return city, country
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
