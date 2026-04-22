@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { api } from '@/lib/api'
 import { pickLocalizedPreview } from '@/lib/localized-fields'
 import { cn } from '@/lib/utils'
-import type { AdminTeamItem, MatchItem } from '@/types'
+import type { AdminTeamItem, AdminVenueItem, MatchItem } from '@/types'
 
 const UNKNOWN_TEAM_ID = '-1'
 
@@ -33,9 +33,8 @@ type MatchFormState = {
 	round: string
 	startsAt: string
 	status: string
-	venue: string
-	city: string
-	country: string
+	venueID: string
+	venueSearch: string
 }
 
 const emptyMatchForm: MatchFormState = {
@@ -44,9 +43,8 @@ const emptyMatchForm: MatchFormState = {
 	round: '',
 	startsAt: '',
 	status: 'scheduled',
-	venue: '',
-	city: '',
-	country: '',
+	venueID: '',
+	venueSearch: '',
 }
 
 function toDateTimeLocalValue(value: string) {
@@ -97,15 +95,15 @@ function buildMatchForm(match?: MatchItem | null): MatchFormState {
 		round: match.round ?? '',
 		startsAt: toDateTimeLocalValue(match.startsAt),
 		status: match.status || 'scheduled',
-		venue: match.venue ?? '',
-		city: match.city ?? '',
-		country: match.country ?? '',
+		venueID: match.venueId ? String(match.venueId) : '',
+		venueSearch: match.venue ?? '',
 	}
 }
 
 export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null, open, onOpenChange, onSaved }: AddMatchDialogProps) {
 	const { token } = useAuth()
 	const [teams, setTeams] = useState<AdminTeamItem[]>([])
+	const [venues, setVenues] = useState<AdminVenueItem[]>([])
 	const [loading, setLoading] = useState(false)
 	const [pending, setPending] = useState(false)
 	const [calendarOpen, setCalendarOpen] = useState(false)
@@ -122,6 +120,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 			return
 		}
 		setForm(buildMatchForm(match))
+		setVenues((current) => current)
 		setError(null)
 	}, [match, open])
 
@@ -132,18 +131,23 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 		let active = true
 		setLoading(true)
 		setError(null)
-		void api.listAdminTeams(token, sportSlug, leagueSlug)
-			.then((response) => {
+		void Promise.all([
+			api.listAdminTeams(token, sportSlug, leagueSlug),
+			api.listAdminVenues(token),
+		])
+			.then(([teamsResponse, venuesResponse]) => {
 				if (!active) {
 					return
 				}
-				setTeams(response.items)
+				setTeams(teamsResponse.items)
+				setVenues(venuesResponse.items)
 			})
 			.catch((caught) => {
 				if (!active) {
 					return
 				}
 				setTeams([])
+				setVenues([])
 				setError(caught instanceof Error ? caught.message : 'load failed')
 			})
 			.finally(() => {
@@ -160,6 +164,17 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 		{ id: UNKNOWN_TEAM_ID, label: 'Unknown team' },
 		...teams.map((team) => ({ id: String(team.id), label: pickLocalizedPreview(team.name) })),
 	]), [teams])
+
+	const filteredVenueOptions = useMemo(() => {
+		const query = form.venueSearch.trim().toLowerCase()
+		if (!query) {
+			return venues
+		}
+		return venues.filter((venue) => {
+			const haystack = [venue.id.toString(), ...Object.values(venue.name), ...Object.values(venue.city), ...Object.values(venue.country)].join(' ').toLowerCase()
+			return haystack.includes(query)
+		})
+	}, [form.venueSearch, venues])
 
 	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -183,9 +198,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 				round: { en: form.round },
 				startsAt: startsAt.toISOString(),
 				status: form.status,
-				venue: form.venue ? { en: form.venue } : {},
-				city: form.city ? { en: form.city } : {},
-				country: form.country ? { en: form.country } : {},
+				venueId: form.venueID ? Number(form.venueID) : null,
 			}
 			if (match) {
 				await api.updateMatch(token, match.id, payload)
@@ -300,9 +313,30 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 					</div>
 				</div>
 				<div className="grid gap-4 md:grid-cols-3">
-					<div><Label htmlFor="match-country">Country</Label><Input id="match-country" value={form.country} onChange={(event) => setForm((current) => ({ ...current, country: event.target.value }))} /></div>
-					<div><Label htmlFor="match-venue">Venue</Label><Input id="match-venue" value={form.venue} onChange={(event) => setForm((current) => ({ ...current, venue: event.target.value }))} /></div>
-					<div><Label htmlFor="match-city">City</Label><Input id="match-city" value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} /></div>
+					<div className="md:col-span-3 space-y-3">
+						<div>
+							<Label htmlFor="match-venue-search">Venue search</Label>
+							<Input id="match-venue-search" placeholder="Search venue by id, name, city, or country" value={form.venueSearch} onChange={(event) => setForm((current) => ({ ...current, venueSearch: event.target.value }))} />
+						</div>
+						<div>
+							<Label htmlFor="match-venue-id">Venue</Label>
+							<Select value={form.venueID || '__none__'} onValueChange={(value) => setForm((current) => ({ ...current, venueID: value === '__none__' ? '' : value }))}>
+								<SelectTrigger id="match-venue-id">
+									<SelectValue placeholder="No venue selected" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectGroup>
+										<SelectItem value="__none__">No venue</SelectItem>
+										{filteredVenueOptions.map((venue) => (
+											<SelectItem key={venue.id} value={String(venue.id)}>
+												{venue.id} · {pickLocalizedPreview(venue.name)} · {[pickLocalizedPreview(venue.city), pickLocalizedPreview(venue.country)].filter((value) => value !== '-').join(', ')}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</div>
+					</div>
 				</div>
 				{error ? <p className="text-sm text-danger">{error}</p> : null}
 				<div className="flex justify-end gap-3">

@@ -28,6 +28,7 @@ type repository interface {
 	ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error)
 	ListAdminSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminSeasonsResponse, error)
 	ListAdminTeams(ctx context.Context, sportSlug, leagueSlug string) (domain.AdminTeamsResponse, error)
+	ListAdminVenues(ctx context.Context) (domain.AdminVenuesResponse, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateUser(ctx context.Context, email, passwordHash string) (domain.UserRecord, error)
 	GetUserByEmail(ctx context.Context, email string) (domain.UserRecord, string, error)
@@ -40,6 +41,9 @@ type repository interface {
 	CreateLeague(ctx context.Context, input domain.CreateLeagueInput) (domain.LeagueRecord, error)
 	UpdateLeague(ctx context.Context, input domain.UpdateLeagueInput) (domain.LeagueRecord, error)
 	UpdateTeam(ctx context.Context, input domain.UpdateTeamInput) (domain.AdminTeamItem, error)
+	CreateVenue(ctx context.Context, input domain.CreateVenueInput) (domain.VenueRecord, error)
+	UpdateVenue(ctx context.Context, input domain.UpdateVenueInput) (domain.VenueRecord, error)
+	DeleteVenue(ctx context.Context, venueID int64) error
 	DeleteLeague(ctx context.Context, input domain.DeleteLeagueInput) error
 	CreateSeason(ctx context.Context, input domain.CreateSeasonInput) (domain.SeasonRecord, error)
 	UpdateSeason(ctx context.Context, input domain.UpdateSeasonInput) (domain.SeasonRecord, error)
@@ -54,6 +58,7 @@ type sportsDataProvider interface {
 	ListLeaguesBySport(ctx context.Context, sportName string) ([]domain.AdminExternalLeagueOption, error)
 	LookupLeague(ctx context.Context, leagueID int64) (domain.AdminExternalLeagueLookup, error)
 	ListSeasons(ctx context.Context, leagueID int64) ([]domain.AdminExternalSeasonOption, error)
+	LookupVenue(ctx context.Context, venueID int64) (domain.VenueSyncRecord, error)
 }
 
 type syncScheduleRefresher interface {
@@ -81,6 +86,7 @@ type SeasonDetail = domain.SeasonDetail
 type SportRecord = domain.SportRecord
 type LeagueRecord = domain.LeagueRecord
 type SeasonRecord = domain.SeasonRecord
+type VenueRecord = domain.VenueRecord
 
 type LeaguesResponse struct {
 	Items     []domain.SportDirectoryItem `json:"items"`

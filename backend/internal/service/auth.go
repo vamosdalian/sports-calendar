@@ -137,6 +137,10 @@ func (s *Service) ListAdminTeams(ctx context.Context, sportSlug, leagueSlug stri
 	return s.repo.ListAdminTeams(ctx, sportSlug, leagueSlug)
 }
 
+func (s *Service) ListAdminVenues(ctx context.Context) (domain.AdminVenuesResponse, error) {
+	return s.repo.ListAdminVenues(ctx)
+}
+
 func (s *Service) GetAdminLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
 	sportSlug = normalizeSlug(sportSlug)
 	leagueSlug = normalizeSlug(leagueSlug)

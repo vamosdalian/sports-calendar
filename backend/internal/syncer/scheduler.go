@@ -54,10 +54,6 @@ func (s *Scheduler) Start() {
 
 	s.logger.WithField("targets", len(targets)).Info("starting league sync scheduler")
 	instance.Start()
-	for _, target := range targets {
-		targetCopy := target
-		go runTarget(s.logger, s.runner, targetCopy)
-	}
 }
 
 func (s *Scheduler) Stop() {

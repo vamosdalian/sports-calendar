@@ -5,6 +5,7 @@ import type {
 	AdminLeaguesResponse,
 	AdminSeasonsResponse,
 	AdminTeamsResponse,
+	AdminVenuesResponse,
 	AuthTokenResponse,
 	ExternalLeagueLookup,
 	ExternalLeaguesResponse,
@@ -63,6 +64,18 @@ export const api = {
 	},
 	listSports(token: string) {
 		return request<SportsResponse>('/api/admin/sports', { token })
+	},
+	listAdminVenues(token: string) {
+		return request<AdminVenuesResponse>('/api/admin/venues', { token })
+	},
+	createVenue(token: string, payload: { id: number; name: Record<string, string>; city: Record<string, string>; country: Record<string, string> }) {
+		return request('/api/admin/venues', { method: 'POST', token, body: JSON.stringify(payload) })
+	},
+	updateVenue(token: string, venueID: number, payload: { name: Record<string, string>; city: Record<string, string>; country: Record<string, string> }) {
+		return request(`/api/admin/venues/${venueID}`, { method: 'PUT', token, body: JSON.stringify(payload) })
+	},
+	deleteVenue(token: string, venueID: number) {
+		return request(`/api/admin/venues/${venueID}`, { method: 'DELETE', token })
 	},
 	listTheSportsDBSports(token: string) {
 		return request<ExternalSportsResponse>('/api/admin/thesportsdb/sports', { token })

@@ -94,7 +94,7 @@ func TestSchedulerRefreshKeepsExistingTargetsOnError(t *testing.T) {
 	}
 }
 
-func TestSchedulerStartRunsCurrentTargets(t *testing.T) {
+func TestSchedulerStartDoesNotRunImmediateSync(t *testing.T) {
 	runner := &schedulerTestRunner{targets: []domain.LeagueSyncTarget{{LeagueID: 1, LeagueSlug: "csl", SyncInterval: "@daily", SeasonID: 101, SeasonSlug: "2026", SeasonLabel: "2026"}}}
 	logger := logrus.New()
 	logger.SetOutput(ioDiscard{})
@@ -107,18 +107,13 @@ func TestSchedulerStartRunsCurrentTargets(t *testing.T) {
 	scheduler.Start()
 	defer scheduler.Stop()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		runner.mu.Lock()
-		called := len(runner.called)
-		runner.mu.Unlock()
-		if called > 0 {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	time.Sleep(200 * time.Millisecond)
 
-	t.Fatalf("expected start to trigger immediate sync run")
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
+	if got := len(runner.called); got != 0 {
+		t.Fatalf("expected no immediate sync run on start, got %d", got)
+	}
 }
 
 type ioDiscard struct{}

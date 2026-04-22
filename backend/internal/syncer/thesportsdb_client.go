@@ -62,6 +62,18 @@ type leagueLookupItem struct {
 	LeagueAlternate2 string `json:"strLeagueAlternate2"`
 }
 
+type venueLookupResponse struct {
+	Lookup []venueLookupItem `json:"lookup"`
+}
+
+type venueLookupItem struct {
+	VenueID  string `json:"idVenue"`
+	Name     string `json:"strVenue"`
+	City     string `json:"strCity"`
+	Country  string `json:"strCountry"`
+	Location string `json:"strLocation"`
+}
+
 type teamListResponse struct {
 	List []teamListItem `json:"list"`
 }
@@ -107,11 +119,13 @@ type scheduleItem struct {
 	EventID      string `json:"idEvent"`
 	HomeTeamID   string `json:"idHomeTeam"`
 	AwayTeamID   string `json:"idAwayTeam"`
+	VenueID      string `json:"idVenue"`
 	Round        string `json:"intRound"`
 	Timestamp    string `json:"strTimestamp"`
 	DateEvent    string `json:"dateEvent"`
 	TimeEvent    string `json:"strTime"`
 	Venue        string `json:"strVenue"`
+	City         string `json:"strCity"`
 	Country      string `json:"strCountry"`
 	Status       string `json:"strStatus"`
 	Postponed    string `json:"strPostponed"`
@@ -167,6 +181,22 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 		return domain.LeagueSnapshot{}, err
 	}
 
+	venueMap := map[int64]domain.VenueSyncRecord{}
+	for _, event := range schedulePayload.Schedule {
+		venueID, ok := parseOptionalInt64(event.VenueID)
+		if !ok {
+			continue
+		}
+		if _, exists := venueMap[venueID]; exists {
+			continue
+		}
+		venue, err := c.LookupVenue(ctx, venueID)
+		if err != nil {
+			return domain.LeagueSnapshot{}, fmt.Errorf("lookup venue %d: %w", venueID, err)
+		}
+		venueMap[venueID] = venue
+	}
+
 	teams := make([]domain.TeamSyncRecord, 0, len(teamsPayload.List))
 	for _, team := range teamsPayload.List {
 		if team.TeamID == "" || team.TeamName == "" {
@@ -201,6 +231,12 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 		if err != nil {
 			return domain.LeagueSnapshot{}, fmt.Errorf("parse event %s start time: %w", event.EventID, err)
 		}
+		venueID, _ := parseOptionalInt64(event.VenueID)
+		var venueRef *int64
+		if venueID > 0 {
+			venueCopy := venueID
+			venueRef = &venueCopy
+		}
 		matches = append(matches, domain.MatchSyncRecord{
 			ExternalID: event.EventID,
 			Teams:      []int64{homeTeamID, awayTeamID},
@@ -209,13 +245,19 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 				englishText(event.AwayTeamName),
 			},
 			Round:    roundText(event.Round),
-			Venue:    englishText(event.Venue),
-			City:     emptyLocalizedText(),
-			Country:  englishText(event.Country),
+			VenueID:  venueRef,
 			StartsAt: startsAt,
 			Status:   mapMatchStatus(event.Status, event.Postponed),
 		})
 	}
+
+	venues := make([]domain.VenueSyncRecord, 0, len(venueMap))
+	for _, venue := range venueMap {
+		venues = append(venues, venue)
+	}
+	sort.Slice(venues, func(i, j int) bool {
+		return venues[i].ID < venues[j].ID
+	})
 
 	dataSourceNote := englishText(fmt.Sprintf("Synced from TheSportsDB league %d for season %s", target.LeagueID, target.SeasonSlug))
 
@@ -225,6 +267,7 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 		CalendarDescription: englishText(league.DescriptionEN),
 		DataSourceNote:      dataSourceNote,
 		Teams:               teams,
+		Venues:              venues,
 		Matches:             matches,
 	}, nil
 }
@@ -337,6 +380,35 @@ func (c *TheSportsDBClient) ListSeasons(ctx context.Context, leagueID int64) ([]
 		return items[i].SeasonValue > items[j].SeasonValue
 	})
 	return items, nil
+}
+
+func (c *TheSportsDBClient) LookupVenue(ctx context.Context, venueID int64) (domain.VenueSyncRecord, error) {
+	var payload venueLookupResponse
+	path := "/api/v2/json/lookup/venue/" + url.PathEscape(strconv.FormatInt(venueID, 10))
+	if err := c.getJSON(ctx, path, &payload); err != nil {
+		return domain.VenueSyncRecord{}, err
+	}
+	if len(payload.Lookup) == 0 {
+		return domain.VenueSyncRecord{}, fmt.Errorf("theSportsDB venue %d not found", venueID)
+	}
+	item := payload.Lookup[0]
+	city := strings.TrimSpace(item.City)
+	country := strings.TrimSpace(item.Country)
+	if city == "" || country == "" {
+		fallbackCity, fallbackCountry := splitLocation(item.Location)
+		if city == "" {
+			city = fallbackCity
+		}
+		if country == "" {
+			country = fallbackCountry
+		}
+	}
+	return domain.VenueSyncRecord{
+		ID:      venueID,
+		Name:    englishText(item.Name),
+		City:    englishText(city),
+		Country: englishText(country),
+	}, nil
 }
 
 func (c *TheSportsDBClient) getJSON(ctx context.Context, path string, destination any) error {
@@ -488,4 +560,29 @@ func slugify(value, fallback string) string {
 		return slug
 	}
 	return strings.ToLower(strings.TrimSpace(fallback))
+}
+
+func parseOptionalInt64(value string) (int64, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, false
+	}
+	parsed, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
+}
+
+func splitLocation(value string) (string, string) {
+	parts := strings.Split(strings.TrimSpace(value), ",")
+	if len(parts) == 0 {
+		return "", ""
+	}
+	city := strings.TrimSpace(parts[0])
+	country := ""
+	if len(parts) > 1 {
+		country = strings.TrimSpace(parts[len(parts)-1])
+	}
+	return city, country
 }

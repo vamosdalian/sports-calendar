@@ -140,6 +140,19 @@ export type AdminTeamItem = {
 	name: LocalizedText
 }
 
+export type AdminVenueItem = {
+	id: number
+	name: LocalizedText
+	city: LocalizedText
+	country: LocalizedText
+	updatedAt: string
+}
+
+export type AdminVenuesResponse = {
+	items: AdminVenueItem[]
+	updatedAt: string
+}
+
 export type AdminTeamsResponse = {
 	sportSlug: string
 	leagueSlug: string
@@ -152,6 +165,7 @@ export type MatchItem = {
 	round: string
 	startsAt: string
 	status: string
+	venueId?: number
 	venue: string
 	city: string
 	country: string

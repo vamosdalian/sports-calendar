@@ -1,6 +1,6 @@
 "use client"
 
-import { ChartNoAxesCombinedIcon, FlagIcon, LanguagesIcon, LogOutIcon, ShieldCheckIcon } from "lucide-react"
+import { ChartNoAxesCombinedIcon, FlagIcon, LanguagesIcon, LogOutIcon, MapPinnedIcon, ShieldCheckIcon } from "lucide-react"
 import { Link, NavLink, useLocation } from "react-router-dom"
 
 import { useAuth } from "@/components/use-auth"
@@ -37,6 +37,12 @@ const navItems = [
     url: "/sports",
     icon: FlagIcon,
     match: (pathname: string) => pathname.startsWith("/sports"),
+  },
+  {
+    title: "Venues",
+    url: "/venues",
+    icon: MapPinnedIcon,
+    match: (pathname: string) => pathname.startsWith("/venues"),
   },
 ]
 

@@ -17,6 +17,7 @@ type LeagueSnapshot struct {
 	CalendarDescription LocalizedText
 	DataSourceNote      LocalizedText
 	Teams               []TeamSyncRecord
+	Venues              []VenueSyncRecord
 	Matches             []MatchSyncRecord
 }
 
@@ -32,9 +33,14 @@ type MatchSyncRecord struct {
 	Teams      []int64
 	TeamNames  []LocalizedText
 	Round      LocalizedText
-	Venue      LocalizedText
-	City       LocalizedText
-	Country    LocalizedText
+	VenueID    *int64
 	StartsAt   time.Time
 	Status     string
+}
+
+type VenueSyncRecord struct {
+	ID      int64
+	Name    LocalizedText
+	City    LocalizedText
+	Country LocalizedText
 }
