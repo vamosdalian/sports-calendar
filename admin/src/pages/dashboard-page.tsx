@@ -126,6 +126,17 @@ function renderRecentSummary(task: RecentRefreshTask) {
 	return `Finished ${new Date(task.finishedAt).toLocaleString()}`
 }
 
+function normalizeQueueSnapshot(snapshot: RefreshQueueSnapshot): RefreshQueueSnapshot {
+	return {
+		running: snapshot.running ?? null,
+		queued: Array.isArray(snapshot.queued) ? snapshot.queued : [],
+		recent: Array.isArray(snapshot.recent) ? snapshot.recent : [],
+		stats: {
+			queueLength: snapshot.stats?.queueLength ?? (Array.isArray(snapshot.queued) ? snapshot.queued.length : 0),
+		},
+	}
+}
+
 export function DashboardPage() {
 	const { token } = useAuth()
 	const [queue, setQueue] = useState<RefreshQueueSnapshot | null>(null)
@@ -136,8 +147,11 @@ export function DashboardPage() {
 			return
 		}
 		const response = await api.getRefreshQueue(token)
-		setQueue(response)
+		setQueue(normalizeQueueSnapshot(response))
 	}, [token])
+
+	const queuedTasks = queue?.queued ?? []
+	const recentTasks = queue?.recent ?? []
 
 	useEffect(() => {
 		if (!token) {
@@ -281,12 +295,12 @@ export function DashboardPage() {
 								<div className="rounded-lg border p-3">
 									<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Queued</p>
 									<p className="mt-2 text-2xl font-semibold tabular-nums">{queue?.stats.queueLength ?? 0}</p>
-									<p className="mt-1 text-sm text-muted-foreground">{queue?.queued[0] ? formatTaskLabel(queue.queued[0].leagueSlug, queue.queued[0].seasonSlug) : 'Queue is empty'}</p>
+									<p className="mt-1 text-sm text-muted-foreground">{queuedTasks[0] ? formatTaskLabel(queuedTasks[0].leagueSlug, queuedTasks[0].seasonSlug) : 'Queue is empty'}</p>
 								</div>
 								<div className="rounded-lg border p-3">
 									<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Recent</p>
-									<p className="mt-2 text-2xl font-semibold tabular-nums">{queue?.recent.length ?? 0}</p>
-									<p className="mt-1 text-sm text-muted-foreground">{queue?.recent[0] ? queue.recent[0].status : 'No recent runs'}</p>
+									<p className="mt-2 text-2xl font-semibold tabular-nums">{recentTasks.length}</p>
+									<p className="mt-1 text-sm text-muted-foreground">{recentTasks[0] ? recentTasks[0].status : 'No recent runs'}</p>
 								</div>
 							</div>
 							<div className="space-y-3">
@@ -312,9 +326,9 @@ export function DashboardPage() {
 										<LoaderCircle className="size-4 text-primary" />
 										<p className="text-sm font-medium">Queued tasks</p>
 									</div>
-									{queue?.queued.length ? (
+									{queuedTasks.length ? (
 										<div className="mt-3 space-y-2">
-											{queue.queued.slice(0, 3).map((task) => (
+											{queuedTasks.slice(0, 3).map((task) => (
 												<div key={`${task.leagueId}-${task.seasonId}-${task.requestedAt}`} className="flex items-center justify-between gap-3 text-sm">
 													<div>
 														<p className="font-medium text-foreground">{formatTaskLabel(task.leagueSlug, task.seasonSlug)}</p>
@@ -333,9 +347,9 @@ export function DashboardPage() {
 										<TimerReset className="size-4 text-primary" />
 										<p className="text-sm font-medium">Recent results</p>
 									</div>
-									{queue?.recent.length ? (
+									{recentTasks.length ? (
 										<div className="mt-3 space-y-2">
-											{queue.recent.slice(0, 3).map((task) => (
+											{recentTasks.slice(0, 3).map((task) => (
 												<div key={`${task.leagueId}-${task.seasonId}-${task.finishedAt}`} className="flex items-start justify-between gap-3 text-sm">
 													<div>
 														<p className="font-medium text-foreground">{formatTaskLabel(task.leagueSlug, task.seasonSlug)}</p>
