@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	defaultRefreshQueueSize  = 100
-	defaultRecentRefreshSize = 20
+	defaultRefreshQueueSize   = 100
+	defaultRecentRefreshSize  = 20
+	defaultRefreshTaskTimeout = 30 * time.Minute
 )
 
 type RefreshRunner interface {
@@ -169,7 +170,7 @@ func (e *RefreshExecutor) execute(task refreshTaskRequest) {
 	e.startedAt = startedAt
 	e.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRefreshTaskTimeout)
 	defer cancel()
 
 	err := e.runner.SyncLeague(ctx, task.target)
