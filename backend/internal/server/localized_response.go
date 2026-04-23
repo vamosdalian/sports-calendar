@@ -56,6 +56,7 @@ type localizedMatch struct {
 	Title      string         `json:"title"`
 	StartsAt   string         `json:"startsAt"`
 	Status     string         `json:"status"`
+	Result     []string       `json:"result"`
 	VenueID    *int64         `json:"venueId,omitempty"`
 	Venue      string         `json:"venue"`
 	City       string         `json:"city"`
@@ -119,6 +120,7 @@ func localizeSeasonDetail(payload service.SeasonDetail, locale string) localized
 				Title:      match.DisplayTitle(locale),
 				StartsAt:   match.StartsAt,
 				Status:     match.Status,
+				Result:     normalizeMatchResult(match.Result),
 				VenueID:    match.VenueID,
 				Venue:      pickLocalizedText(match.Venue, locale),
 				City:       pickLocalizedText(match.City, locale),
@@ -165,6 +167,13 @@ func localizeSeasonDetail(payload service.SeasonDetail, locale string) localized
 		Groups:                      groups,
 		UpdatedAt:                   payload.UpdatedAt,
 	}
+}
+
+func normalizeMatchResult(result []string) []string {
+	if result == nil {
+		return []string{}
+	}
+	return result
 }
 
 func pickLocalizedText(value map[string]string, locale string) string {

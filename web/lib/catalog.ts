@@ -11,6 +11,7 @@ export type Match = {
   title?: string;
   startsAt: string;
   status: string;
+  result?: string[];
   venue: string;
   city: string;
   country: string;
@@ -296,13 +297,20 @@ export async function getAllSeasonRoutes() {
 }
 
 export function matchLabel(match: Match) {
+  if (match.homeTeam && match.awayTeam) {
+    if (hasMatchResult(match)) {
+      return `${match.homeTeam.name} ${match.result[0]}:${match.result[1]} ${match.awayTeam.name}`;
+    }
+    return `${match.homeTeam.name} vs ${match.awayTeam.name}`;
+  }
   if (match.title) {
     return match.title;
   }
-  if (match.homeTeam && match.awayTeam) {
-    return `${match.homeTeam.name} vs ${match.awayTeam.name}`;
-  }
   return match.id;
+}
+
+function hasMatchResult(match: Match): match is Match & { result: [string, string] } {
+  return Array.isArray(match.result) && match.result.length === 2;
 }
 
 export function formatMatchLocation(match: Match) {

@@ -199,6 +199,7 @@ export type MatchItem = {
 	round: string
 	startsAt: string
 	status: string
+	result?: string[]
 	venueId?: number
 	venue: string
 	city: string

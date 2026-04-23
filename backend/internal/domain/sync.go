@@ -97,6 +97,7 @@ type MatchSyncRecord struct {
 	VenueID    *int64
 	StartsAt   time.Time
 	Status     string
+	Result     []string
 }
 
 type VenueSyncRecord struct {

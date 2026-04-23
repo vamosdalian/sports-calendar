@@ -151,6 +151,13 @@ var allMigrations = []migration{
 			`ALTER TABLE matches DROP COLUMN IF EXISTS country`,
 		},
 	},
+	{
+		version: 6,
+		name:    "match_result",
+		statements: []string{
+			`ALTER TABLE matches ADD COLUMN IF NOT EXISTS result TEXT[] NOT NULL DEFAULT '{}'`,
+		},
+	},
 }
 
 func Run(ctx context.Context, pool *pgxpool.Pool, logger *logrus.Logger) error {
