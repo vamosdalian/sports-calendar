@@ -215,7 +215,6 @@ web/yarn-error.log*
 web/.env*
 !web/.env.example
 web/.dev.vars
-web/next-env.d.ts
 
 # Go
 backend/bin/
@@ -236,4 +235,3 @@ backend/config/config.*.yaml
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-web/next-env.d.ts
