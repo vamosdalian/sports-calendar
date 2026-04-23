@@ -25,18 +25,18 @@ import (
 )
 
 type fakeRepository struct {
-	mu            sync.Mutex
-	nextSeasonID  int64
-	nextUserID    int64
-	sportsBySlug  map[string]domain.SportRecord
-	adminLocales  map[string]domain.AdminLocaleItem
-	leaguesBySlug map[string]domain.LeagueRecord
-	seasonsByKey  map[string]domain.SeasonRecord
-	teamsByLeague map[string][]domain.AdminTeamItem
-	venuesByID    map[int64]domain.VenueRecord
-	manualMatches map[string][]domain.Match
-	seasonMatches map[string]int
-	usersByEmail  map[string]fakeUser
+	mu              sync.Mutex
+	nextSeasonID    int64
+	nextUserID      int64
+	sportsBySlug    map[string]domain.SportRecord
+	adminLocales    map[string]domain.AdminLocaleItem
+	leaguesBySlug   map[string]domain.LeagueRecord
+	seasonsByKey    map[string]domain.SeasonRecord
+	teamsByLeague   map[string][]domain.AdminTeamItem
+	venuesByID      map[int64]domain.VenueRecord
+	manualMatches   map[string][]domain.Match
+	seasonMatches   map[string]int
+	usersByEmail    map[string]fakeUser
 	enqueuedTargets []domain.LeagueSyncTarget
 	queueSnapshot   domain.RefreshQueueSnapshot
 }
@@ -261,16 +261,17 @@ func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlu
 	}
 	matches := []domain.Match{
 		{
-			ID:         "csl-2026-r1-guoan-shenhua",
-			Round:      domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
-			StartsAt:   "2026-03-14T11:35:00Z",
-			Status:     "scheduled",
-			VenueID:    int64Ptr(100),
-			Venue:      domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
-			City:       domain.LocalizedText{"en": "Beijing", "zh": "北京"},
-			Country:    domain.LocalizedText{"en": "China", "zh": "中国"},
-			HomeTeam:   &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
-			AwayTeam:   &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
+			ID:       "csl-2026-r1-guoan-shenhua",
+			Round:    domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
+			StartsAt: "2026-03-14T11:35:00Z",
+			Status:   "scheduled",
+			Result:   []string{"2", "1"},
+			VenueID:  int64Ptr(100),
+			Venue:    domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
+			City:     domain.LocalizedText{"en": "Beijing", "zh": "北京"},
+			Country:  domain.LocalizedText{"en": "China", "zh": "中国"},
+			HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
+			AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
 		},
 		{
 			ID:       "csl-2026-r1-three-towns-haifa",
@@ -314,16 +315,16 @@ func (r *fakeRepository) GetAdminLeagueSeason(_ context.Context, sportSlug, leag
 	}
 	matches := []domain.Match{
 		{
-			ID:         "csl-2026-r1-guoan-shenhua",
-			Round:      domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
-			StartsAt:   "2026-03-14T11:35:00Z",
-			Status:     "scheduled",
-			VenueID:    int64Ptr(100),
-			Venue:      domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
-			City:       domain.LocalizedText{"en": "Beijing", "zh": "北京"},
-			Country:    domain.LocalizedText{"en": "China", "zh": "中国"},
-			HomeTeam:   &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
-			AwayTeam:   &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
+			ID:       "csl-2026-r1-guoan-shenhua",
+			Round:    domain.LocalizedText{"en": "Round 1", "zh": "第1轮"},
+			StartsAt: "2026-03-14T11:35:00Z",
+			Status:   "scheduled",
+			VenueID:  int64Ptr(100),
+			Venue:    domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
+			City:     domain.LocalizedText{"en": "Beijing", "zh": "北京"},
+			Country:  domain.LocalizedText{"en": "China", "zh": "中国"},
+			HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
+			AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
 		},
 	}
 	matches = append(matches, r.manualMatches[seasonKey(sportSlug, leagueSlug, seasonSlug)]...)
@@ -1145,6 +1146,22 @@ func TestSeasonDetailLocalized(t *testing.T) {
 	groups, ok := payload["groups"].([]any)
 	if !ok || len(groups) != 1 {
 		t.Fatalf("expected grouped matches in response")
+	}
+	firstGroup, ok := groups[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first group object")
+	}
+	matches, ok := firstGroup["matches"].([]any)
+	if !ok || len(matches) == 0 {
+		t.Fatalf("expected grouped matches")
+	}
+	firstMatch, ok := matches[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first match object")
+	}
+	result, ok := firstMatch["result"].([]any)
+	if !ok || len(result) != 2 || result[0] != "2" || result[1] != "1" {
+		t.Fatalf("unexpected match result: %#v", firstMatch["result"])
 	}
 }
 

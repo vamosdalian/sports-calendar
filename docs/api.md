@@ -131,6 +131,7 @@ Returns season detail for a specific league + season.
           "title": "Team A vs Team B",
           "startsAt": "2026-03-14T11:35:00Z",
           "status": "scheduled",
+          "result": [],
           "venue": "Workers Stadium",
           "city": "Beijing"
         }

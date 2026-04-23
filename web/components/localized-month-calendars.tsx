@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { type Match } from "../lib/catalog";
+import { matchLabel, type Match } from "../lib/catalog";
 import { localizedDateLocale, type Locale } from "../lib/site";
 
 const SERVER_TIME_ZONE = "UTC";
@@ -111,7 +111,7 @@ function MonthCalendar({
                       <li key={`tooltip-${match.id}`} className="truncate whitespace-nowrap leading-5">
                         <span className="font-medium">{formatTooltipTime(match.startsAt, locale, timeZone)}</span>
                         <span className="text-white/75"> · </span>
-                        <span>{formatTooltipMatchLabel(match)}</span>
+                        <span>{matchLabel(match)}</span>
                         {match.venue ? (
                           <>
                             <span className="text-white/75"> / </span>
@@ -193,12 +193,4 @@ function formatTooltipTime(startsAt: string, locale: Locale, timeZone: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(startsAt));
-}
-
-function formatTooltipMatchLabel(match: Match) {
-  if (match.homeTeam && match.awayTeam) {
-    return `${match.homeTeam.name} vs ${match.awayTeam.name}`;
-  }
-
-  return match.title || match.id;
 }

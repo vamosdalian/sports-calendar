@@ -4,7 +4,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import type { Match } from "../lib/catalog";
+import { matchLabel, type Match } from "../lib/catalog";
 import type { Locale } from "../lib/site";
 import { LocalizedMatchTime } from "./localized-match-time";
 import { LocalizedMonthCalendars } from "./localized-month-calendars";
@@ -279,11 +279,7 @@ function MatchSummary({ match }: { match: Match }) {
     <>
       <span>
         {match.homeTeam && match.awayTeam ? (
-          <>
-            <strong className="font-semibold text-ink">{match.homeTeam.name}</strong>
-            <span className="text-ink/65"> vs </span>
-            <strong className="font-semibold text-ink">{match.awayTeam.name}</strong>
-          </>
+          <strong className="font-semibold text-ink">{matchLabel(match)}</strong>
         ) : (
           <span>{match.title || match.id}</span>
         )}

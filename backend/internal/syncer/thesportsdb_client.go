@@ -276,6 +276,7 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 			VenueID:  venueRef,
 			StartsAt: startsAt,
 			Status:   mapMatchStatus(firstNonEmpty(eventDetail.Status, event.Status), firstNonEmpty(eventDetail.Postponed, event.Postponed)),
+			Result:   matchResult(eventDetail.Status, eventDetail.HomeScore, eventDetail.AwayScore),
 		})
 	}
 
@@ -544,6 +545,18 @@ func mapMatchStatus(status, postponed string) string {
 	default:
 		return "scheduled"
 	}
+}
+
+func matchResult(status, homeScore, awayScore string) []string {
+	if strings.TrimSpace(status) != "Match Finished" {
+		return []string{}
+	}
+	home := strings.TrimSpace(homeScore)
+	away := strings.TrimSpace(awayScore)
+	if home == "" || away == "" {
+		return []string{}
+	}
+	return []string{home, away}
 }
 
 func normalizeExternalName(value string) string {

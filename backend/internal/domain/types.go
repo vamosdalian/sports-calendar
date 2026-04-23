@@ -69,6 +69,7 @@ type Match struct {
 	Round      LocalizedText `json:"round"`
 	StartsAt   string        `json:"startsAt"`
 	Status     string        `json:"status"`
+	Result     []string      `json:"result"`
 	VenueID    *int64        `json:"venueId,omitempty"`
 	Venue      LocalizedText `json:"venue"`
 	City       LocalizedText `json:"city"`

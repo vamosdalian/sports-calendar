@@ -82,24 +82,26 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 					"strPostponed": "no",
 					"strHomeTeam":  "Liverpool",
 					"strAwayTeam":  "Bournemouth",
+					"intHomeScore": "4",
+					"intAwayScore": "2",
 				}},
 			})
 		case "/api/v2/json/lookup/event/2267999":
 			_ = json.NewEncoder(writer).Encode(map[string]any{
 				"lookup": []map[string]any{{
-					"idEvent":     "2267999",
-					"idHomeTeam":  "133602",
-					"idAwayTeam":  "134301",
-					"idVenue":     "9001",
-					"intRound":    "2",
-					"dateEvent":   "2025-08-22",
-					"strTime":     "15:00:00",
-					"strVenue":    "Anfield",
-					"strCountry":  "England",
-					"strStatus":   "Not Started",
-					"strPostponed":"yes",
-					"strHomeTeam": "Liverpool",
-					"strAwayTeam": "Bournemouth",
+					"idEvent":      "2267999",
+					"idHomeTeam":   "133602",
+					"idAwayTeam":   "134301",
+					"idVenue":      "9001",
+					"intRound":     "2",
+					"dateEvent":    "2025-08-22",
+					"strTime":      "15:00:00",
+					"strVenue":     "Anfield",
+					"strCountry":   "England",
+					"strStatus":    "Not Started",
+					"strPostponed": "yes",
+					"strHomeTeam":  "Liverpool",
+					"strAwayTeam":  "Bournemouth",
 				}},
 			})
 		default:
@@ -158,8 +160,14 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 	if got := snapshot.Matches[0].Status; got != "finished" {
 		t.Fatalf("unexpected first match status: %q", got)
 	}
+	if got := snapshot.Matches[0].Result; len(got) != 2 || got[0] != "4" || got[1] != "2" {
+		t.Fatalf("unexpected first match result: %#v", got)
+	}
 	if got := snapshot.Matches[1].Status; got != "postponed" {
 		t.Fatalf("unexpected second match status: %q", got)
+	}
+	if got := snapshot.Matches[1].Result; len(got) != 0 {
+		t.Fatalf("unexpected second match result: %#v", got)
 	}
 	if got := snapshot.Matches[0].StartsAt.UTC().Format(time.RFC3339); got != "2025-08-15T19:00:00Z" {
 		t.Fatalf("unexpected parsed start time: %q", got)

@@ -828,7 +828,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 	}
 
 	matchRows, err := r.pool.Query(ctx, `
-		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.venue_id, v.name, v.city, v.country, m.teams, m.updated_at
+		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.result, m.venue_id, v.name, v.city, v.country, m.teams, m.updated_at
 		FROM matches m
 		LEFT JOIN venues v ON v.id = m.venue_id
 		WHERE m.season_id = $1
@@ -846,6 +846,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 			match          domain.Match
 			roundRaw       []byte
 			startsAt       time.Time
+			result         []string
 			venueID        *int64
 			venueRaw       []byte
 			cityRaw        []byte
@@ -858,6 +859,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 			&roundRaw,
 			&startsAt,
 			&match.Status,
+			&result,
 			&venueID,
 			&venueRaw,
 			&cityRaw,
@@ -870,6 +872,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 
 		match.Round = decodeLocalizedText(roundRaw)
 		match.StartsAt = startsAt.UTC().Format(time.RFC3339)
+		match.Result = result
 		match.VenueID = venueID
 		match.Venue = decodeLocalizedText(venueRaw)
 		match.City = decodeLocalizedText(cityRaw)
@@ -1014,6 +1017,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			}
 			storedTeamIDs = append(storedTeamIDs, storedTeamID)
 		}
+		matchResult := normalizeStringSlice(match.Result)
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO matches (
 				season_id,
@@ -1022,8 +1026,9 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 				round_name,
 				venue_id,
 				starts_at,
-				status
-			) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+				status,
+				result
+			) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8)
 			ON CONFLICT (external_id) DO UPDATE
 			SET season_id = EXCLUDED.season_id,
 			    teams = EXCLUDED.teams,
@@ -1031,6 +1036,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			    venue_id = EXCLUDED.venue_id,
 			    starts_at = EXCLUDED.starts_at,
 			    status = EXCLUDED.status,
+			    result = EXCLUDED.result,
 			    updated_at = NOW()
 			WHERE matches.season_id IS DISTINCT FROM EXCLUDED.season_id
 			   OR matches.teams IS DISTINCT FROM EXCLUDED.teams
@@ -1038,7 +1044,8 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			   OR matches.venue_id IS DISTINCT FROM EXCLUDED.venue_id
 			   OR matches.starts_at IS DISTINCT FROM EXCLUDED.starts_at
 			   OR matches.status IS DISTINCT FROM EXCLUDED.status
-		`, snapshot.Target.SeasonID, match.ExternalID, storedTeamIDs, encodeLocalizedText(match.Round), match.VenueID, match.StartsAt.UTC(), match.Status); err != nil {
+			   OR matches.result IS DISTINCT FROM EXCLUDED.result
+		`, snapshot.Target.SeasonID, match.ExternalID, storedTeamIDs, encodeLocalizedText(match.Round), match.VenueID, match.StartsAt.UTC(), match.Status, matchResult); err != nil {
 			return fmt.Errorf("upsert match %s: %w", match.ExternalID, err)
 		}
 		matchExternalIDs = append(matchExternalIDs, match.ExternalID)
@@ -1064,6 +1071,13 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 	}
 	tx = nil
 	return nil
+}
+
+func normalizeStringSlice(value []string) []string {
+	if value == nil {
+		return []string{}
+	}
+	return value
 }
 
 func upsertSnapshotTeam(ctx context.Context, tx pgx.Tx, leagueID int64, team domain.TeamSyncRecord) (int64, error) {
