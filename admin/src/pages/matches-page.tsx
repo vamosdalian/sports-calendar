@@ -30,12 +30,20 @@ function countMatches(detail: SeasonDetailResponse | null) {
 	return detail.groups.reduce((total, group) => total + group.matches.length, 0)
 }
 
+function displayResult(result: string[] | undefined) {
+	if (!result || result.length !== 2) {
+		return '-'
+	}
+	return `${result[0]}:${result[1]}`
+}
+
 type MatchTableRow = {
 	match: MatchItem
 	id: string
 	round: string
 	startsAt: string
 	status: string
+	result: string
 	homeTeam: string
 	awayTeam: string
 	venue: string
@@ -134,6 +142,7 @@ export function MatchesPage() {
 				round: displayText(match.round),
 				startsAt: match.startsAt,
 				status: match.status,
+				result: displayResult(match.result),
 				homeTeam: displayText(match.homeTeam?.name),
 				awayTeam: displayText(match.awayTeam?.name),
 				venue: displayText(match.venue),
@@ -211,11 +220,12 @@ export function MatchesPage() {
 							{ id: 'kickoff', header: 'Kickoff', cell: (row) => new Date(row.startsAt).toLocaleString(), cellClassName: 'text-muted-foreground min-w-44' },
 							{ id: 'round', header: 'Round', cell: (row) => <div><p>{row.round}</p><p className="mt-1 text-xs text-muted-foreground">{row.groupLabel}</p></div>, cellClassName: 'min-w-36' },
 							{ id: 'venue', header: 'Venue', cell: (row) => <div><p>{row.venue}</p><p className="mt-1 text-xs text-muted-foreground">{[row.city, row.country].filter((value) => value && value !== '-').join(', ') || '-'}</p></div>, cellClassName: 'min-w-40' },
+							{ id: 'result', header: 'Result', cell: (row) => <span className="font-mono text-sm text-muted-foreground">{row.result}</span>, cellClassName: 'w-24' },
 							{ id: 'status', header: 'Status', cell: (row) => <Badge variant="outline" className="px-1.5 text-muted-foreground">{row.status}</Badge>, cellClassName: 'w-28' },
 						]}
 						rows={rows}
 						getRowId={(row) => row.id}
-						getSearchText={(row) => `${row.homeTeam} ${row.awayTeam} ${row.round} ${row.groupLabel} ${row.venue} ${row.city} ${row.country} ${row.status}`}
+						getSearchText={(row) => `${row.homeTeam} ${row.awayTeam} ${row.round} ${row.groupLabel} ${row.venue} ${row.city} ${row.country} ${row.result} ${row.status}`}
 						searchPlaceholder="Filter matches..."
 						emptyMessage="No matches found."
 						renderRowActions={(row) => row.isManual ? (
