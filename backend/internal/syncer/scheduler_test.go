@@ -28,11 +28,11 @@ func (r *schedulerTestRunner) ListSyncTargets(_ context.Context) ([]domain.Leagu
 	return append([]domain.LeagueSyncTarget(nil), r.targets...), nil
 }
 
-func (r *schedulerTestRunner) SyncLeague(_ context.Context, target domain.LeagueSyncTarget) error {
+func (r *schedulerTestRunner) Enqueue(target domain.LeagueSyncTarget, _ domain.RefreshRequestSource) domain.RefreshEnqueueResponse {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.called = append(r.called, target)
-	return nil
+	return domain.RefreshEnqueueResponse{Status: domain.RefreshEnqueueStatusQueued}
 }
 
 func TestSchedulerRefreshReplacesTargets(t *testing.T) {
@@ -40,7 +40,7 @@ func TestSchedulerRefreshReplacesTargets(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(ioDiscard{})
 
-	scheduler, err := NewScheduler(logger, runner)
+	scheduler, err := NewScheduler(logger, runner, runner)
 	if err != nil {
 		t.Fatalf("create scheduler: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestSchedulerRefreshKeepsExistingTargetsOnError(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(ioDiscard{})
 
-	scheduler, err := NewScheduler(logger, runner)
+	scheduler, err := NewScheduler(logger, runner, runner)
 	if err != nil {
 		t.Fatalf("create scheduler: %v", err)
 	}
@@ -94,12 +94,12 @@ func TestSchedulerRefreshKeepsExistingTargetsOnError(t *testing.T) {
 	}
 }
 
-func TestSchedulerStartRunsCurrentTargets(t *testing.T) {
+func TestSchedulerStartDoesNotRunImmediateSync(t *testing.T) {
 	runner := &schedulerTestRunner{targets: []domain.LeagueSyncTarget{{LeagueID: 1, LeagueSlug: "csl", SyncInterval: "@daily", SeasonID: 101, SeasonSlug: "2026", SeasonLabel: "2026"}}}
 	logger := logrus.New()
 	logger.SetOutput(ioDiscard{})
 
-	scheduler, err := NewScheduler(logger, runner)
+	scheduler, err := NewScheduler(logger, runner, runner)
 	if err != nil {
 		t.Fatalf("create scheduler: %v", err)
 	}
@@ -107,18 +107,13 @@ func TestSchedulerStartRunsCurrentTargets(t *testing.T) {
 	scheduler.Start()
 	defer scheduler.Stop()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		runner.mu.Lock()
-		called := len(runner.called)
-		runner.mu.Unlock()
-		if called > 0 {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	time.Sleep(200 * time.Millisecond)
 
-	t.Fatalf("expected start to trigger immediate sync run")
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
+	if got := len(runner.called); got != 0 {
+		t.Fatalf("expected no immediate sync run on start, got %d", got)
+	}
 }
 
 type ioDiscard struct{}

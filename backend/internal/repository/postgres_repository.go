@@ -464,6 +464,9 @@ func (r *PostgresRepository) CreateMatch(ctx context.Context, input domain.Creat
 	if err := validateMatchTeamIDTx(ctx, tx, leagueID, input.AwayTeamID); err != nil {
 		return err
 	}
+	if err := lookupVenueExistsTx(ctx, tx, input.VenueID); err != nil {
+		return err
+	}
 	startsAt, err := time.Parse(time.RFC3339, input.StartsAt)
 	if err != nil {
 		return fmt.Errorf("parse match startsAt: %w", err)
@@ -475,13 +478,11 @@ func (r *PostgresRepository) CreateMatch(ctx context.Context, input domain.Creat
 			external_id,
 			teams,
 			round_name,
-			venue,
-			city,
-			country,
+			venue_id,
 			starts_at,
 			status
-		) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9)
-	`, seasonID, input.ExternalID, []int64{input.HomeTeamID, input.AwayTeamID}, encodeLocalizedText(input.Round), encodeLocalizedText(input.Venue), encodeLocalizedText(input.City), encodeLocalizedText(input.Country), startsAt.UTC(), input.Status); err != nil {
+		) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+	`, seasonID, input.ExternalID, []int64{input.HomeTeamID, input.AwayTeamID}, encodeLocalizedText(input.Round), input.VenueID, startsAt.UTC(), input.Status); err != nil {
 		return mapWriteError("create match", err)
 	}
 
@@ -513,6 +514,9 @@ func (r *PostgresRepository) UpdateMatch(ctx context.Context, input domain.Updat
 	if err := validateMatchTeamIDTx(ctx, tx, leagueID, input.AwayTeamID); err != nil {
 		return err
 	}
+	if err := lookupVenueExistsTx(ctx, tx, input.VenueID); err != nil {
+		return err
+	}
 	startsAt, err := time.Parse(time.RFC3339, input.StartsAt)
 	if err != nil {
 		return fmt.Errorf("parse match startsAt: %w", err)
@@ -522,11 +526,9 @@ func (r *PostgresRepository) UpdateMatch(ctx context.Context, input domain.Updat
 		UPDATE matches
 		SET teams = $5,
 		    round_name = $6::jsonb,
-		    venue = $7::jsonb,
-		    city = $8::jsonb,
-		    country = $9::jsonb,
-		    starts_at = $10,
-		    status = $11,
+		    venue_id = $7,
+		    starts_at = $8,
+		    status = $9,
 		    updated_at = NOW()
 		WHERE season_id = $1
 		  AND external_id = $2
@@ -538,7 +540,7 @@ func (r *PostgresRepository) UpdateMatch(ctx context.Context, input domain.Updat
 			JOIN sports s ON s.id = l.sport_id
 			WHERE se.id = $1 AND s.slug = $3 AND l.slug = $4
 		  )
-	`, seasonID, input.ExternalID, input.SportSlug, input.LeagueSlug, []int64{input.HomeTeamID, input.AwayTeamID}, encodeLocalizedText(input.Round), encodeLocalizedText(input.Venue), encodeLocalizedText(input.City), encodeLocalizedText(input.Country), startsAt.UTC(), input.Status)
+	`, seasonID, input.ExternalID, input.SportSlug, input.LeagueSlug, []int64{input.HomeTeamID, input.AwayTeamID}, encodeLocalizedText(input.Round), input.VenueID, startsAt.UTC(), input.Status)
 	if err != nil {
 		return fmt.Errorf("update match %s: %w", input.ExternalID, err)
 	}
@@ -826,8 +828,9 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 	}
 
 	matchRows, err := r.pool.Query(ctx, `
-		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.venue, m.city, m.country, m.teams, m.updated_at
+		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.venue_id, v.name, v.city, v.country, m.teams, m.updated_at
 		FROM matches m
+		LEFT JOIN venues v ON v.id = m.venue_id
 		WHERE m.season_id = $1
 		ORDER BY m.starts_at ASC, m.id ASC
 	`, selected.id)
@@ -843,6 +846,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 			match          domain.Match
 			roundRaw       []byte
 			startsAt       time.Time
+			venueID        *int64
 			venueRaw       []byte
 			cityRaw        []byte
 			countryRaw     []byte
@@ -854,6 +858,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 			&roundRaw,
 			&startsAt,
 			&match.Status,
+			&venueID,
 			&venueRaw,
 			&cityRaw,
 			&countryRaw,
@@ -865,6 +870,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 
 		match.Round = decodeLocalizedText(roundRaw)
 		match.StartsAt = startsAt.UTC().Format(time.RFC3339)
+		match.VenueID = venueID
 		match.Venue = decodeLocalizedText(venueRaw)
 		match.City = decodeLocalizedText(cityRaw)
 		match.Country = decodeLocalizedText(countryRaw)
@@ -979,6 +985,12 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 		teamIDs[team.ID] = teamID
 	}
 
+	for _, venue := range snapshot.Venues {
+		if err := upsertVenueSnapshotRecord(ctx, tx, venue); err != nil {
+			return err
+		}
+	}
+
 	matchExternalIDs := make([]string, 0, len(snapshot.Matches))
 	for _, match := range snapshot.Matches {
 		storedTeamIDs := make([]int64, 0, len(match.Teams))
@@ -1008,31 +1020,25 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 				external_id,
 				teams,
 				round_name,
-				venue,
-				city,
-				country,
+				venue_id,
 				starts_at,
 				status
-			) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9)
+			) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
 			ON CONFLICT (external_id) DO UPDATE
 			SET season_id = EXCLUDED.season_id,
 			    teams = EXCLUDED.teams,
 			    round_name = matches.round_name || EXCLUDED.round_name,
-			    venue = matches.venue || EXCLUDED.venue,
-			    city = matches.city || EXCLUDED.city,
-			    country = matches.country || EXCLUDED.country,
+			    venue_id = EXCLUDED.venue_id,
 			    starts_at = EXCLUDED.starts_at,
 			    status = EXCLUDED.status,
 			    updated_at = NOW()
 			WHERE matches.season_id IS DISTINCT FROM EXCLUDED.season_id
 			   OR matches.teams IS DISTINCT FROM EXCLUDED.teams
 			   OR matches.round_name IS DISTINCT FROM matches.round_name || EXCLUDED.round_name
-			   OR matches.venue IS DISTINCT FROM matches.venue || EXCLUDED.venue
-			   OR matches.city IS DISTINCT FROM matches.city || EXCLUDED.city
-			   OR matches.country IS DISTINCT FROM matches.country || EXCLUDED.country
+			   OR matches.venue_id IS DISTINCT FROM EXCLUDED.venue_id
 			   OR matches.starts_at IS DISTINCT FROM EXCLUDED.starts_at
 			   OR matches.status IS DISTINCT FROM EXCLUDED.status
-		`, snapshot.Target.SeasonID, match.ExternalID, storedTeamIDs, encodeLocalizedText(match.Round), encodeLocalizedText(match.Venue), encodeLocalizedText(match.City), encodeLocalizedText(match.Country), match.StartsAt.UTC(), match.Status); err != nil {
+		`, snapshot.Target.SeasonID, match.ExternalID, storedTeamIDs, encodeLocalizedText(match.Round), match.VenueID, match.StartsAt.UTC(), match.Status); err != nil {
 			return fmt.Errorf("upsert match %s: %w", match.ExternalID, err)
 		}
 		matchExternalIDs = append(matchExternalIDs, match.ExternalID)
@@ -1114,6 +1120,7 @@ func (r *PostgresRepository) latestUpdatedAt(ctx context.Context) (string, error
 			COALESCE((SELECT MAX(updated_at) FROM leagues), '-infinity'::timestamptz),
 			COALESCE((SELECT MAX(updated_at) FROM seasons), '-infinity'::timestamptz),
 			COALESCE((SELECT MAX(updated_at) FROM teams), '-infinity'::timestamptz),
+			COALESCE((SELECT MAX(updated_at) FROM venues), '-infinity'::timestamptz),
 			COALESCE((SELECT MAX(updated_at) FROM matches), '-infinity'::timestamptz)
 		)
 	`).Scan(&updatedAt)

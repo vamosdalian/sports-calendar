@@ -132,6 +132,25 @@ var allMigrations = []migration{
 			 ON CONFLICT (code) DO NOTHING`,
 		},
 	},
+	{
+		version: 5,
+		name:    "venues_table",
+		statements: []string{
+			`CREATE TABLE IF NOT EXISTS venues (
+			    id BIGINT PRIMARY KEY,
+			    name JSONB NOT NULL DEFAULT '{}'::JSONB,
+			    city JSONB NOT NULL DEFAULT '{}'::JSONB,
+			    country JSONB NOT NULL DEFAULT '{}'::JSONB,
+			    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+			`ALTER TABLE matches ADD COLUMN IF NOT EXISTS venue_id BIGINT`,
+			`CREATE INDEX IF NOT EXISTS idx_matches_venue_id ON matches (venue_id)`,
+			`ALTER TABLE matches DROP COLUMN IF EXISTS venue`,
+			`ALTER TABLE matches DROP COLUMN IF EXISTS city`,
+			`ALTER TABLE matches DROP COLUMN IF EXISTS country`,
+		},
+	},
 }
 
 func Run(ctx context.Context, pool *pgxpool.Pool, logger *logrus.Logger) error {

@@ -154,7 +154,7 @@ func (h *Handler) updateSeason(c *gin.Context) {
 }
 
 func (h *Handler) refreshSeasonNow(c *gin.Context) {
-	err := h.service.RefreshSeasonNow(c.Request.Context(), domain.RefreshSeasonInput{
+	payload, err := h.service.RefreshSeasonNow(c.Request.Context(), domain.RefreshSeasonInput{
 		SportSlug:  c.Param("sport"),
 		LeagueSlug: c.Param("league"),
 		SeasonSlug: c.Param("season"),
@@ -164,5 +164,5 @@ func (h *Handler) refreshSeasonNow(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusAccepted, payload)
 }

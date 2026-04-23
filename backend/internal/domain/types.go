@@ -69,6 +69,7 @@ type Match struct {
 	Round      LocalizedText `json:"round"`
 	StartsAt   string        `json:"startsAt"`
 	Status     string        `json:"status"`
+	VenueID    *int64        `json:"venueId,omitempty"`
 	Venue      LocalizedText `json:"venue"`
 	City       LocalizedText `json:"city"`
 	Country    LocalizedText `json:"country"`
@@ -117,6 +118,15 @@ type SeasonRecord struct {
 	DefaultMatchDurationMinutes int    `json:"defaultMatchDurationMinutes"`
 	CreatedAt                   string `json:"createdAt"`
 	UpdatedAt                   string `json:"updatedAt"`
+}
+
+type VenueRecord struct {
+	ID        int64         `json:"id"`
+	Name      LocalizedText `json:"name"`
+	City      LocalizedText `json:"city"`
+	Country   LocalizedText `json:"country"`
+	CreatedAt string        `json:"createdAt"`
+	UpdatedAt string        `json:"updatedAt"`
 }
 
 type CreateSportInput struct {
@@ -201,9 +211,7 @@ type CreateMatchInput struct {
 	Round      LocalizedText `json:"round"`
 	StartsAt   string        `json:"startsAt"`
 	Status     string        `json:"status"`
-	Venue      LocalizedText `json:"venue"`
-	City       LocalizedText `json:"city"`
-	Country    LocalizedText `json:"country"`
+	VenueID    *int64        `json:"venueId"`
 }
 
 type UpdateMatchInput struct {
@@ -216,9 +224,21 @@ type UpdateMatchInput struct {
 	Round      LocalizedText `json:"round"`
 	StartsAt   string        `json:"startsAt"`
 	Status     string        `json:"status"`
-	Venue      LocalizedText `json:"venue"`
-	City       LocalizedText `json:"city"`
-	Country    LocalizedText `json:"country"`
+	VenueID    *int64        `json:"venueId"`
+}
+
+type CreateVenueInput struct {
+	ID      int64         `json:"id"`
+	Name    LocalizedText `json:"name"`
+	City    LocalizedText `json:"city"`
+	Country LocalizedText `json:"country"`
+}
+
+type UpdateVenueInput struct {
+	ID      int64         `json:"-"`
+	Name    LocalizedText `json:"name"`
+	City    LocalizedText `json:"city"`
+	Country LocalizedText `json:"country"`
 }
 
 type DeleteMatchInput struct {

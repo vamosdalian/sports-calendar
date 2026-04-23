@@ -9,11 +9,12 @@ import (
 )
 
 type Config struct {
-	Server      ServerConfig      `yaml:"server"`
-	RateLimit   RateLimitConfig   `yaml:"rateLimit"`
-	Database    DatabaseConfig    `yaml:"database"`
-	TheSportsDB TheSportsDBConfig `yaml:"theSportsDB"`
-	AdminAuth   AdminAuthConfig   `yaml:"adminAuth"`
+	Server          ServerConfig          `yaml:"server"`
+	RateLimit       RateLimitConfig       `yaml:"rateLimit"`
+	Database        DatabaseConfig        `yaml:"database"`
+	TheSportsDB     TheSportsDBConfig     `yaml:"theSportsDB"`
+	RefreshExecutor RefreshExecutorConfig `yaml:"refreshExecutor"`
+	AdminAuth       AdminAuthConfig       `yaml:"adminAuth"`
 }
 
 type ServerConfig struct {
@@ -38,6 +39,10 @@ type TheSportsDBConfig struct {
 	BaseURL        string `yaml:"baseURL"`
 	APIKey         string `yaml:"apiKey"`
 	TimeoutSeconds int    `yaml:"timeoutSeconds"`
+}
+
+type RefreshExecutorConfig struct {
+	QPS int `yaml:"qps"`
 }
 
 type AdminAuthConfig struct {
@@ -84,6 +89,9 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.TheSportsDB.APIKey == "" {
 		return Config{}, fmt.Errorf("theSportsDB apiKey is required")
+	}
+	if cfg.RefreshExecutor.QPS <= 0 {
+		cfg.RefreshExecutor.QPS = 1
 	}
 	if cfg.AdminAuth.Secret == "" {
 		return Config{}, fmt.Errorf("adminAuth secret is required")

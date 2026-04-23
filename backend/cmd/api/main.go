@@ -67,6 +67,7 @@ func main() {
 		cfg.TheSportsDB.BaseURL,
 		cfg.TheSportsDB.APIKey,
 		time.Duration(cfg.TheSportsDB.TimeoutSeconds)*time.Second,
+		cfg.RefreshExecutor.QPS,
 	)
 	if err != nil {
 		logger.WithError(err).Fatal("create TheSportsDB client")
@@ -77,9 +78,15 @@ func main() {
 	if err != nil {
 		logger.WithError(err).Fatal("create league syncer")
 	}
-	svc.SetSyncRunner(leagueSyncer)
+	refreshExecutor, err := syncer.NewRefreshExecutor(logger, leagueSyncer)
+	if err != nil {
+		logger.WithError(err).Fatal("create refresh executor")
+	}
+	refreshExecutor.Start()
+	defer refreshExecutor.Stop()
+	svc.SetRefreshExecutor(refreshExecutor)
 
-	scheduler, err := syncer.NewScheduler(logger, leagueSyncer)
+	scheduler, err := syncer.NewScheduler(logger, repo, refreshExecutor)
 	if err != nil {
 		logger.WithError(err).Fatal("create sync scheduler")
 	}

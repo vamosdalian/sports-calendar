@@ -16,20 +16,32 @@ type Scheduler struct {
 	mu      sync.Mutex
 	cron    *cron.Cron
 	logger  *logrus.Logger
-	runner  Runner
+	loader  targetLoader
+	queue   queueProducer
 	targets []domain.LeagueSyncTarget
 	started bool
 }
 
-func NewScheduler(logger *logrus.Logger, runner Runner) (*Scheduler, error) {
+type targetLoader interface {
+	ListSyncTargets(ctx context.Context) ([]domain.LeagueSyncTarget, error)
+}
+
+type queueProducer interface {
+	Enqueue(target domain.LeagueSyncTarget, source domain.RefreshRequestSource) domain.RefreshEnqueueResponse
+}
+
+func NewScheduler(logger *logrus.Logger, loader targetLoader, queue queueProducer) (*Scheduler, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required")
 	}
-	if runner == nil {
-		return nil, fmt.Errorf("sync runner is required")
+	if loader == nil {
+		return nil, fmt.Errorf("sync target loader is required")
+	}
+	if queue == nil {
+		return nil, fmt.Errorf("refresh queue producer is required")
 	}
 
-	scheduler := &Scheduler{cron: cron.New(), logger: logger, runner: runner}
+	scheduler := &Scheduler{cron: cron.New(), logger: logger, loader: loader, queue: queue}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := scheduler.Refresh(ctx); err != nil {
@@ -54,10 +66,6 @@ func (s *Scheduler) Start() {
 
 	s.logger.WithField("targets", len(targets)).Info("starting league sync scheduler")
 	instance.Start()
-	for _, target := range targets {
-		targetCopy := target
-		go runTarget(s.logger, s.runner, targetCopy)
-	}
 }
 
 func (s *Scheduler) Stop() {
@@ -82,7 +90,7 @@ func (s *Scheduler) Refresh(ctx context.Context) error {
 	if s == nil {
 		return nil
 	}
-	targets, err := s.runner.ListSyncTargets(ctx)
+	targets, err := s.loader.ListSyncTargets(ctx)
 	if err != nil {
 		return fmt.Errorf("load sync targets: %w", err)
 	}
@@ -91,7 +99,7 @@ func (s *Scheduler) Refresh(ctx context.Context) error {
 	for _, target := range targets {
 		targetCopy := target
 		if _, err := instance.AddFunc(targetCopy.SyncInterval, func() {
-			runTarget(s.logger, s.runner, targetCopy)
+			s.queue.Enqueue(targetCopy, domain.RefreshRequestSourceCron)
 		}); err != nil {
 			return fmt.Errorf("register sync schedule for %s: %w", targetCopy.LeagueSlug, err)
 		}
@@ -114,21 +122,4 @@ func (s *Scheduler) Refresh(ctx context.Context) error {
 
 	s.logger.WithField("targets", len(targets)).Info("refreshed league sync scheduler")
 	return nil
-}
-
-func runTarget(logger *logrus.Logger, runner Runner, target domain.LeagueSyncTarget) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	logger.WithFields(logrus.Fields{
-		"league": target.LeagueSlug,
-		"season": target.SeasonSlug,
-	}).Info("league sync started")
-
-	if err := runner.SyncLeague(ctx, target); err != nil {
-		logger.WithError(err).WithFields(logrus.Fields{
-			"league": target.LeagueSlug,
-			"season": target.SeasonSlug,
-		}).Error("league sync failed")
-	}
 }

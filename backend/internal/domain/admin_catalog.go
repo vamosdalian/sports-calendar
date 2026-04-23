@@ -67,6 +67,19 @@ type AdminTeamItem struct {
 	Name LocalizedText `json:"name"`
 }
 
+type AdminVenueItem struct {
+	ID        int64         `json:"id"`
+	Name      LocalizedText `json:"name"`
+	City      LocalizedText `json:"city"`
+	Country   LocalizedText `json:"country"`
+	UpdatedAt string        `json:"updatedAt"`
+}
+
+type AdminVenuesResponse struct {
+	Items     []AdminVenueItem `json:"items"`
+	UpdatedAt string           `json:"updatedAt"`
+}
+
 type AdminTeamsResponse struct {
 	SportSlug  string          `json:"sportSlug"`
 	LeagueSlug string          `json:"leagueSlug"`

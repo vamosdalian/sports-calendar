@@ -56,6 +56,7 @@ type localizedMatch struct {
 	Title      string         `json:"title"`
 	StartsAt   string         `json:"startsAt"`
 	Status     string         `json:"status"`
+	VenueID    *int64         `json:"venueId,omitempty"`
 	Venue      string         `json:"venue"`
 	City       string         `json:"city"`
 	Country    string         `json:"country"`
@@ -118,6 +119,7 @@ func localizeSeasonDetail(payload service.SeasonDetail, locale string) localized
 				Title:      match.DisplayTitle(locale),
 				StartsAt:   match.StartsAt,
 				Status:     match.Status,
+				VenueID:    match.VenueID,
 				Venue:      pickLocalizedText(match.Venue, locale),
 				City:       pickLocalizedText(match.City, locale),
 				Country:    pickLocalizedText(match.Country, locale),

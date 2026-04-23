@@ -15,6 +15,40 @@ export type AuthTokenResponse = {
 	expiresAt: string
 }
 
+export type RefreshTaskSource = 'manual' | 'cron'
+
+export type RefreshTaskStatus = 'running' | 'succeeded' | 'failed'
+
+export type RefreshTaskItem = {
+	leagueId: number
+	leagueSlug: string
+	seasonId: number
+	seasonSlug: string
+	requestedAt: string
+	source: RefreshTaskSource
+}
+
+export type RunningRefreshTask = RefreshTaskItem & {
+	startedAt: string
+	status: RefreshTaskStatus
+}
+
+export type RecentRefreshTask = RefreshTaskItem & {
+	startedAt: string
+	finishedAt: string
+	status: RefreshTaskStatus
+	error?: string
+}
+
+export type RefreshQueueSnapshot = {
+	running: RunningRefreshTask | null
+	queued: RefreshTaskItem[]
+	recent: RecentRefreshTask[]
+	stats: {
+		queueLength: number
+	}
+}
+
 export type SportItem = {
 	id: number
 	slug: string
@@ -140,6 +174,19 @@ export type AdminTeamItem = {
 	name: LocalizedText
 }
 
+export type AdminVenueItem = {
+	id: number
+	name: LocalizedText
+	city: LocalizedText
+	country: LocalizedText
+	updatedAt: string
+}
+
+export type AdminVenuesResponse = {
+	items: AdminVenueItem[]
+	updatedAt: string
+}
+
 export type AdminTeamsResponse = {
 	sportSlug: string
 	leagueSlug: string
@@ -152,6 +199,7 @@ export type MatchItem = {
 	round: string
 	startsAt: string
 	status: string
+	venueId?: number
 	venue: string
 	city: string
 	country: string

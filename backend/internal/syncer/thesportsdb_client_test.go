@@ -66,13 +66,49 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 					},
 				},
 			})
+		case "/api/v2/json/lookup/event/2267073":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"lookup": []map[string]any{{
+					"idEvent":      "2267073",
+					"idHomeTeam":   "133602",
+					"idAwayTeam":   "134301",
+					"idVenue":      "9001",
+					"intRound":     "1",
+					"strTimestamp": "2025-08-15T19:00:00",
+					"strVenue":     "Anfield",
+					"strCity":      "Liverpool",
+					"strCountry":   "England",
+					"strStatus":    "Match Finished",
+					"strPostponed": "no",
+					"strHomeTeam":  "Liverpool",
+					"strAwayTeam":  "Bournemouth",
+				}},
+			})
+		case "/api/v2/json/lookup/event/2267999":
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"lookup": []map[string]any{{
+					"idEvent":     "2267999",
+					"idHomeTeam":  "133602",
+					"idAwayTeam":  "134301",
+					"idVenue":     "9001",
+					"intRound":    "2",
+					"dateEvent":   "2025-08-22",
+					"strTime":     "15:00:00",
+					"strVenue":    "Anfield",
+					"strCountry":  "England",
+					"strStatus":   "Not Started",
+					"strPostponed":"yes",
+					"strHomeTeam": "Liverpool",
+					"strAwayTeam": "Bournemouth",
+				}},
+			})
 		default:
 			t.Fatalf("unexpected request path: %s", request.URL.Path)
 		}
 	}))
 	defer server.Close()
 
-	client, err := NewTheSportsDBClient(server.URL, "test-key", 5*time.Second)
+	client, err := NewTheSportsDBClient(server.URL, "test-key", 5*time.Second, 10)
 	if err != nil {
 		t.Fatalf("create client: %v", err)
 	}
@@ -101,8 +137,17 @@ func TestFetchLeagueSnapshot(t *testing.T) {
 	if len(snapshot.Matches) != 2 {
 		t.Fatalf("unexpected match count: %d", len(snapshot.Matches))
 	}
+	if len(snapshot.Venues) != 1 {
+		t.Fatalf("unexpected venue count: %d", len(snapshot.Venues))
+	}
+	if got := snapshot.Venues[0].Name["en"]; got != "Anfield" {
+		t.Fatalf("unexpected venue name: %q", got)
+	}
 	if len(snapshot.Matches[0].Teams) != 2 || snapshot.Matches[0].Teams[0] != 133602 || snapshot.Matches[0].Teams[1] != 134301 {
 		t.Fatalf("unexpected first match teams: %#v", snapshot.Matches[0].Teams)
+	}
+	if snapshot.Matches[0].VenueID == nil || *snapshot.Matches[0].VenueID != 9001 {
+		t.Fatalf("unexpected first match venue id: %#v", snapshot.Matches[0].VenueID)
 	}
 	if got := snapshot.Matches[0].TeamNames[0]["en"]; got != "Liverpool" {
 		t.Fatalf("unexpected first home team name: %q", got)
