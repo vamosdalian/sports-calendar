@@ -3,6 +3,7 @@ package ics
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"time"
 
 	ical "github.com/emersion/go-ical"
@@ -12,7 +13,7 @@ import (
 func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 	locale := normalizeLocale(detail.Locale)
 	calendar := ical.NewCalendar()
-	calendar.Props.SetText(ical.PropProductID, "-//sports-calendar//season-feed//EN")
+	calendar.Props.SetText(ical.PropProductID, fmt.Sprintf("-//sports-calendar//season-feed//%s", strings.ToUpper(locale)))
 	calendar.Props.SetText(ical.PropVersion, "2.0")
 	calendarName := buildCalendarName(detail, locale)
 	calendar.Props.SetText(ical.PropName, calendarName)
@@ -30,12 +31,16 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		venue := domain.PickLocalized(match.Venue, locale)
 		event.Props.SetDateTime(ical.PropDateTimeStart, startTime)
 		event.Props.SetDateTime(ical.PropDateTimeEnd, startTime.Add(time.Duration(detail.DefaultMatchDurationMinutes)*time.Minute))
-		event.Props.SetText(ical.PropSummary, match.DisplayTitle(locale))
+		summary := buildSummary(match, locale)
+		event.Props.SetText(ical.PropSummary, summary)
 		event.Props.SetText(ical.PropDescription, buildDescription(match, locale))
 		if venue != "" {
 			event.Props.SetText(ical.PropLocation, venue)
 		}
 		event.Props.SetText(ical.PropStatus, normalizeStatus(match.Status))
+		if match.Status != "" {
+			event.Props.SetText("X-SC-MATCH-STATUS", match.Status)
+		}
 
 		categories := ical.NewProp(ical.PropCategories)
 		categoryValues := []string{detail.SportSlug, detail.LeagueSlug}
@@ -44,6 +49,7 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		}
 		categories.SetTextList(categoryValues)
 		event.Props.Set(categories)
+		event.Children = append(event.Children, buildReminderAlarm(summary))
 
 		calendar.Children = append(calendar.Children, event.Component)
 	}
@@ -53,6 +59,27 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		return nil, fmt.Errorf("encode calendar: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func buildReminderAlarm(summary string) *ical.Component {
+	alarm := ical.NewComponent(ical.CompAlarm)
+	alarm.Props.SetText(ical.PropAction, "DISPLAY")
+	trigger := ical.NewProp(ical.PropTrigger)
+	trigger.SetDuration(-30 * time.Minute)
+	alarm.Props.Set(trigger)
+	alarm.Props.SetText(ical.PropDescription, summary)
+	return alarm
+}
+
+func buildSummary(match domain.Match, locale string) string {
+	if match.Status == "finished" && len(match.Result) == 2 && match.HomeTeam != nil && match.AwayTeam != nil {
+		homeName := domain.PickLocalized(match.HomeTeam.Names, locale)
+		awayName := domain.PickLocalized(match.AwayTeam.Names, locale)
+		if homeName != "" && awayName != "" {
+			return fmt.Sprintf("%s %s:%s %s", homeName, match.Result[0], match.Result[1], awayName)
+		}
+	}
+	return match.DisplayTitle(locale)
 }
 
 func buildDescription(match domain.Match, locale string) string {
