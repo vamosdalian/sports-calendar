@@ -3,6 +3,7 @@ package ics
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,8 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 	calendar := ical.NewCalendar()
 	calendar.Props.SetText(ical.PropProductID, fmt.Sprintf("-//sports-calendar//season-feed//%s", strings.ToUpper(locale)))
 	calendar.Props.SetText(ical.PropVersion, "2.0")
+	calendar.Props.SetText(ical.PropCalendarScale, "GREGORIAN")
+	calendar.Props.SetText(ical.PropMethod, "PUBLISH")
 	calendarName := buildCalendarName(detail, locale)
 	calendar.Props.SetText(ical.PropName, calendarName)
 	calendar.Props.SetText("X-WR-CALNAME", calendarName)
@@ -23,6 +26,9 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		event := ical.NewEvent()
 		event.Props.SetText(ical.PropUID, fmt.Sprintf("%s@sports-calendar.com", match.ID))
 		event.Props.SetDateTime(ical.PropDateTimeStamp, now)
+		lastModified := resolveLastModified(match.UpdatedAt, detail.UpdatedAt, now)
+		event.Props.SetDateTime(ical.PropLastModified, lastModified)
+		event.Props.Set(buildSequence(lastModified))
 
 		startTime, err := match.StartTime()
 		if err != nil {
@@ -41,6 +47,7 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		if match.Status != "" {
 			event.Props.SetText("X-SC-MATCH-STATUS", match.Status)
 		}
+		event.Props.SetText(ical.PropTransparency, "OPAQUE")
 
 		categories := ical.NewProp(ical.PropCategories)
 		categoryValues := []string{detail.SportSlug, detail.LeagueSlug}
@@ -59,6 +66,26 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		return nil, fmt.Errorf("encode calendar: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func resolveLastModified(matchUpdatedAt, feedUpdatedAt string, fallback time.Time) time.Time {
+	for _, value := range []string{matchUpdatedAt, feedUpdatedAt} {
+		if value == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err == nil {
+			return parsed.UTC()
+		}
+	}
+	return fallback.UTC()
+}
+
+func buildSequence(lastModified time.Time) *ical.Prop {
+	sequence := ical.NewProp(ical.PropSequence)
+	sequence.SetValueType(ical.ValueInt)
+	sequence.Value = strconv.FormatInt(lastModified.Unix(), 10)
+	return sequence
 }
 
 func buildReminderAlarm(summary string) *ical.Component {

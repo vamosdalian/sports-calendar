@@ -19,17 +19,19 @@ func TestBuildCalendar(t *testing.T) {
 		LeagueNames:                 domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
 		Locale:                      "en",
 		SeasonLabel:                 "2026",
+		UpdatedAt:                   "2026-03-08T00:00:00Z",
 		DefaultMatchDurationMinutes: 120,
 		Matches: []domain.Match{
 			{
-				ID:       "csl-2026-r1-guoan-shenhua",
-				Round:    domain.LocalizedText{"en": "Round 1"},
-				StartsAt: "2026-03-14T11:35:00Z",
-				Status:   "scheduled",
-				Venue:    domain.LocalizedText{"en": "Workers Stadium"},
-				City:     domain.LocalizedText{"en": "Beijing"},
-				HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan"}},
-				AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua"}},
+				ID:        "csl-2026-r1-guoan-shenhua",
+				Round:     domain.LocalizedText{"en": "Round 1"},
+				StartsAt:  "2026-03-14T11:35:00Z",
+				Status:    "scheduled",
+				Venue:     domain.LocalizedText{"en": "Workers Stadium"},
+				City:      domain.LocalizedText{"en": "Beijing"},
+				HomeTeam:  &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan"}},
+				AwayTeam:  &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua"}},
+				UpdatedAt: "2026-03-09T00:00:00Z",
 			},
 		},
 	}, time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC))
@@ -48,6 +50,15 @@ func TestBuildCalendar(t *testing.T) {
 		t.Fatalf("alarm count = %d, want %d", got, want)
 	}
 	body := string(content)
+	if !strings.Contains(body, "CALSCALE:GREGORIAN") || !strings.Contains(body, "METHOD:PUBLISH") {
+		t.Fatalf("expected publish calendar metadata body=%s", body)
+	}
+	if !strings.Contains(body, "LAST-MODIFIED:20260309T000000Z") || !strings.Contains(body, "SEQUENCE:1773014400") {
+		t.Fatalf("expected event update metadata body=%s", body)
+	}
+	if !strings.Contains(body, "TRANSP:OPAQUE") {
+		t.Fatalf("expected opaque event transparency body=%s", body)
+	}
 	if !strings.Contains(body, "BEGIN:VALARM") || !strings.Contains(body, "ACTION:DISPLAY") || !strings.Contains(body, "TRIGGER:-PT1800S") || !strings.Contains(body, "END:VALARM") {
 		t.Fatalf("expected 30-minute display reminder body=%s", body)
 	}
