@@ -66,6 +66,7 @@ export function SeasonCalendarContent({
     ? matches.filter((match) => matchIncludesTeam(match, selectedTeamSlug))
     : matches;
   const filteredGroups = buildMatchGroups(filteredMatches);
+  const initiallyOpenGroupKey = findMostRecentFinishedGroupKey(filteredGroups);
   const subscriptionUrl = buildSubscriptionUrl(subscriptionBaseUrl, selectedTeamSlug);
   const subscriptionCopyUrl = buildSubscriptionUrl(subscriptionCopyBaseUrl, selectedTeamSlug);
 
@@ -226,7 +227,7 @@ export function SeasonCalendarContent({
               <details
                 key={group.key}
                 className="group w-full rounded-3xl bg-white/25 px-4 py-4"
-                open={index === 0}
+                open={initiallyOpenGroupKey ? group.key === initiallyOpenGroupKey : index === 0}
               >
                 <summary className="flex w-full cursor-pointer list-none items-center text-sm font-medium text-ink">
                   <span className="flex items-center gap-3">
@@ -311,6 +312,30 @@ function buildMatchGroups(matches: Match[]): MatchGroup[] {
     const group = groupsByKey.get(key);
     return group ? [group] : [];
   });
+}
+
+function findMostRecentFinishedGroupKey(groups: MatchGroup[]) {
+  let mostRecent: { groupKey: string; startsAtMs: number } | null = null;
+  const now = Date.now();
+
+  for (const group of groups) {
+    for (const match of group.matches) {
+      if (match.status !== "finished") {
+        continue;
+      }
+
+      const startsAtMs = Date.parse(match.startsAt);
+      if (!Number.isFinite(startsAtMs) || startsAtMs > now) {
+        continue;
+      }
+
+      if (!mostRecent || startsAtMs > mostRecent.startsAtMs) {
+        mostRecent = { groupKey: group.key, startsAtMs };
+      }
+    }
+  }
+
+  return mostRecent?.groupKey ?? "";
 }
 
 function matchIncludesTeam(match: Match, teamSlug: string) {
