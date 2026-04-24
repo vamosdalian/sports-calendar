@@ -877,6 +877,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 		match.Venue = decodeLocalizedText(venueRaw)
 		match.City = decodeLocalizedText(cityRaw)
 		match.Country = decodeLocalizedText(countryRaw)
+		match.UpdatedAt = matchUpdatedAt.UTC().Format(time.RFC3339)
 		if len(teamIDs) > 0 {
 			match.HomeTeamID = teamIDs[0]
 			match.HomeTeam = resolveMatchTeam(teamIDs[0], teamMap)

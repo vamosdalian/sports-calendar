@@ -78,6 +78,7 @@ type Match struct {
 	AwayTeamID int64         `json:"awayTeamID,omitempty"`
 	HomeTeam   *Team         `json:"homeTeam,omitempty"`
 	AwayTeam   *Team         `json:"awayTeam,omitempty"`
+	UpdatedAt  string        `json:"updatedAt,omitempty"`
 }
 
 type Team struct {

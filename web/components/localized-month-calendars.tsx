@@ -112,12 +112,6 @@ function MonthCalendar({
                         <span className="font-medium">{formatTooltipTime(match.startsAt, locale, timeZone)}</span>
                         <span className="text-white/75"> · </span>
                         <span>{matchLabel(match)}</span>
-                        {match.venue ? (
-                          <>
-                            <span className="text-white/75"> / </span>
-                            <span className="text-white/85">{match.venue}</span>
-                          </>
-                        ) : null}
                       </li>
                     ))}
                   </ul>

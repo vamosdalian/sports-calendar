@@ -4,7 +4,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { matchLabel, type Match } from "../lib/catalog";
+import { formatMatchLocation, matchLabel, type Match } from "../lib/catalog";
 import type { Locale } from "../lib/site";
 import { LocalizedMatchTime } from "./localized-match-time";
 import { LocalizedMonthCalendars } from "./localized-month-calendars";
@@ -66,6 +66,7 @@ export function SeasonCalendarContent({
     ? matches.filter((match) => matchIncludesTeam(match, selectedTeamSlug))
     : matches;
   const filteredGroups = buildMatchGroups(filteredMatches);
+  const initiallyOpenGroupKey = findMostRecentFinishedGroupKey(filteredGroups);
   const subscriptionUrl = buildSubscriptionUrl(subscriptionBaseUrl, selectedTeamSlug);
   const subscriptionCopyUrl = buildSubscriptionUrl(subscriptionCopyBaseUrl, selectedTeamSlug);
 
@@ -226,7 +227,7 @@ export function SeasonCalendarContent({
               <details
                 key={group.key}
                 className="group w-full rounded-3xl bg-white/25 px-4 py-4"
-                open={index === 0}
+                open={initiallyOpenGroupKey ? group.key === initiallyOpenGroupKey : index === 0}
               >
                 <summary className="flex w-full cursor-pointer list-none items-center text-sm font-medium text-ink">
                   <span className="flex items-center gap-3">
@@ -313,12 +314,32 @@ function buildMatchGroups(matches: Match[]): MatchGroup[] {
   });
 }
 
-function matchIncludesTeam(match: Match, teamSlug: string) {
-  return match.homeTeam?.slug === teamSlug || match.awayTeam?.slug === teamSlug;
+function findMostRecentFinishedGroupKey(groups: MatchGroup[]) {
+  let mostRecent: { groupKey: string; startsAtMs: number } | null = null;
+  const now = Date.now();
+
+  for (const group of groups) {
+    for (const match of group.matches) {
+      if (match.status !== "finished") {
+        continue;
+      }
+
+      const startsAtMs = Date.parse(match.startsAt);
+      if (!Number.isFinite(startsAtMs) || startsAtMs > now) {
+        continue;
+      }
+
+      if (!mostRecent || startsAtMs > mostRecent.startsAtMs) {
+        mostRecent = { groupKey: group.key, startsAtMs };
+      }
+    }
+  }
+
+  return mostRecent?.groupKey ?? "";
 }
 
-function formatMatchLocation(match: Match) {
-  return [match.venue, match.city, match.country].filter(Boolean).join(", ");
+function matchIncludesTeam(match: Match, teamSlug: string) {
+  return match.homeTeam?.slug === teamSlug || match.awayTeam?.slug === teamSlug;
 }
 
 function buildSubscriptionUrl(baseUrl: string, teamSlug: string) {

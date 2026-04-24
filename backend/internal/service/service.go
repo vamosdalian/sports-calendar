@@ -321,6 +321,7 @@ func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, sea
 		LeagueNames:                 detail.LeagueNames,
 		Locale:                      locale,
 		SeasonLabel:                 detail.SeasonLabel,
+		UpdatedAt:                   detail.UpdatedAt,
 		DefaultMatchDurationMinutes: detail.DefaultMatchDurationMinutes,
 		Matches:                     filteredMatches,
 		TeamSlug:                    teamSlug,
