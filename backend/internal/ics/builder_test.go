@@ -72,7 +72,7 @@ func TestBuildCalendarTeamScopedName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build calendar: %v", err)
 	}
-	if body := string(content); !strings.Contains(body, "NAME:Chinese Super League 2026 - Beijing Guoan") || !strings.Contains(body, "CATEGORIES:football,csl,beijing-guoan") {
+	if body := string(content); !strings.Contains(body, "NAME:Chinese Super League 2026 - Beijing Guoan") || !strings.Contains(body, "X-WR-CALNAME;VALUE=TEXT:Chinese Super League 2026 - Beijing Guoan") || !strings.Contains(body, "CATEGORIES:football,csl,beijing-guoan") {
 		t.Fatalf("expected team-scoped calendar metadata body=%s", body)
 	}
 }
@@ -95,6 +95,7 @@ func TestBuildCalendarLocalizedChinese(t *testing.T) {
 				Status:   "scheduled",
 				Venue:    domain.LocalizedText{"en": "Workers Stadium", "zh": "工人体育场"},
 				City:     domain.LocalizedText{"en": "Beijing", "zh": "北京"},
+				Country:  domain.LocalizedText{"en": "China", "zh": "中国"},
 				HomeTeam: &domain.Team{Slug: "beijing-guoan", Names: domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"}},
 				AwayTeam: &domain.Team{Slug: "shanghai-shenhua", Names: domain.LocalizedText{"en": "Shanghai Shenhua", "zh": "上海申花"}},
 			},
@@ -108,10 +109,16 @@ func TestBuildCalendarLocalizedChinese(t *testing.T) {
 	if !strings.Contains(body, "NAME:中超 2026 - 北京国安") {
 		t.Fatalf("expected localized calendar name body=%s", body)
 	}
+	if !strings.Contains(body, "X-WR-CALNAME;VALUE=TEXT:中超 2026 - 北京国安") {
+		t.Fatalf("expected localized calendar display name body=%s", body)
+	}
 	if !strings.Contains(body, "SUMMARY:北京国安 对阵 上海申花") {
 		t.Fatalf("expected localized summary body=%s", body)
 	}
-	if !strings.Contains(body, "轮次: 第1轮") || !strings.Contains(body, "状态: 已安排") || !strings.Contains(body, "场地: 工人体育场") || !strings.Contains(body, "城市: 北京") {
+	if !strings.Contains(body, "轮次: 第1轮") || !strings.Contains(body, "状态: 已安排") || !strings.Contains(body, "场地: 工人体育场\\, 北京\\, 中国") || strings.Contains(body, "城市: 北京") {
 		t.Fatalf("expected localized description body=%s", body)
+	}
+	if !strings.Contains(body, "LOCATION:工人体育场") || strings.Contains(body, "LOCATION:工人体育场\\,") {
+		t.Fatalf("expected localized location with venue only body=%s", body)
 	}
 }

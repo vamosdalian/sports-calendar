@@ -4,7 +4,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { matchLabel, type Match } from "../lib/catalog";
+import { formatMatchLocation, matchLabel, type Match } from "../lib/catalog";
 import type { Locale } from "../lib/site";
 import { LocalizedMatchTime } from "./localized-match-time";
 import { LocalizedMonthCalendars } from "./localized-month-calendars";
@@ -315,10 +315,6 @@ function buildMatchGroups(matches: Match[]): MatchGroup[] {
 
 function matchIncludesTeam(match: Match, teamSlug: string) {
   return match.homeTeam?.slug === teamSlug || match.awayTeam?.slug === teamSlug;
-}
-
-function formatMatchLocation(match: Match) {
-  return [match.venue, match.city, match.country].filter(Boolean).join(", ");
 }
 
 function buildSubscriptionUrl(baseUrl: string, teamSlug: string) {

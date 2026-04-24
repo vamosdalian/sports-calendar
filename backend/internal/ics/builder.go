@@ -14,7 +14,9 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 	calendar := ical.NewCalendar()
 	calendar.Props.SetText(ical.PropProductID, "-//sports-calendar//season-feed//EN")
 	calendar.Props.SetText(ical.PropVersion, "2.0")
-	calendar.Props.SetText(ical.PropName, buildCalendarName(detail, locale))
+	calendarName := buildCalendarName(detail, locale)
+	calendar.Props.SetText(ical.PropName, calendarName)
+	calendar.Props.SetText("X-WR-CALNAME", calendarName)
 
 	for _, match := range detail.Matches {
 		event := ical.NewEvent()
@@ -26,13 +28,12 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 			return nil, err
 		}
 		venue := domain.PickLocalized(match.Venue, locale)
-		city := domain.PickLocalized(match.City, locale)
 		event.Props.SetDateTime(ical.PropDateTimeStart, startTime)
 		event.Props.SetDateTime(ical.PropDateTimeEnd, startTime.Add(time.Duration(detail.DefaultMatchDurationMinutes)*time.Minute))
 		event.Props.SetText(ical.PropSummary, match.DisplayTitle(locale))
 		event.Props.SetText(ical.PropDescription, buildDescription(match, locale))
-		if location := buildLocation(venue, city); location != "" {
-			event.Props.SetText(ical.PropLocation, location)
+		if venue != "" {
+			event.Props.SetText(ical.PropLocation, venue)
 		}
 		event.Props.SetText(ical.PropStatus, normalizeStatus(match.Status))
 
@@ -57,15 +58,17 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 func buildDescription(match domain.Match, locale string) string {
 	labels := localizedDescriptionLabels(locale)
 	return fmt.Sprintf(
-		"%s: %s\n%s: %s\n%s: %s\n%s: %s",
+		"%s: %s\n%s: %s\n%s: %s",
 		labels.Round,
 		domain.PickLocalized(match.Round, locale),
 		labels.Status,
 		localizeMatchStatus(match.Status, locale),
 		labels.Venue,
-		domain.PickLocalized(match.Venue, locale),
-		labels.City,
-		domain.PickLocalized(match.City, locale),
+		buildLocation(
+			domain.PickLocalized(match.Venue, locale),
+			domain.PickLocalized(match.City, locale),
+			domain.PickLocalized(match.Country, locale),
+		),
 	)
 }
 
@@ -124,7 +127,6 @@ type descriptionLabels struct {
 	Round  string
 	Status string
 	Venue  string
-	City   string
 }
 
 func localizedDescriptionLabels(locale string) descriptionLabels {
@@ -134,14 +136,12 @@ func localizedDescriptionLabels(locale string) descriptionLabels {
 			Round:  "轮次",
 			Status: "状态",
 			Venue:  "场地",
-			City:   "城市",
 		}
 	default:
 		return descriptionLabels{
 			Round:  "Round",
 			Status: "Status",
 			Venue:  "Venue",
-			City:   "City",
 		}
 	}
 }
