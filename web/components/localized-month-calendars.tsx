@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { matchLabel, type Match } from "../lib/catalog";
 import { localizedDateLocale, type Locale } from "../lib/site";
-
-const SERVER_TIME_ZONE = "UTC";
+import { useTimeZone } from "./time-zone-provider";
 
 type MonthSpec = {
   year: number;
@@ -20,14 +17,7 @@ type LocalizedMonthCalendarsProps = {
 };
 
 export function LocalizedMonthCalendars({ locale, matches, seasonSlug, weekLabels }: LocalizedMonthCalendarsProps) {
-  const [timeZone, setTimeZone] = useState(SERVER_TIME_ZONE);
-
-  useEffect(() => {
-    const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (browserTimeZone && browserTimeZone !== SERVER_TIME_ZONE) {
-      setTimeZone(browserTimeZone);
-    }
-  }, []);
+  const { timeZone } = useTimeZone();
 
   const monthSpecs = buildMonthSpecs(seasonSlug, matches, timeZone);
 
