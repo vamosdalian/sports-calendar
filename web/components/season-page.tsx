@@ -109,10 +109,6 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             <p className="text-base leading-7 text-ink/75">{data.season.calendarDescription}</p>
           </InfoSection>
 
-          <InfoSection title={t("dataSourceLabel")}>
-            <p className="text-base leading-7 text-ink/75">{data.season.dataSourceNote}</p>
-          </InfoSection>
-
           <InfoSection title={t("notesLabel")}>
             <p className="text-base leading-7 text-ink/75">{data.season.notes}</p>
           </InfoSection>
