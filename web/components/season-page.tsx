@@ -144,7 +144,7 @@ function InfoSection({ title, children }: { title: string; children: ReactNode }
   return (
     <section className="mt-6 bg-transparent p-0">
       <h2 className="bg-aside px-5 py-3 text-sm font-medium text-ink/80">{title}</h2>
-      <div className="px-5 pt-4">{children}</div>
+      <div className="pt-4">{children}</div>
     </section>
   );
 }
