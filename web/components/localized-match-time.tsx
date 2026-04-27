@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { localizedDateLocale, type Locale } from "../lib/site";
-
-const SERVER_TIME_ZONE = "UTC";
+import { useTimeZone } from "./time-zone-provider";
 
 type LocalizedMatchTimeProps = {
   startsAt: string;
@@ -13,14 +10,7 @@ type LocalizedMatchTimeProps = {
 };
 
 export function LocalizedMatchTime({ startsAt, locale, className }: LocalizedMatchTimeProps) {
-  const [timeZone, setTimeZone] = useState(SERVER_TIME_ZONE);
-
-  useEffect(() => {
-    const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (browserTimeZone && browserTimeZone !== SERVER_TIME_ZONE) {
-      setTimeZone(browserTimeZone);
-    }
-  }, []);
+  const { timeZone } = useTimeZone();
 
   return (
     <time dateTime={startsAt} className={className} suppressHydrationWarning>

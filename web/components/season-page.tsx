@@ -9,6 +9,7 @@ import { locales, type Locale, toPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
 import { SeasonCalendarContent } from "./season-calendar-content";
+import { TimeZoneSelector } from "./time-zone-selector";
 
 type SeasonPageProps = {
   locale: Locale;
@@ -124,15 +125,20 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             <span>{t("siteName")}</span>
             <span>{data.league.name} · {data.season.label}</span>
           </div>
-          <div className="text-left md:text-right">
-            <span>{t("contactUsLabel")}: </span>
-            <Link
-              aria-label={t("contactEmailAriaLabel")}
-              className="font-medium text-white underline underline-offset-2 transition hover:text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-              href="mailto:support@sports-calendar.com"
-            >
-              support@sports-calendar.com
-            </Link>
+          <div className="flex flex-col gap-3 text-left md:ml-auto md:items-end md:text-right">
+            <TimeZoneSelector
+              browserDefaultLabel={t("browserDefaultLabel")}
+            />
+            <div>
+              <span>{t("contactUsLabel")}: </span>
+              <Link
+                aria-label={t("contactEmailAriaLabel")}
+                className="font-medium text-white underline underline-offset-2 transition hover:text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                href="mailto:support@sports-calendar.com"
+              >
+                support@sports-calendar.com
+              </Link>
+            </div>
           </div>
         </div>
       </footer>

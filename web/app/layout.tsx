@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 
+import { TimeZoneProvider } from "../components/time-zone-provider";
+
 import "./globals.css";
 
 const DISPLAY_TIME_ZONE = "UTC";
@@ -27,7 +29,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang={locale}>
       <body className="font-sans antialiased">
         <NextIntlClientProvider messages={messages} timeZone={DISPLAY_TIME_ZONE}>
-          {children}
+          <TimeZoneProvider>{children}</TimeZoneProvider>
         </NextIntlClientProvider>
       </body>
     </html>
