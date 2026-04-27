@@ -136,8 +136,11 @@ func TestBuildCalendarLocalizedChinese(t *testing.T) {
 	if !strings.Contains(body, "SUMMARY:北京国安 对阵 上海申花") {
 		t.Fatalf("expected localized summary body=%s", body)
 	}
-	if !strings.Contains(body, "轮次: 第1轮") || !strings.Contains(body, "状态: 已安排") || !strings.Contains(body, "场地: 工人体育场\\, 北京\\, 中国") || strings.Contains(body, "城市: 北京") {
+	if !strings.Contains(body, "轮次: 第1轮") || !strings.Contains(body, "球队: 北京国安 vs 上海申花") || !strings.Contains(body, "状态: 已安排") || !strings.Contains(body, "场地: 工人体育场\\, 北京\\, 中国") || strings.Contains(body, "城市: 北京") {
 		t.Fatalf("expected localized description body=%s", body)
+	}
+	if strings.Contains(body, "比分:") {
+		t.Fatalf("did not expect score line for scheduled match body=%s", body)
 	}
 	if !strings.Contains(body, "LOCATION:工人体育场") || strings.Contains(body, "LOCATION:工人体育场\\,") {
 		t.Fatalf("expected localized location with venue only body=%s", body)
@@ -225,10 +228,19 @@ func TestBuildCalendarFinishedMatchSummaryIncludesScore(t *testing.T) {
 	if !strings.Contains(body, "SUMMARY:北京国安 2:1 上海申花") {
 		t.Fatalf("expected finished match summary with score body=%s", body)
 	}
+	if !strings.Contains(body, "球队: 北京国安 vs 上海申花") {
+		t.Fatalf("expected teams line in description body=%s", body)
+	}
+	if !strings.Contains(body, "比分: 2:1") {
+		t.Fatalf("expected score line for finished match body=%s", body)
+	}
 	if !strings.Contains(body, "DESCRIPTION:北京国安 2:1 上海申花") {
 		t.Fatalf("expected reminder description with score body=%s", body)
 	}
 	if !strings.Contains(body, "SUMMARY:北京国安 对阵 上海申花") {
 		t.Fatalf("expected scheduled match summary without score body=%s", body)
+	}
+	if strings.Contains(body, "比分: 0:0") {
+		t.Fatalf("did not expect score line for scheduled match body=%s", body)
 	}
 }
