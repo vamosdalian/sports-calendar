@@ -111,19 +111,22 @@ func buildSummary(match domain.Match, locale string) string {
 
 func buildDescription(match domain.Match, locale string) string {
 	labels := localizedDescriptionLabels(locale)
-	return fmt.Sprintf(
-		"%s: %s\n%s: %s\n%s: %s",
-		labels.Round,
-		domain.PickLocalized(match.Round, locale),
-		labels.Status,
-		localizeMatchStatus(match.Status, locale),
-		labels.Venue,
-		buildLocation(
+	lines := []string{
+		fmt.Sprintf("%s: %s", labels.Round, domain.PickLocalized(match.Round, locale)),
+		fmt.Sprintf("%s: %s", labels.Teams, buildTeamsLine(match, locale)),
+	}
+	if score := buildScoreLine(match); score != "" {
+		lines = append(lines, fmt.Sprintf("%s: %s", labels.Score, score))
+	}
+	lines = append(lines,
+		fmt.Sprintf("%s: %s", labels.Status, localizeMatchStatus(match.Status, locale)),
+		fmt.Sprintf("%s: %s", labels.Venue, buildLocation(
 			domain.PickLocalized(match.Venue, locale),
 			domain.PickLocalized(match.City, locale),
 			domain.PickLocalized(match.Country, locale),
-		),
+		)),
 	)
+	return strings.Join(lines, "\n")
 }
 
 func normalizeStatus(status string) string {
@@ -179,6 +182,8 @@ func joinLocationSuffix(parts []string) string {
 
 type descriptionLabels struct {
 	Round  string
+	Teams  string
+	Score  string
 	Status string
 	Venue  string
 }
@@ -188,16 +193,39 @@ func localizedDescriptionLabels(locale string) descriptionLabels {
 	case "zh":
 		return descriptionLabels{
 			Round:  "轮次",
+			Teams:  "球队",
+			Score:  "比分",
 			Status: "状态",
 			Venue:  "场地",
 		}
 	default:
 		return descriptionLabels{
 			Round:  "Round",
+			Teams:  "Teams",
+			Score:  "Score",
 			Status: "Status",
 			Venue:  "Venue",
 		}
 	}
+}
+
+func buildTeamsLine(match domain.Match, locale string) string {
+	if match.HomeTeam == nil || match.AwayTeam == nil {
+		return ""
+	}
+	homeName := domain.PickLocalized(match.HomeTeam.Names, locale)
+	awayName := domain.PickLocalized(match.AwayTeam.Names, locale)
+	if homeName == "" || awayName == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s vs %s", homeName, awayName)
+}
+
+func buildScoreLine(match domain.Match) string {
+	if match.Status != "finished" || len(match.Result) != 2 {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s", match.Result[0], match.Result[1])
 }
 
 func localizeMatchStatus(status, locale string) string {
