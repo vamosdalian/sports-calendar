@@ -248,9 +248,9 @@ export function SeasonCalendarContent({
                 </summary>
                 <ul className="mt-3 w-full space-y-2">
                   {group.matches.map((match) => (
-                    <li key={`summary-${match.id}`} className="rounded-2xl bg-white/35 px-4 py-3">
+                    <li key={`summary-${match.id}`} className="flex flex-col gap-1 rounded-2xl bg-white/35 px-4 py-3 sm:flex-row sm:items-center">
                       <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
-                      <span className="mx-2 text-ink/45">/</span>
+                      <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
                       <MatchSummary match={match} />
                     </li>
                   ))}
@@ -277,21 +277,16 @@ function MatchSummary({ match }: { match: Match }) {
   const location = formatMatchLocation(match);
 
   return (
-    <>
-      <span>
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
+      <span className="block">
         {match.homeTeam && match.awayTeam ? (
           <strong className="font-semibold text-ink">{matchLabel(match)}</strong>
         ) : (
           <span>{match.title || match.id}</span>
         )}
       </span>
-      {location ? (
-        <>
-          <span className="mx-2 text-ink/45">/</span>
-          <span className="text-ink/72">{location}</span>
-        </>
-      ) : null}
-    </>
+      {location ? <span className="text-ink/72 sm:before:mx-2 sm:before:text-ink/45 sm:before:content-['/']">{location}</span> : null}
+    </div>
   );
 }
 
