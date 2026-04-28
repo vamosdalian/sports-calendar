@@ -39,7 +39,7 @@
   "contactUsLabel": "Contact us",
   "contactEmailAriaLabel": "Send email to support@sports-calendar.com",
   "weekDays": ["S", "M", "T", "W", "T", "F", "S"],
-  "seasonTitle": "{leagueName} {year} Season Calendar",
+  "seasonTitle": "{leagueName} {seasonLabel} Season Calendar",
   "metaDescriptionHome": "Season calendar directory for football and racing.",
-  "metaTitleSeason": "{leagueName} {year} Season Calendar | sports-calendar.com"
+  "metaTitleSeason": "{leagueName} {seasonLabel} Season Calendar | sports-calendar.com"
 }

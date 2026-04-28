@@ -27,6 +27,7 @@ type SeasonCalendarContentProps = {
   locale: Locale;
   matches: Match[];
   noMatchesLabel: string;
+  pageTitle: string;
   seasonSlug: string;
   subscribeLabel: string;
   subscriptionBaseUrl: string;
@@ -44,6 +45,7 @@ export function SeasonCalendarContent({
   locale,
   matches,
   noMatchesLabel,
+  pageTitle,
   seasonSlug,
   subscribeLabel,
   subscriptionBaseUrl,
@@ -126,76 +128,43 @@ export function SeasonCalendarContent({
   return (
     <>
       <section>
-        <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
-          <div className="relative inline-block">
-            <select
-              aria-label={teamFilterLabel}
-              className="h-10 appearance-none rounded-full bg-header px-4 pr-10 text-sm font-medium leading-5 text-white outline-none transition hover:bg-header/90"
-              value={selectedTeamSlug || "all"}
-              onChange={(event) => {
-                const nextSearchParams = new URLSearchParams(search);
-                if (event.target.value === "all") {
-                  nextSearchParams.delete("team");
-                } else {
-                  nextSearchParams.set("team", event.target.value);
-                }
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">{pageTitle}</h1>
 
-                const nextSearch = nextSearchParams.toString();
-                const nextUrl = nextSearch ? `${pathname}?${nextSearch}` : pathname;
-                startTransition(() => {
-                  router.replace(nextUrl);
-                });
-              }}
-            >
-              <option value="all" className="text-ink">
-                {allTeamsLabel}
-              </option>
-              {teamOptions.map((option) => (
-                <option key={option.slug} value={option.slug} className="text-ink">
-                  {option.name}
-                </option>
-              ))}
-            </select>
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/80"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M4.5 6.5L8 10l3.5-3.5" />
-            </svg>
-          </div>
-
-          <div className="relative inline-flex" ref={menuRef}>
-            <a
-              href={subscriptionUrl}
-              className="inline-flex h-10 items-center rounded-l-full bg-header px-4 py-2 text-sm font-medium text-white transition hover:bg-header/90"
-            >
-              {subscribeLabel}
-            </a>
-            <button
-              type="button"
-              aria-label={copySubscriptionLinkLabel}
-              aria-expanded={isMenuOpen}
-              className="inline-flex h-10 items-center rounded-r-full bg-header px-3 text-white transition hover:bg-header/90"
-              onClick={() => {
-                setIsMenuOpen((current) => {
-                  const next = !current;
-                  if (next) {
-                    setCopyState("idle");
+          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+            <div className="relative inline-block">
+              <select
+                aria-label={teamFilterLabel}
+                className="h-10 appearance-none rounded-full bg-header px-4 pr-10 text-sm font-medium leading-5 text-white outline-none transition hover:bg-header/90"
+                value={selectedTeamSlug || "all"}
+                onChange={(event) => {
+                  const nextSearchParams = new URLSearchParams(search);
+                  if (event.target.value === "all") {
+                    nextSearchParams.delete("team");
+                  } else {
+                    nextSearchParams.set("team", event.target.value);
                   }
-                  return next;
-                });
-              }}
-            >
+
+                  const nextSearch = nextSearchParams.toString();
+                  const nextUrl = nextSearch ? `${pathname}?${nextSearch}` : pathname;
+                  startTransition(() => {
+                    router.replace(nextUrl);
+                  });
+                }}
+              >
+                <option value="all" className="text-ink">
+                  {allTeamsLabel}
+                </option>
+                {teamOptions.map((option) => (
+                  <option key={option.slug} value={option.slug} className="text-ink">
+                    {option.name}
+                  </option>
+                ))}
+              </select>
               <svg
                 aria-hidden="true"
                 viewBox="0 0 16 16"
-                className={`h-4 w-4 transition ${isMenuOpen ? "rotate-180" : ""}`}
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/80"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="1.8"
@@ -204,21 +173,58 @@ export function SeasonCalendarContent({
               >
                 <path d="M4.5 6.5L8 10l3.5-3.5" />
               </svg>
-            </button>
+            </div>
 
-            {isMenuOpen ? (
-              <div className="absolute right-0 top-full z-10 mt-1 min-w-[220px] overflow-hidden rounded-2xl bg-header shadow-[0_18px_40px_rgba(17,24,39,0.18)]">
-                <button
-                  type="button"
-                  className="flex w-full items-center bg-header px-4 py-3 text-left text-sm font-medium text-white transition hover:brightness-110"
-                  onClick={() => {
-                    void handleCopySubscriptionLink();
-                  }}
+            <div className="relative inline-flex" ref={menuRef}>
+              <a
+                href={subscriptionUrl}
+                className="inline-flex h-10 items-center rounded-l-full bg-header px-4 py-2 text-sm font-medium text-white transition hover:bg-header/90"
+              >
+                {subscribeLabel}
+              </a>
+              <button
+                type="button"
+                aria-label={copySubscriptionLinkLabel}
+                aria-expanded={isMenuOpen}
+                className="inline-flex h-10 items-center rounded-r-full bg-header px-3 text-white transition hover:bg-header/90"
+                onClick={() => {
+                  setIsMenuOpen((current) => {
+                    const next = !current;
+                    if (next) {
+                      setCopyState("idle");
+                    }
+                    return next;
+                  });
+                }}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  className={`h-4 w-4 transition ${isMenuOpen ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <span>{copyState === "copied" ? subscriptionLinkCopiedLabel : copySubscriptionLinkLabel}</span>
-                </button>
-              </div>
-            ) : null}
+                  <path d="M4.5 6.5L8 10l3.5-3.5" />
+                </svg>
+              </button>
+
+              {isMenuOpen ? (
+                <div className="absolute right-0 top-full z-10 mt-1 min-w-[220px] overflow-hidden rounded-2xl bg-header shadow-[0_18px_40px_rgba(17,24,39,0.18)]">
+                  <button
+                    type="button"
+                    className="flex w-full items-center bg-header px-4 py-3 text-left text-sm font-medium text-white transition hover:brightness-110"
+                    onClick={() => {
+                      void handleCopySubscriptionLink();
+                    }}
+                  >
+                    <span>{copyState === "copied" ? subscriptionLinkCopiedLabel : copySubscriptionLinkLabel}</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
