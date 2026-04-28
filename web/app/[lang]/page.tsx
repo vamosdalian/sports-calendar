@@ -27,21 +27,28 @@ export async function generateMetadata({
   const localePaths = Object.fromEntries(
     locales.map((entry) => [entry, toPath(entry)]),
   ) as Record<Locale, string>;
+  const title = t("metaTitleHome");
+  const description = t("metaDescriptionHome");
 
   return {
-    title: "sports-calendar.com",
-    description: t("metaDescriptionHome"),
+    title,
+    description,
     alternates: {
       canonical: localePaths[lang],
       languages: localePaths,
     },
     openGraph: {
-      title: "sports-calendar.com",
-      description: t("metaDescriptionHome"),
+      title,
+      description,
       url: localePaths[lang],
       siteName: "sports-calendar.com",
       type: "website",
       locale: lang,
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
     },
     other: {
       "last-modified": directory.updatedAt,

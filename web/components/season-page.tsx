@@ -4,8 +4,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { getLeagueSeasons, getLeagues, getSeasonFeedUrl, getSeasonPageData, getSeasonSubscriptionUrl, type Match } from "../lib/catalog";
-import { locales, type Locale, toPath, toTutorialPath } from "../lib/site";
+import { formatMatchLocation, getLeagueSeasons, getLeagues, getSeasonFeedUrl, getSeasonPageData, getSeasonSubscriptionUrl, matchLabel, type Match, type Team } from "../lib/catalog";
+import { formatSeasonDisplay } from "../lib/season";
+import { locales, siteUrl, type Locale, toPath, toTutorialPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
 import { SeasonCalendarContent } from "./season-calendar-content";
@@ -37,7 +38,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   }
 
   const competitionLabel = t("competitionLabel");
-  const seasonLabel = t("seasonLabel");
+  const seasonNavLabel = t("seasonLabel");
   const competitions = directory.items.flatMap((sport) =>
     sport.leagues.map((league) => ({
       key: `${sport.sportSlug}-${league.leagueSlug}`,
@@ -58,21 +59,36 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
     active: season.slug === seasonSlug,
   }));
   const leagueName = data.league.name;
-  const year = extractPrimaryYear(data.season.slug, data.season.label);
-  const pageTitle = t("seasonTitle", { leagueName, year });
+  const seasonLabel = formatSeasonDisplay(data.season.slug, data.season.label);
+  const pageTitle = t("seasonTitle", { leagueName, seasonLabel });
   const weekLabels = t.raw("weekDays") as string[];
   const subscriptionUrl = getSeasonSubscriptionUrl(sportSlug, leagueSlug, seasonSlug, { locale });
   const subscriptionCopyUrl = getSeasonFeedUrl(sportSlug, leagueSlug, seasonSlug, { locale });
   const teamOptions = buildTeamOptions(data.season.matches, locale);
   const notes = data.season.notes.trim();
+  const canonicalUrl = `${siteUrl}${toPath(locale, sportSlug, leagueSlug, seasonSlug)}`;
+  const structuredData = buildSeasonStructuredData({
+    canonicalUrl,
+    description: data.season.calendarDescription,
+    leagueName: data.league.name,
+    locale,
+    matches: data.season.matches,
+    pageTitle,
+    sportName: data.sport.name,
+  });
 
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+
       <header className="mx-auto w-full max-w-[1200px] bg-header text-white">
         <div className="flex items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <Link className="block" href={toPath(locale)}>
             <span className="block text-sm text-white/58">{t("siteName")}</span>
-            <span className="mt-1 block text-lg font-medium text-white">{pageTitle}</span>
+            <span className="mt-1 block text-lg font-medium text-white">{t("homeTitle")}</span>
           </Link>
           <LanguageSwitcher localePaths={localePaths} />
         </div>
@@ -83,7 +99,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
           <LeagueSeasonNav
             competitionLabel={competitionLabel}
             competitions={competitions}
-            seasonLabel={seasonLabel}
+            seasonLabel={seasonNavLabel}
             seasons={seasons}
           />
         </aside>
@@ -101,6 +117,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             subscriptionBaseUrl={subscriptionUrl}
             subscriptionCopyBaseUrl={subscriptionCopyUrl}
             subscriptionLinkCopiedLabel={t("subscriptionLinkCopiedLabel")}
+            pageTitle={pageTitle}
             teamFilterLabel={t("teamFilterLabel")}
             teamOptions={teamOptions}
             weekLabels={weekLabels}
@@ -163,20 +180,6 @@ function InfoSection({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-function extractPrimaryYear(seasonSlug: string, seasonLabel: string): string {
-  const slugMatch = seasonSlug.match(/\d{4}/);
-  if (slugMatch) {
-    return slugMatch[0];
-  }
-
-  const labelMatch = seasonLabel.match(/\d{4}/);
-  if (labelMatch) {
-    return labelMatch[0];
-  }
-
-  return seasonLabel;
-}
-
 function buildTeamOptions(matches: Match[], locale: Locale) {
   const teamsBySlug = new Map<string, string>();
 
@@ -193,4 +196,113 @@ function buildTeamOptions(matches: Match[], locale: Locale) {
   return Array.from(teamsBySlug.entries(), ([slug, name]) => ({ slug, name })).sort((left, right) =>
     collator.compare(left.name, right.name),
   );
+}
+
+function buildSeasonStructuredData({
+  canonicalUrl,
+  description,
+  leagueName,
+  locale,
+  matches,
+  pageTitle,
+  sportName,
+}: {
+  canonicalUrl: string;
+  description: string;
+  leagueName: string;
+  locale: Locale;
+  matches: Match[];
+  pageTitle: string;
+  sportName: string;
+}) {
+  const featuredMatches = matches.slice(0, 50);
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "sports-calendar.com",
+            item: `${siteUrl}${toPath(locale)}`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: pageTitle,
+            item: canonicalUrl,
+          },
+        ],
+      },
+      {
+        "@type": "CollectionPage",
+        "@id": `${canonicalUrl}#collection`,
+        url: canonicalUrl,
+        name: pageTitle,
+        description,
+        inLanguage: locale,
+        isPartOf: {
+          "@type": "WebSite",
+          "@id": `${siteUrl}/#website`,
+          url: siteUrl,
+          name: "sports-calendar.com",
+        },
+        about: {
+          "@type": "SportsOrganization",
+          name: leagueName,
+          sport: sportName,
+        },
+        mainEntity: {
+          "@type": "ItemList",
+          name: `${pageTitle} fixtures`,
+          numberOfItems: featuredMatches.length,
+          itemListElement: featuredMatches.map((match, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            item: buildSportsEventStructuredData(match, sportName),
+          })),
+        },
+      },
+    ],
+  };
+}
+
+function buildSportsEventStructuredData(match: Match, sportName: string) {
+  const location = formatMatchLocation(match);
+
+  return {
+    "@type": "SportsEvent",
+    name: matchLabel(match),
+    startDate: match.startsAt,
+    eventStatus: toEventStatus(match.status),
+    sport: sportName,
+    location: location
+      ? {
+          "@type": "Place",
+          name: location,
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: match.city || undefined,
+            addressCountry: match.country || undefined,
+          },
+        }
+      : undefined,
+    competitor: [match.homeTeam, match.awayTeam]
+      .filter((team): team is Team => Boolean(team))
+      .map((team) => ({
+        "@type": "SportsTeam",
+        name: team.name,
+      })),
+  };
+}
+
+function toEventStatus(status: string) {
+  if (status === "finished") {
+    return "https://schema.org/EventCompleted";
+  }
+
+  return "https://schema.org/EventScheduled";
 }
