@@ -64,6 +64,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   const subscriptionUrl = getSeasonSubscriptionUrl(sportSlug, leagueSlug, seasonSlug, { locale });
   const subscriptionCopyUrl = getSeasonFeedUrl(sportSlug, leagueSlug, seasonSlug, { locale });
   const teamOptions = buildTeamOptions(data.season.matches, locale);
+  const notes = data.season.notes.trim();
 
   return (
     <div>
@@ -109,9 +110,11 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             <p className="text-base leading-7 text-ink/75">{data.season.calendarDescription}</p>
           </InfoSection>
 
-          <InfoSection title={t("notesLabel")}>
-            <p className="text-base leading-7 text-ink/75">{data.season.notes}</p>
-          </InfoSection>
+          {notes ? (
+            <InfoSection title={t("notesLabel")}>
+              <p className="text-base leading-7 text-ink/75">{notes}</p>
+            </InfoSection>
+          ) : null}
 
           <InfoSection title={t("otherLabel")}>
             <Link
