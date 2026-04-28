@@ -10,6 +10,8 @@
   "leagueDescriptionLabel": "League description",
   "calendarDescriptionLabel": "Calendar description",
   "notesLabel": "Notes",
+  "otherLabel": "Other",
+  "iosTutorialLinkLabel": "How to import to iOS Calendar",
   "allMatchesLabel": "All fixtures in this season",
   "noMatches": "No matches available for this season.",
   "viewSeason": "Open season",

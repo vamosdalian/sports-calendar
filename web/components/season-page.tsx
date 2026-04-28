@@ -112,6 +112,15 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
           <InfoSection title={t("notesLabel")}>
             <p className="text-base leading-7 text-ink/75">{data.season.notes}</p>
           </InfoSection>
+
+          <InfoSection title={t("otherLabel")}>
+            <Link
+              className="text-sm text-blue-700 underline underline-offset-2 transition hover:text-blue-800"
+              href={`/${locale}/tutorials/how-to-subscribe-ios`}
+            >
+              {t("iosTutorialLinkLabel")}
+            </Link>
+          </InfoSection>
         </section>
       </main>
 
