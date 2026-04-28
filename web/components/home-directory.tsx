@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import type { LeaguesDirectory } from "../lib/catalog";
-import { locales, type Locale, toPath } from "../lib/site";
+import { locales, siteUrl, type Locale, toPath } from "../lib/site";
 import { LegacyLeagueRedirect } from "./legacy-league-redirect";
 import { LanguageSwitcher } from "./language-switcher";
 import { TimeZoneSelector } from "./time-zone-selector";
@@ -18,9 +18,21 @@ export async function HomeDirectory({ directory, legacyLeagueRoutes, locale }: H
   const localePaths = Object.fromEntries(
     locales.map((entry) => [entry, toPath(entry)]),
   ) as Record<Locale, string>;
+  const canonicalUrl = `${siteUrl}${toPath(locale)}`;
+  const structuredData = buildHomeStructuredData({
+    canonicalUrl,
+    directory,
+    locale,
+    pageTitle: t("homeTitle"),
+  });
 
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+
       <LegacyLeagueRedirect leagueRoutes={legacyLeagueRoutes} />
       <header className="mx-auto w-full max-w-[1200px] bg-header text-white">
         <div className="flex items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
@@ -85,4 +97,68 @@ export async function HomeDirectory({ directory, legacyLeagueRoutes, locale }: H
       </footer>
     </div>
   );
+}
+
+function buildHomeStructuredData({
+  canonicalUrl,
+  directory,
+  locale,
+  pageTitle,
+}: {
+  canonicalUrl: string;
+  directory: LeaguesDirectory;
+  locale: Locale;
+  pageTitle: string;
+}) {
+  const competitions = directory.items.flatMap((sport) =>
+    sport.leagues.flatMap((league) =>
+      league.defaultSeason
+        ? [
+            {
+              sportName: sport.sportName,
+              leagueName: league.leagueName,
+              url: `${siteUrl}${toPath(locale, sport.sportSlug, league.leagueSlug, league.defaultSeason.slug)}`,
+            },
+          ]
+        : [],
+    ),
+  );
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${siteUrl}/#website`,
+        url: siteUrl,
+        name: "sports-calendar.com",
+        inLanguage: locale,
+      },
+      {
+        "@type": "CollectionPage",
+        "@id": `${canonicalUrl}#collection`,
+        url: canonicalUrl,
+        name: pageTitle,
+        inLanguage: locale,
+        isPartOf: {
+          "@id": `${siteUrl}/#website`,
+        },
+        mainEntity: {
+          "@type": "ItemList",
+          name: pageTitle,
+          numberOfItems: competitions.length,
+          itemListElement: competitions.map((competition, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            item: {
+              "@type": "SportsOrganization",
+              name: competition.leagueName,
+              sport: competition.sportName,
+              url: competition.url,
+            },
+          })),
+        },
+      },
+    ],
+  };
 }

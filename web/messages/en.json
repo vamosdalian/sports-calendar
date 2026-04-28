@@ -40,6 +40,7 @@
   "contactEmailAriaLabel": "Send email to support@sports-calendar.com",
   "weekDays": ["S", "M", "T", "W", "T", "F", "S"],
   "seasonTitle": "{leagueName} {seasonLabel} Season Calendar",
-  "metaDescriptionHome": "Season calendar directory for football and racing.",
+  "metaTitleHome": "Sports Schedule Calendar for Apple Calendar, Google Calendar & Outlook | sports-calendar.com",
+  "metaDescriptionHome": "Browse sports schedule calendars and subscribe to live season feeds for Apple Calendar, Google Calendar, and Outlook with automatic updates.",
   "metaTitleSeason": "{leagueName} {seasonLabel} Season Calendar | sports-calendar.com"
 }
