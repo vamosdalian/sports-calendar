@@ -1,10 +1,12 @@
 import type { MetadataRoute } from "next";
 
 import { getAllSeasonRoutes } from "../lib/catalog";
+import { getTutorialSlugs } from "../lib/tutorials";
 import { locales, siteUrl, toPath } from "../lib/site";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const routes = await getAllSeasonRoutes();
+  const tutorialSlugs = getTutorialSlugs();
   const entries: MetadataRoute.Sitemap = [
     {
       url: `${siteUrl}/en/`,
@@ -15,6 +17,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date("2026-03-10T00:00:00Z"),
     },
   ];
+
+  for (const locale of locales) {
+    for (const slug of tutorialSlugs) {
+      entries.push({
+        url: `${siteUrl}/${locale}/tutorials/${slug}`,
+        lastModified: new Date("2026-03-10T00:00:00Z"),
+      });
+    }
+  }
 
   for (const route of routes) {
     for (const locale of locales) {
