@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useRef, useState } from "react";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { formatMatchLocation, matchLabel, type Match } from "../lib/catalog";
 import type { Locale } from "../lib/site";
@@ -55,13 +55,11 @@ export function SeasonCalendarContent({
 }: SeasonCalendarContentProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const menuRef = useRef<HTMLDivElement>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
-  const search = searchParams.toString();
-  const rawTeamSlug = searchParams.get("team") ?? "";
-  const selectedTeamSlug = teamOptions.some((option) => option.slug === rawTeamSlug) ? rawTeamSlug : "";
+  const [search, setSearch] = useState("");
+  const [selectedTeamSlug, setSelectedTeamSlug] = useState("");
   const filteredMatches = selectedTeamSlug
     ? matches.filter((match) => matchIncludesTeam(match, selectedTeamSlug))
     : matches;
@@ -71,16 +69,25 @@ export function SeasonCalendarContent({
   const subscriptionCopyUrl = buildSubscriptionUrl(subscriptionCopyBaseUrl, selectedTeamSlug);
 
   useEffect(() => {
-    if (!rawTeamSlug || selectedTeamSlug) {
+    const nextSearch = window.location.search.startsWith("?")
+      ? window.location.search.slice(1)
+      : window.location.search;
+    const nextSearchParams = new URLSearchParams(nextSearch);
+    const rawTeamSlug = nextSearchParams.get("team") ?? "";
+    const nextSelectedTeamSlug = teamOptions.some((option) => option.slug === rawTeamSlug) ? rawTeamSlug : "";
+
+    setSearch(nextSearch);
+    setSelectedTeamSlug(nextSelectedTeamSlug);
+
+    if (!rawTeamSlug || nextSelectedTeamSlug) {
       return;
     }
 
-    const nextSearchParams = new URLSearchParams(search);
     nextSearchParams.delete("team");
-    const nextSearch = nextSearchParams.toString();
-    const nextUrl = nextSearch ? `${pathname}?${nextSearch}` : pathname;
+    const sanitizedSearch = nextSearchParams.toString();
+    const nextUrl = sanitizedSearch ? `${pathname}?${sanitizedSearch}` : pathname;
     router.replace(nextUrl);
-  }, [pathname, rawTeamSlug, router, search, selectedTeamSlug]);
+  }, [pathname, router, teamOptions]);
 
   useEffect(() => {
     if (!isMenuOpen) {

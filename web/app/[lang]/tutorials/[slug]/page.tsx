@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { LanguageSwitcher } from "../../../../components/language-switcher";
 import { TimeZoneSelector } from "../../../../components/time-zone-selector";
 import { getTutorial, getTutorialSlugs } from "../../../../lib/tutorials";
-import { isLocale, locales, type Locale, toPath } from "../../../../lib/site";
+import { isLocale, locales, type Locale, toPath, toTutorialPath } from "../../../../lib/site";
 
 export const revalidate = 3600;
 
@@ -30,9 +30,17 @@ export async function generateMetadata({
     return {};
   }
 
+  const localePaths = Object.fromEntries(
+    locales.map((entry) => [entry, toTutorialPath(entry, tutorial.slug)]),
+  ) as Record<Locale, string>;
+
   return {
     title: `${tutorial.title} | sports-calendar.com`,
     description: tutorial.description,
+    alternates: {
+      canonical: localePaths[lang],
+      languages: localePaths,
+    },
   };
 }
 
@@ -52,9 +60,10 @@ export default async function TutorialPage({
     notFound();
   }
 
+  setRequestLocale(locale);
   const t = await getTranslations({ locale });
   const localePaths = Object.fromEntries(
-    locales.map((entry) => [entry, `/${entry}/tutorials/${tutorial.slug}`]),
+    locales.map((entry) => [entry, toTutorialPath(entry, tutorial.slug)]),
   ) as Record<Locale, string>;
   const homeHref = toPath(locale);
 

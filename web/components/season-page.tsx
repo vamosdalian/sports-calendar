@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { getLeagueSeasons, getLeagues, getSeasonFeedUrl, getSeasonPageData, getSeasonSubscriptionUrl, type Match } from "../lib/catalog";
-import { locales, type Locale, toPath } from "../lib/site";
+import { locales, type Locale, toPath, toTutorialPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
 import { SeasonCalendarContent } from "./season-calendar-content";
@@ -117,12 +117,12 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
           ) : null}
 
           <InfoSection title={t("otherLabel")}>
-            <Link
-              className="text-sm text-blue-700 underline underline-offset-2 transition hover:text-blue-800"
-              href={`/${locale}/tutorials/how-to-subscribe-ios`}
-            >
-              {t("iosTutorialLinkLabel")}
-            </Link>
+              <Link
+                className="text-sm text-blue-700 underline underline-offset-2 transition hover:text-blue-800"
+                href={toTutorialPath(locale, "how-to-subscribe-ios")}
+              >
+                {t("iosTutorialLinkLabel")}
+              </Link>
           </InfoSection>
         </section>
       </main>
