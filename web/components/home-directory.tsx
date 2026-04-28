@@ -1,24 +1,27 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { getLeagues } from "../lib/catalog";
+import type { LeaguesDirectory } from "../lib/catalog";
 import { locales, type Locale, toPath } from "../lib/site";
+import { LegacyLeagueRedirect } from "./legacy-league-redirect";
 import { LanguageSwitcher } from "./language-switcher";
 import { TimeZoneSelector } from "./time-zone-selector";
 
 type HomeDirectoryProps = {
+  directory: LeaguesDirectory;
+  legacyLeagueRoutes: Record<string, string>;
   locale: Locale;
 };
 
-export async function HomeDirectory({ locale }: HomeDirectoryProps) {
+export async function HomeDirectory({ directory, legacyLeagueRoutes, locale }: HomeDirectoryProps) {
   const t = await getTranslations({ locale });
-  const directory = await getLeagues(locale);
   const localePaths = Object.fromEntries(
     locales.map((entry) => [entry, toPath(entry)]),
   ) as Record<Locale, string>;
 
   return (
     <div>
+      <LegacyLeagueRedirect leagueRoutes={legacyLeagueRoutes} />
       <header className="mx-auto w-full max-w-[1200px] bg-header text-white">
         <div className="flex items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <Link className="block" href={toPath(locale)}>

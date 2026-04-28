@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { SeasonPage } from "../../../../../components/season-page";
 import { getAllSeasonRoutes, getSeasonPageData } from "../../../../../lib/catalog";
-import { isLocale, locales } from "../../../../../lib/site";
+import { isLocale, locales, type Locale, toPath } from "../../../../../lib/site";
 
 export const revalidate = 3600;
 
@@ -31,10 +31,30 @@ export async function generateMetadata({
   const t = await getTranslations({ locale: lang });
   const year = extractPrimaryYear(data.season.slug, data.season.label);
   const leagueName = data.league.name;
+  const localePaths = Object.fromEntries(
+    locales.map((entry) => [entry, toPath(entry, sport, league, season)]),
+  ) as Record<Locale, string>;
+  const title = t("metaTitleSeason", { leagueName, year });
 
   return {
-    title: t("metaTitleSeason", { leagueName, year }),
+    title,
     description: data.season.calendarDescription,
+    alternates: {
+      canonical: localePaths[lang],
+      languages: localePaths,
+    },
+    openGraph: {
+      title,
+      description: data.season.calendarDescription,
+      url: localePaths[lang],
+      siteName: "sports-calendar.com",
+      type: "website",
+      locale: lang,
+    },
+    other: {
+      "last-modified": data.updatedAt,
+      "article:modified_time": data.updatedAt,
+    },
   };
 }
 
@@ -62,5 +82,6 @@ export default async function SeasonRoutePage({
     notFound();
   }
 
+  setRequestLocale(lang);
   return <SeasonPage locale={lang} sportSlug={sport} leagueSlug={league} seasonSlug={season} />;
 }

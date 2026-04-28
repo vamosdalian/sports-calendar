@@ -27,10 +27,14 @@ export function getLocaleOption(locale: Locale) {
 
 export function toPath(locale: Locale, sport?: string, league?: string, season?: string) {
   if (!sport || !league || !season) {
-    return `/${locale}`;
+    return `/${locale}/`;
   }
 
-  return `/${locale}/${sport}/${league}/${season}`;
+  return `/${locale}/${sport}/${league}/${season}/`;
+}
+
+export function toTutorialPath(locale: Locale, slug: string) {
+  return `/${locale}/tutorials/${slug}/`;
 }
 
 export function localizedDateLocale(locale: Locale) {

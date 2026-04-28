@@ -11,30 +11,24 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
-        source: `/:lang(${localePattern})`,
-        destination: "/:lang/index.html",
-        permanent: true,
-      },
-      {
-        source: `/:lang(${localePattern})/:sport/:league/:season`,
-        destination: "/:lang/:sport/:league/:season/index.html",
-        permanent: true,
-      },
-    ];
-  },
-  async rewrites() {
-    return [
-      {
         source: "/index.html",
         destination: "/",
+        permanent: true,
       },
       {
         source: `/:lang(${localePattern})/index.html`,
-        destination: "/:lang",
+        destination: "/:lang/",
+        permanent: true,
       },
       {
         source: `/:lang(${localePattern})/:sport/:league/:season/index.html`,
-        destination: "/:lang/:sport/:league/:season",
+        destination: "/:lang/:sport/:league/:season/",
+        permanent: true,
+      },
+      {
+        source: `/:lang(${localePattern})/tutorials/:slug/index.html`,
+        destination: "/:lang/tutorials/:slug/",
+        permanent: true,
       },
     ];
   },
