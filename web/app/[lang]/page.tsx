@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { setRequestLocale } from "next-intl/server";
 
-import { HomeDirectory } from "../../components/home-directory";
-import { getLeagues } from "../../lib/catalog";
-import { isLocale, locales, type Locale, toPath } from "../../lib/site";
+import { generateHomeMetadata, renderHomePage } from "../home-page";
+import { isLocale, locales, type Locale } from "../../lib/site";
 
 export const revalidate = 3600;
 
@@ -22,39 +21,7 @@ export async function generateMetadata({
     return {};
   }
 
-  const t = await getTranslations({ locale: lang });
-  const directory = await getLeagues(lang);
-  const localePaths = Object.fromEntries(
-    locales.map((entry) => [entry, toPath(entry)]),
-  ) as Record<Locale, string>;
-  const title = t("metaTitleHome");
-  const description = t("metaDescriptionHome");
-
-  return {
-    title,
-    description,
-    alternates: {
-      canonical: localePaths[lang],
-      languages: localePaths,
-    },
-    openGraph: {
-      title,
-      description,
-      url: localePaths[lang],
-      siteName: "sports-calendar.com",
-      type: "website",
-      locale: lang,
-    },
-    twitter: {
-      card: "summary",
-      title,
-      description,
-    },
-    other: {
-      "last-modified": directory.updatedAt,
-      "article:modified_time": directory.updatedAt,
-    },
-  };
+  return generateHomeMetadata(lang, `/${lang}/`);
 }
 
 export default async function LanguageHomePage({ params }: { params: Promise<{ lang: string }> }) {
@@ -65,32 +32,5 @@ export default async function LanguageHomePage({ params }: { params: Promise<{ l
 
   const locale = lang as Locale;
   setRequestLocale(locale);
-  const directory = await getLeagues(locale);
-
-  return (
-    <HomeDirectory
-      directory={directory}
-      legacyLeagueRoutes={buildLegacyLeagueRoutes(directory, locale)}
-      locale={locale}
-    />
-  );
-}
-
-function buildLegacyLeagueRoutes(
-  directory: Awaited<ReturnType<typeof getLeagues>>,
-  locale: Locale,
-): Record<string, string> {
-  const routes: Record<string, string> = {};
-
-  for (const sport of directory.items) {
-    for (const league of sport.leagues) {
-      if (!league.defaultSeason) {
-        continue;
-      }
-
-      routes[league.leagueSlug] = toPath(locale, sport.sportSlug, league.leagueSlug, league.defaultSeason.slug);
-    }
-  }
-
-  return routes;
+  return renderHomePage(locale, `/${locale}/`);
 }

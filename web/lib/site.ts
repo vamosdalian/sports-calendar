@@ -16,6 +16,7 @@ export type Locale = (typeof localeOptions)[number]["code"];
 
 export const locales = localeOptions.map((option) => option.code) as Locale[];
 export const defaultLocale: Locale = "en";
+export const localeCookieName = "NEXT_LOCALE";
 
 export function isLocale(value: string): value is Locale {
   return localeOptions.some((option) => option.code === value);

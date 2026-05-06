@@ -11,14 +11,21 @@ type HomeDirectoryProps = {
   directory: LeaguesDirectory;
   legacyLeagueRoutes: Record<string, string>;
   locale: Locale;
+  currentPath?: string;
 };
 
-export async function HomeDirectory({ directory, legacyLeagueRoutes, locale }: HomeDirectoryProps) {
+export async function HomeDirectory({
+  directory,
+  legacyLeagueRoutes,
+  locale,
+  currentPath,
+}: HomeDirectoryProps) {
   const t = await getTranslations({ locale });
+  const homePath = currentPath === "/" ? "/" : toPath(locale);
   const localePaths = Object.fromEntries(
-    locales.map((entry) => [entry, toPath(entry)]),
+    locales.map((entry) => [entry, currentPath === "/" ? `/${entry}/` : toPath(entry)]),
   ) as Record<Locale, string>;
-  const canonicalUrl = `${siteUrl}${toPath(locale)}`;
+  const canonicalUrl = `${siteUrl}${currentPath ?? toPath(locale)}`;
   const structuredData = buildHomeStructuredData({
     canonicalUrl,
     directory,
@@ -36,7 +43,7 @@ export async function HomeDirectory({ directory, legacyLeagueRoutes, locale }: H
       <LegacyLeagueRedirect leagueRoutes={legacyLeagueRoutes} />
       <header className="mx-auto w-full max-w-[1200px] bg-header text-white">
         <div className="flex items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
-          <Link className="block" href={toPath(locale)}>
+          <Link className="block" href={homePath}>
             <span className="block text-sm text-white/58">{t("siteName")}</span>
             <span className="mt-1 block text-lg font-medium text-white">{t("homeTitle")}</span>
           </Link>
