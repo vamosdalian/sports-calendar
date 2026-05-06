@@ -21,6 +21,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   );
   const entries: MetadataRoute.Sitemap = [
     {
+      url: `${siteUrl}/`,
+      lastModified: homeLastModified,
+    },
+    {
       url: `${siteUrl}${toPath("en")}`,
       lastModified: homeLastModified,
     },
