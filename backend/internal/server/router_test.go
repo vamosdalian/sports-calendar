@@ -155,6 +155,19 @@ func testRouter(t *testing.T) (*gin.Engine, *fakeRepository, *auth.Manager) {
 	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100)), repo, manager
 }
 
+func testRouterWithLogger(t *testing.T, logger *logrus.Logger) (*gin.Engine, *fakeRepository, *auth.Manager) {
+	t.Helper()
+	repo := newFakeRepository()
+	svc := service.New(repo)
+	svc.SetRefreshExecutor(&fakeRefreshExecutor{repo: repo})
+	manager, err := auth.NewManager("test-secret", 30*time.Minute)
+	if err != nil {
+		t.Fatalf("create test token manager: %v", err)
+	}
+	svc.SetTokenManager(manager)
+	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100)), repo, manager
+}
+
 func (r *fakeRepository) GetSeasonSyncTarget(_ context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1263,6 +1276,54 @@ func TestICSFeedByTeamNotFound(t *testing.T) {
 
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestICSFeedLogsRequestHeaders(t *testing.T) {
+	var buffer bytes.Buffer
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger.SetOutput(&buffer)
+
+	router, _, _ := testRouterWithLogger(t, logger)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics?lang=zh&team=beijing-guoan", nil)
+	request.Header.Set("User-Agent", "calendar-test-client/1.0")
+	request.Header.Set("X-Forwarded-For", "203.0.113.10")
+	request.Header.Set("Authorization", "Bearer secret-token")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var entry map[string]any
+	if err := json.Unmarshal(buffer.Bytes(), &entry); err != nil {
+		t.Fatalf("decode log entry: %v body=%s", err, buffer.String())
+	}
+
+	if got := entry["path"]; got != "/ics/football/csl/2026/matches.ics" {
+		t.Fatalf("unexpected path in log: %#v", got)
+	}
+	if got := entry["query"]; got != "lang=zh&team=beijing-guoan" {
+		t.Fatalf("unexpected query in log: %#v", got)
+	}
+
+	headers, ok := entry["request_headers"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected request_headers object, got %#v", entry["request_headers"])
+	}
+	if got := headers["User-Agent"]; got == nil {
+		t.Fatalf("expected user-agent header in log: %#v", headers)
+	}
+	if got := headers["X-Forwarded-For"]; got == nil {
+		t.Fatalf("expected x-forwarded-for header in log: %#v", headers)
+	}
+
+	authHeader, ok := headers["Authorization"].([]any)
+	if !ok || len(authHeader) != 1 || authHeader[0] != "[REDACTED]" {
+		t.Fatalf("expected authorization header to be redacted, got %#v", headers["Authorization"])
 	}
 }
 
