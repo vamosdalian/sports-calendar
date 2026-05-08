@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	ical "github.com/emersion/go-ical"
@@ -220,13 +221,43 @@ func requestLogger(logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startedAt := timeNow()
 		c.Next()
-		logger.WithFields(logrus.Fields{
+
+		fields := logrus.Fields{
 			"method": c.Request.Method,
 			"path":   c.Request.URL.Path,
 			"status": c.Writer.Status(),
 			"took":   timeNow().Sub(startedAt).String(),
-		}).Info("request completed")
+		}
+		if isICSRequest(c.Request.URL.Path) {
+			fields["query"] = c.Request.URL.RawQuery
+			fields["request_headers"] = sanitizeRequestHeaders(c.Request.Header)
+		}
+
+		logger.WithFields(fields).Info("request completed")
 	}
+}
+
+func isICSRequest(path string) bool {
+	return strings.HasPrefix(path, "/ics/")
+}
+
+func sanitizeRequestHeaders(header http.Header) map[string][]string {
+	if len(header) == 0 {
+		return map[string][]string{}
+	}
+
+	sanitized := make(map[string][]string, len(header))
+	for key, values := range header {
+		copied := append([]string(nil), values...)
+		switch http.CanonicalHeaderKey(key) {
+		case "Authorization", "Cookie":
+			sanitized[key] = []string{"[REDACTED]"}
+		default:
+			sanitized[key] = copied
+		}
+	}
+
+	return sanitized
 }
 
 func corsMiddleware() gin.HandlerFunc {
