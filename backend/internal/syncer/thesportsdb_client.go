@@ -265,6 +265,7 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 				}
 			}
 		}
+		status := mapMatchStatus(firstNonEmpty(eventDetail.Status, event.Status), firstNonEmpty(eventDetail.Postponed, event.Postponed))
 		matches = append(matches, domain.MatchSyncRecord{
 			ExternalID: event.EventID,
 			Teams:      []int64{homeTeamID, awayTeamID},
@@ -275,8 +276,8 @@ func (c *TheSportsDBClient) FetchLeagueSnapshot(ctx context.Context, target doma
 			Round:    roundText(firstNonEmpty(eventDetail.Round, event.Round)),
 			VenueID:  venueRef,
 			StartsAt: startsAt,
-			Status:   mapMatchStatus(firstNonEmpty(eventDetail.Status, event.Status), firstNonEmpty(eventDetail.Postponed, event.Postponed)),
-			Result:   matchResult(eventDetail.Status, eventDetail.HomeScore, eventDetail.AwayScore),
+			Status:   status,
+			Result:   matchResult(status, firstNonEmpty(eventDetail.HomeScore, event.HomeScore), firstNonEmpty(eventDetail.AwayScore, event.AwayScore)),
 		})
 	}
 
@@ -548,7 +549,7 @@ func mapMatchStatus(status, postponed string) string {
 }
 
 func matchResult(status, homeScore, awayScore string) []string {
-	if strings.TrimSpace(status) != "Match Finished" {
+	if strings.TrimSpace(status) != "finished" {
 		return []string{}
 	}
 	home := strings.TrimSpace(homeScore)

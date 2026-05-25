@@ -183,6 +183,7 @@ func TestMapMatchStatus(t *testing.T) {
 	}{
 		{name: "default scheduled", status: "Not Started", postponed: "no", expected: "scheduled"},
 		{name: "finished", status: "Match Finished", postponed: "no", expected: "finished"},
+		{name: "finished ft", status: "FT", postponed: "no", expected: "finished"},
 		{name: "cancelled", status: "Cancelled", postponed: "no", expected: "cancelled"},
 		{name: "postponed flag", status: "Not Started", postponed: "yes", expected: "postponed"},
 	}
@@ -191,6 +192,34 @@ func TestMapMatchStatus(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := mapMatchStatus(testCase.status, testCase.postponed); got != testCase.expected {
 				t.Fatalf("unexpected status mapping: got %q want %q", got, testCase.expected)
+			}
+		})
+	}
+}
+
+func TestMatchResult(t *testing.T) {
+	testCases := []struct {
+		name      string
+		status    string
+		homeScore string
+		awayScore string
+		expected  []string
+	}{
+		{name: "finished result", status: "finished", homeScore: "4", awayScore: "2", expected: []string{"4", "2"}},
+		{name: "scheduled result ignored", status: "scheduled", homeScore: "4", awayScore: "2", expected: []string{}},
+		{name: "missing score ignored", status: "finished", homeScore: "4", awayScore: "", expected: []string{}},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := matchResult(testCase.status, testCase.homeScore, testCase.awayScore)
+			if len(got) != len(testCase.expected) {
+				t.Fatalf("unexpected result length: got %#v want %#v", got, testCase.expected)
+			}
+			for i := range got {
+				if got[i] != testCase.expected[i] {
+					t.Fatalf("unexpected result: got %#v want %#v", got, testCase.expected)
+				}
 			}
 		})
 	}
