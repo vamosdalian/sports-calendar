@@ -5,9 +5,35 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 // Keep in sync with localeOptions in lib/site.ts
 const localePattern = "en|zh";
+const htmlCacheHeaders = [
+  {
+    key: "Cache-Control",
+    value: "public, max-age=0, must-revalidate",
+  },
+];
 
 const nextConfig: NextConfig = {
   trailingSlash: true,
+  async headers() {
+    return [
+      {
+        source: "/",
+        headers: htmlCacheHeaders,
+      },
+      {
+        source: `/:lang(${localePattern})`,
+        headers: htmlCacheHeaders,
+      },
+      {
+        source: `/:lang(${localePattern})/:sport/:league/:season`,
+        headers: htmlCacheHeaders,
+      },
+      {
+        source: `/:lang(${localePattern})/tutorials/:slug`,
+        headers: htmlCacheHeaders,
+      },
+    ];
+  },
   async redirects() {
     return [
       {
