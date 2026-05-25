@@ -66,6 +66,7 @@ export function SeasonCalendarContent({
     ? matches.filter((match) => matchIncludesTeam(match, selectedTeamSlug))
     : matches;
   const filteredGroups = buildMatchGroups(filteredMatches);
+  const sortedFilteredMatches = sortMatchesByStartsAt(filteredMatches);
   const initiallyOpenGroupKey = findMostRecentFinishedGroupKey(filteredGroups);
   const subscriptionUrl = buildSubscriptionUrl(subscriptionBaseUrl, selectedTeamSlug);
   const subscriptionCopyUrl = buildSubscriptionUrl(subscriptionCopyBaseUrl, selectedTeamSlug);
@@ -232,7 +233,23 @@ export function SeasonCalendarContent({
       </section>
 
       <InfoSection title={leagueCalendarLabel}>
-        {filteredGroups.length === 0 ? (
+        {selectedTeamSlug ? (
+          sortedFilteredMatches.length === 0 ? (
+            <p className="text-sm text-ink/75">{noMatchesLabel}</p>
+          ) : (
+            <ul className="space-y-2 text-sm text-ink/75">
+              {sortedFilteredMatches.map((match) => (
+                <li key={`team-match-${match.id}`} className="flex flex-col gap-1 rounded-2xl bg-white/35 px-4 py-3 sm:flex-row sm:items-center">
+                  {match.round ? <span className="font-medium text-ink/72">{match.round}</span> : null}
+                  {match.round ? <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span> : null}
+                  <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
+                  <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
+                  <MatchSummary match={match} />
+                </li>
+              ))}
+            </ul>
+          )
+        ) : filteredGroups.length === 0 ? (
           <p className="text-sm text-ink/75">{noMatchesLabel}</p>
         ) : (
           <div className="space-y-4 text-sm text-ink/75">
@@ -344,6 +361,27 @@ function findMostRecentFinishedGroupKey(groups: MatchGroup[]) {
   }
 
   return mostRecent?.groupKey ?? "";
+}
+
+function sortMatchesByStartsAt(matches: Match[]) {
+  return [...matches].sort((left, right) => {
+    const leftTime = Date.parse(left.startsAt);
+    const rightTime = Date.parse(right.startsAt);
+
+    if (!Number.isFinite(leftTime) || !Number.isFinite(rightTime)) {
+      return left.id.localeCompare(right.id);
+    }
+
+    if (!Number.isFinite(leftTime)) {
+      return 1;
+    }
+
+    if (!Number.isFinite(rightTime)) {
+      return -1;
+    }
+
+    return leftTime - rightTime;
+  });
 }
 
 function matchIncludesTeam(match: Match, teamSlug: string) {
