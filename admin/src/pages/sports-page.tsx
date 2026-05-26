@@ -10,6 +10,7 @@ import { useToast } from '@/components/use-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { api } from '@/lib/api'
 import { pickLocalizedPreview } from '@/lib/localized-fields'
 import type { SportItem } from '@/types'
@@ -18,6 +19,7 @@ export function SportsPage() {
 	const navigate = useNavigate()
 	const { token } = useAuth()
 	const { showToast } = useToast()
+	const { previewLocale } = useAdminLocales()
 	const [sports, setSports] = useState<SportItem[]>([])
 	const [error, setError] = useState<string | null>(null)
 	const [createOpen, setCreateOpen] = useState(false)
@@ -88,12 +90,12 @@ export function SportsPage() {
 						columns={[
 							{ id: 'id', header: 'ID', cell: (sport) => sport.id.toString(), cellClassName: 'w-20' },
 							{ id: 'slug', header: 'Slug', cell: (sport) => <span className="font-mono text-xs">{sport.slug}</span> },
-							{ id: 'name', header: 'Name', cell: (sport) => pickLocalizedPreview(sport.name) },
+							{ id: 'name', header: 'Name', cell: (sport) => pickLocalizedPreview(sport.name, previewLocale) },
 							{ id: 'updatedAt', header: 'Updated', cell: (sport) => new Date(sport.updatedAt).toLocaleString(), headerClassName: 'min-w-44', cellClassName: 'text-muted-foreground' },
 						]}
 						rows={sports}
 						getRowId={(sport) => sport.slug}
-						getSearchText={(sport) => `${sport.slug} ${pickLocalizedPreview(sport.name)}`}
+						getSearchText={(sport) => `${sport.slug} ${pickLocalizedPreview(sport.name, previewLocale)}`}
 						searchPlaceholder="Filter sports..."
 						emptyMessage="No sports found."
 						onRowClick={(sport) => {

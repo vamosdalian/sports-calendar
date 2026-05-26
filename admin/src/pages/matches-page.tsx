@@ -10,17 +10,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { api } from '@/lib/api'
 import type { MatchItem, SeasonDetailResponse } from '@/types'
 
-function displayText(value: string | Record<string, string> | undefined) {
-	if (!value) {
-		return '-'
-	}
-	if (typeof value === 'string') {
-		return value
-	}
-	return value.zh || value.en || Object.values(value)[0] || '-'
+function displayText(value: string | undefined) {
+	return value || '-'
 }
 
 function countMatches(detail: SeasonDetailResponse | null) {
@@ -57,6 +52,7 @@ export function MatchesPage() {
 	const { sportSlug = '', leagueSlug = '', seasonSlug = '' } = useParams()
 	const { token } = useAuth()
 	const { showToast } = useToast()
+	const { previewLocale } = useAdminLocales()
 	const [detail, setDetail] = useState<SeasonDetailResponse | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [refreshing, setRefreshing] = useState(false)
@@ -70,9 +66,9 @@ export function MatchesPage() {
 		if (!token) {
 			return
 		}
-		const response = await api.getAdminSeasonDetail(token, sportSlug, leagueSlug, seasonSlug)
+		const response = await api.getAdminSeasonDetail(token, sportSlug, leagueSlug, seasonSlug, previewLocale)
 		setDetail(response)
-	}, [leagueSlug, seasonSlug, sportSlug, token])
+	}, [leagueSlug, previewLocale, seasonSlug, sportSlug, token])
 
 	useEffect(() => {
 		if (!sportSlug || !leagueSlug || !seasonSlug) {

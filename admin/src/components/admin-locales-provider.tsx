@@ -11,6 +11,8 @@ type AdminLocalesContextValue = {
 	error: string | null
 	refresh: () => Promise<void>
 	preferredLocaleCode: string
+	previewLocale: string
+	setPreviewLocale: (locale: string) => void
 }
 
 const AdminLocalesContext = createContext<AdminLocalesContextValue | null>(null)
@@ -20,6 +22,7 @@ export function AdminLocalesProvider({ children }: { children: React.ReactNode }
 	const [locales, setLocales] = useState<AdminLocaleItem[]>([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const [previewLocale, setPreviewLocale] = useState<string>('en')
 
 	const refresh = useCallback(async () => {
 		if (!token) {
@@ -49,7 +52,9 @@ export function AdminLocalesProvider({ children }: { children: React.ReactNode }
 		error,
 		refresh,
 		preferredLocaleCode: getPreferredLocaleCode(locales),
-	}), [error, loading, locales, refresh])
+		previewLocale,
+		setPreviewLocale,
+	}), [error, loading, locales, refresh, previewLocale])
 
 	return <AdminLocalesContext.Provider value={value}>{children}</AdminLocalesContext.Provider>
 }

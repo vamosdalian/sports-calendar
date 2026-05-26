@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { CalendarIcon } from 'lucide-react'
 
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { useAuth } from '@/components/use-auth'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -102,6 +103,7 @@ function buildMatchForm(match?: MatchItem | null): MatchFormState {
 
 export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null, open, onOpenChange, onSaved }: AddMatchDialogProps) {
 	const { token } = useAuth()
+	const { previewLocale } = useAdminLocales()
 	const [teams, setTeams] = useState<AdminTeamItem[]>([])
 	const [venues, setVenues] = useState<AdminVenueItem[]>([])
 	const [loading, setLoading] = useState(false)
@@ -162,8 +164,8 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 
 	const teamOptions = useMemo(() => ([
 		{ id: UNKNOWN_TEAM_ID, label: 'Unknown team' },
-		...teams.map((team) => ({ id: String(team.id), label: pickLocalizedPreview(team.name) })),
-	]), [teams])
+		...teams.map((team) => ({ id: String(team.id), label: pickLocalizedPreview(team.name, previewLocale) })),
+	]), [teams, previewLocale])
 
 	const filteredVenueOptions = useMemo(() => {
 		const query = form.venueSearch.trim().toLowerCase()
@@ -329,7 +331,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 										<SelectItem value="__none__">No venue</SelectItem>
 										{filteredVenueOptions.map((venue) => (
 											<SelectItem key={venue.id} value={String(venue.id)}>
-												{venue.id} · {pickLocalizedPreview(venue.name)} · {[pickLocalizedPreview(venue.city), pickLocalizedPreview(venue.country)].filter((value) => value !== '-').join(', ')}
+												{venue.id} · {pickLocalizedPreview(venue.name, previewLocale)} · {[pickLocalizedPreview(venue.city, previewLocale), pickLocalizedPreview(venue.country, previewLocale)].filter((value) => value !== '-').join(', ')}
 											</SelectItem>
 										))}
 									</SelectGroup>

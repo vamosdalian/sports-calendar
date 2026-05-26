@@ -148,8 +148,9 @@ export const api = {
 	refreshSeasonSchedule(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string) {
 		return request(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}/refresh`, { method: 'POST', token })
 	},
-	getAdminSeasonDetail(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string) {
-		return request<SeasonDetailResponse>(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}`, { token })
+	getAdminSeasonDetail(token: string, sportSlug: string, leagueSlug: string, seasonSlug: string, lang?: string) {
+		const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+		return request<SeasonDetailResponse>(`/api/admin/${sportSlug}/${leagueSlug}/seasons/${seasonSlug}${query}`, { token })
 	},
 	getSeasonDetail(sportSlug: string, leagueSlug: string, seasonSlug: string) {
 		return request<SeasonDetailResponse>(`/api/${sportSlug}/${leagueSlug}/${seasonSlug}`)
