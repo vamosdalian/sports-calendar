@@ -25,9 +25,12 @@ export function entriesToLocalizedText(entries: LocalizedFieldEntry[]): Localize
 	}, {})
 }
 
-export function pickLocalizedPreview(value: LocalizedText | undefined) {
+export function pickLocalizedPreview(value: LocalizedText | undefined, locale?: string) {
 	if (!value) {
 		return '-'
+	}
+	if (locale && value[locale]) {
+		return value[locale]
 	}
 	if (value.en) {
 		return value.en

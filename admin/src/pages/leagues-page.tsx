@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { api } from '@/lib/api'
 import { pickLocalizedPreview } from '@/lib/localized-fields'
 import type { LeagueItem } from '@/types'
@@ -20,6 +21,7 @@ export function LeaguesPage() {
 	const navigate = useNavigate()
 	const { token } = useAuth()
 	const { showToast } = useToast()
+	const { previewLocale } = useAdminLocales()
 	const [leagues, setLeagues] = useState<LeagueItem[]>([])
 	const [error, setError] = useState<string | null>(null)
 	const [createOpen, setCreateOpen] = useState(false)
@@ -93,13 +95,13 @@ export function LeaguesPage() {
 						columns={[
 							{ id: 'id', header: 'ID', cell: (league) => league.id.toString(), cellClassName: 'w-20' },
 							{ id: 'slug', header: 'Slug', cell: (league) => <span className="font-mono text-xs">{league.slug}</span> },
-							{ id: 'name', header: 'Name', cell: (league) => pickLocalizedPreview(league.name) },
+							{ id: 'name', header: 'Name', cell: (league) => pickLocalizedPreview(league.name, previewLocale) },
 							{ id: 'show', header: 'Public', cell: (league) => <Badge variant={league.show ? 'secondary' : 'outline'}>{league.show ? 'Shown' : 'Hidden'}</Badge> },
 							{ id: 'syncInterval', header: 'Sync', cell: (league) => league.syncInterval, cellClassName: 'text-muted-foreground' },
 						]}
 						rows={leagues}
 						getRowId={(league) => league.slug}
-						getSearchText={(league) => `${league.slug} ${pickLocalizedPreview(league.name)} ${league.syncInterval} ${league.show ? 'shown visible' : 'hidden draft'}`}
+						getSearchText={(league) => `${league.slug} ${pickLocalizedPreview(league.name, previewLocale)} ${league.syncInterval} ${league.show ? 'shown visible' : 'hidden draft'}`}
 						searchPlaceholder="Filter leagues..."
 						emptyMessage="No leagues found."
 						onRowClick={(league) => {

@@ -8,6 +8,7 @@ import { useToast } from '@/components/use-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { api } from '@/lib/api'
 import { pickLocalizedPreview } from '@/lib/localized-fields'
 import type { AdminVenueItem } from '@/types'
@@ -15,6 +16,7 @@ import type { AdminVenueItem } from '@/types'
 export function VenuesPage() {
 	const { token } = useAuth()
 	const { showToast } = useToast()
+	const { previewLocale } = useAdminLocales()
 	const [venues, setVenues] = useState<AdminVenueItem[]>([])
 	const [error, setError] = useState<string | null>(null)
 	const [editingVenue, setEditingVenue] = useState<AdminVenueItem | null>(null)
@@ -111,9 +113,9 @@ export function VenuesPage() {
 					<CatalogDataTable
 						columns={[
 							{ id: 'id', header: 'ID', cell: (venue) => venue.id.toString(), cellClassName: 'w-24' },
-							{ id: 'name', header: 'Name', cell: (venue) => pickLocalizedPreview(venue.name), cellClassName: 'min-w-56' },
-							{ id: 'city', header: 'City', cell: (venue) => pickLocalizedPreview(venue.city), cellClassName: 'min-w-40' },
-							{ id: 'country', header: 'Country', cell: (venue) => pickLocalizedPreview(venue.country), cellClassName: 'min-w-40' },
+							{ id: 'name', header: 'Name', cell: (venue) => pickLocalizedPreview(venue.name, previewLocale), cellClassName: 'min-w-56' },
+							{ id: 'city', header: 'City', cell: (venue) => pickLocalizedPreview(venue.city, previewLocale), cellClassName: 'min-w-40' },
+							{ id: 'country', header: 'Country', cell: (venue) => pickLocalizedPreview(venue.country, previewLocale), cellClassName: 'min-w-40' },
 							{ id: 'updated', header: 'Updated', cell: (venue) => new Date(venue.updatedAt).toLocaleString(), cellClassName: 'min-w-44 text-muted-foreground' },
 						]}
 						rows={venues}

@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { useAdminLocales } from '@/components/admin-locales-provider'
 import { api } from '@/lib/api'
 import { pickLocalizedPreview } from '@/lib/localized-fields'
 import type { AdminTeamItem } from '@/types'
@@ -17,6 +18,7 @@ export function TeamsPage() {
 	const { sportSlug = '', leagueSlug = '' } = useParams()
 	const { token } = useAuth()
 	const { showToast } = useToast()
+	const { previewLocale } = useAdminLocales()
 	const [teams, setTeams] = useState<AdminTeamItem[]>([])
 	const [error, setError] = useState<string | null>(null)
 	const [editingTeam, setEditingTeam] = useState<AdminTeamItem | null>(null)
@@ -100,7 +102,7 @@ export function TeamsPage() {
 						columns={[
 							{ id: 'id', header: 'ID', cell: (team) => team.id.toString(), cellClassName: 'w-24' },
 							{ id: 'slug', header: 'Slug', cell: (team) => <span className="font-mono text-xs">{team.slug}</span>, cellClassName: 'min-w-56' },
-							{ id: 'name', header: 'Name', cell: (team) => pickLocalizedPreview(team.name), cellClassName: 'min-w-52' },
+							{ id: 'name', header: 'Name', cell: (team) => pickLocalizedPreview(team.name, previewLocale), cellClassName: 'min-w-52' },
 						]}
 						rows={teams}
 						getRowId={(team) => String(team.id)}

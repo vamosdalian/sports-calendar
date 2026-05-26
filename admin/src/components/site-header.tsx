@@ -1,4 +1,6 @@
 import { Link, useLocation } from "react-router-dom"
+import { useAdminLocales } from "@/components/admin-locales-provider"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -58,12 +60,13 @@ function getHeaderContext(pathname: string): HeaderContext {
 export function SiteHeader() {
   const location = useLocation()
   const context = getHeaderContext(location.pathname)
+  const { locales, previewLocale, setPreviewLocale } = useAdminLocales()
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4 transition-[width,height] ease-linear lg:px-6">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 h-4" />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {context.href ? (
           <Link className="truncate text-sm font-medium text-foreground hover:text-primary" to={context.href}>
             {context.label}
@@ -72,6 +75,20 @@ export function SiteHeader() {
           <p className="truncate text-sm font-medium text-foreground">{context.label}</p>
         )}
       </div>
+      {locales.length > 0 && (
+        <Select value={previewLocale} onValueChange={setPreviewLocale}>
+          <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            {locales.map((locale) => (
+              <SelectItem key={locale.code} value={locale.code} className="text-xs">
+                {locale.label} ({locale.code})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </header>
   )
 }
