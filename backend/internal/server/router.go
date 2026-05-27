@@ -36,9 +36,9 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	auth.POST("/register", handler.registerAdmin)
 	auth.POST("/login", handler.loginAdmin)
 	auth.POST("/refresh", handler.refreshAdminToken)
-	api.GET("/leagues", handler.listLeagues)
-	api.GET("/:sport/:league/seasons", handler.listLeagueSeasons)
-	api.GET("/:sport/:league/:season", handler.getLeagueSeason)
+	api.GET("/leagues", publicCacheMiddleware(), handler.listLeagues)
+	api.GET("/:sport/:league/seasons", publicCacheMiddleware(), handler.listLeagueSeasons)
+	api.GET("/:sport/:league/:season", publicCacheMiddleware(), handler.getLeagueSeason)
 	admin := api.Group("/admin")
 	admin.Use(adminAuthMiddleware(svc))
 	admin.GET("/locales", handler.listAdminLocales)
@@ -285,6 +285,16 @@ func corsMiddleware() gin.HandlerFunc {
 
 var timeNow = func() time.Time {
 	return time.Now()
+}
+
+// publicCacheMiddleware sets Cache-Control headers for public read-only API endpoints.
+// s-maxage=3600: CDN (Cloudflare) caches for 1 hour, matching Next.js ISR revalidate interval.
+// must-revalidate: CDN must revalidate with the origin after the TTL expires (no serving stale).
+func publicCacheMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=0, s-maxage=3600, must-revalidate")
+		c.Next()
+	}
 }
 
 func rateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
