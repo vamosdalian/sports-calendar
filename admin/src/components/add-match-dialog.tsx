@@ -56,15 +56,15 @@ function toDateTimeLocalValue(value: string) {
 	if (Number.isNaN(date.getTime())) {
 		return ''
 	}
-	return `${formatLocalDate(date)}T${formatLocalTime(date)}`
+	return `${formatUTCDate(date)}T${formatUTCTime(date)}`
 }
 
-function formatLocalDate(date: Date) {
-	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+function formatUTCDate(date: Date) {
+	return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
 }
 
-function formatLocalTime(date: Date) {
-	return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+function formatUTCTime(date: Date) {
+	return `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`
 }
 
 function getDatePart(value: string) {
@@ -75,11 +75,13 @@ function getTimePart(value: string) {
 	return value.includes('T') ? value.slice(11, 16) : ''
 }
 
-function parseLocalDateTime(value: string) {
+function parseUTCDateTime(value: string) {
 	if (!value) {
 		return undefined
 	}
-	const date = new Date(value)
+	// Append ':00Z' so the browser treats the datetime-local string as UTC
+	// rather than local time.  form.startsAt is always "YYYY-MM-DDTHH:MM".
+	const date = new Date(`${value}:00Z`)
 	if (Number.isNaN(date.getTime())) {
 		return undefined
 	}
@@ -112,7 +114,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 	const [form, setForm] = useState<MatchFormState>(emptyMatchForm)
 	const [error, setError] = useState<string | null>(null)
 	const isEditing = match !== null
-	const selectedKickoffDate = parseLocalDateTime(form.startsAt)
+	const selectedKickoffDate = parseUTCDateTime(form.startsAt)
 
 	useEffect(() => {
 		if (!open) {
@@ -183,7 +185,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 		if (!token) {
 			return
 		}
-		const startsAt = parseLocalDateTime(form.startsAt)
+		const startsAt = parseUTCDateTime(form.startsAt)
 		if (!startsAt) {
 			setError('Kickoff must be a valid date and time')
 			return
@@ -224,7 +226,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 		const timePart = getTimePart(form.startsAt) || '12:00'
 		setForm((current) => ({
 			...current,
-			startsAt: `${formatLocalDate(date)}T${timePart}`,
+			startsAt: `${formatUTCDate(date)}T${timePart}`,
 		}))
 		setCalendarOpen(false)
 	}
@@ -287,14 +289,14 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 										onSelect={handleDateSelect}
 										captionLayout="dropdown"
 										initialFocus
-										timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+										timeZone="UTC"
 									/>
 								</PopoverContent>
 							</Popover>
 						</div>
 					</div>
 					<div>
-						<Label htmlFor="match-starts-at-time">Time</Label>
+						<Label htmlFor="match-starts-at-time">Time (UTC)</Label>
 						<div className="mt-2">
 							<Input id="match-starts-at-time" required type="time" step="60" value={getTimePart(form.startsAt)} disabled={!getDatePart(form.startsAt)} onChange={(event) => handleTimeChange(event.target.value)} />
 						</div>
