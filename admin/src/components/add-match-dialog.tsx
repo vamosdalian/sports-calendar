@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { CalendarIcon } from 'lucide-react'
+import { CalendarIcon, Check, ChevronsUpDown } from 'lucide-react'
 
 import { useAdminLocales } from '@/components/admin-locales-provider'
 import { useAuth } from '@/components/use-auth'
@@ -88,6 +88,19 @@ function parseUTCDateTime(value: string) {
 	return date
 }
 
+function getVenueFilterText(venue: AdminVenueItem) {
+	return [venue.id.toString(), ...Object.values(venue.name), ...Object.values(venue.city), ...Object.values(venue.country)].join(' ').toLowerCase()
+}
+
+function getVenueOptionLabel(venue: AdminVenueItem, previewLocale: string) {
+	const location = [pickLocalizedPreview(venue.city, previewLocale), pickLocalizedPreview(venue.country, previewLocale)].filter((value) => value !== '-')
+	const parts = [venue.id.toString(), pickLocalizedPreview(venue.name, previewLocale)]
+	if (location.length > 0) {
+		parts.push(location.join(', '))
+	}
+	return parts.join(' · ')
+}
+
 function buildMatchForm(match?: MatchItem | null): MatchFormState {
 	if (!match) {
 		return emptyMatchForm
@@ -99,7 +112,7 @@ function buildMatchForm(match?: MatchItem | null): MatchFormState {
 		startsAt: toDateTimeLocalValue(match.startsAt),
 		status: match.status || 'scheduled',
 		venueID: match.venueId ? String(match.venueId) : '',
-		venueSearch: match.venue ?? '',
+		venueSearch: '',
 	}
 }
 
@@ -111,6 +124,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 	const [loading, setLoading] = useState(false)
 	const [pending, setPending] = useState(false)
 	const [calendarOpen, setCalendarOpen] = useState(false)
+	const [venuePickerOpen, setVenuePickerOpen] = useState(false)
 	const [form, setForm] = useState<MatchFormState>(emptyMatchForm)
 	const [error, setError] = useState<string | null>(null)
 	const isEditing = match !== null
@@ -120,6 +134,7 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 		if (!open) {
 			setForm(emptyMatchForm)
 			setCalendarOpen(false)
+			setVenuePickerOpen(false)
 			setError(null)
 			return
 		}
@@ -174,11 +189,20 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 		if (!query) {
 			return venues
 		}
-		return venues.filter((venue) => {
-			const haystack = [venue.id.toString(), ...Object.values(venue.name), ...Object.values(venue.city), ...Object.values(venue.country)].join(' ').toLowerCase()
-			return haystack.includes(query)
-		})
+		return venues.filter((venue) => getVenueFilterText(venue).includes(query))
 	}, [form.venueSearch, venues])
+
+	const selectedVenue = useMemo(() => venues.find((venue) => String(venue.id) === form.venueID) ?? null, [form.venueID, venues])
+
+	const selectedVenueLabel = useMemo(() => {
+		if (!form.venueID) {
+			return 'No venue selected'
+		}
+		if (selectedVenue) {
+			return getVenueOptionLabel(selectedVenue, previewLocale)
+		}
+		return match?.venue ?? 'Loading venue...'
+	}, [form.venueID, match?.venue, previewLocale, selectedVenue])
 
 	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -237,6 +261,22 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 			...current,
 			startsAt: datePart ? `${datePart}T${value}` : current.startsAt,
 		}))
+	}
+
+	function handleVenuePickerOpenChange(nextOpen: boolean) {
+		setVenuePickerOpen(nextOpen)
+		if (!nextOpen) {
+			setForm((current) => current.venueSearch ? { ...current, venueSearch: '' } : current)
+		}
+	}
+
+	function handleVenueSelect(venueID: string) {
+		setForm((current) => ({
+			...current,
+			venueID,
+			venueSearch: '',
+		}))
+		setVenuePickerOpen(false)
 	}
 
 	return (
@@ -317,28 +357,38 @@ export function AddMatchDialog({ sportSlug, leagueSlug, seasonSlug, match = null
 					</div>
 				</div>
 				<div className="grid gap-4 md:grid-cols-3">
-					<div className="md:col-span-3 space-y-3">
+					<div className="md:col-span-3">
 						<div>
-							<Label htmlFor="match-venue-search">Venue search</Label>
-							<Input id="match-venue-search" placeholder="Search venue by id, name, city, or country" value={form.venueSearch} onChange={(event) => setForm((current) => ({ ...current, venueSearch: event.target.value }))} />
-						</div>
-						<div>
-							<Label htmlFor="match-venue-id">Venue</Label>
-							<Select value={form.venueID || '__none__'} onValueChange={(value) => setForm((current) => ({ ...current, venueID: value === '__none__' ? '' : value }))}>
-								<SelectTrigger id="match-venue-id">
-									<SelectValue placeholder="No venue selected" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectGroup>
-										<SelectItem value="__none__">No venue</SelectItem>
-										{filteredVenueOptions.map((venue) => (
-											<SelectItem key={venue.id} value={String(venue.id)}>
-												{venue.id} · {pickLocalizedPreview(venue.name, previewLocale)} · {[pickLocalizedPreview(venue.city, previewLocale), pickLocalizedPreview(venue.country, previewLocale)].filter((value) => value !== '-').join(', ')}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								</SelectContent>
-							</Select>
+							<Label htmlFor="match-venue-trigger">Venue</Label>
+							<div className="mt-2">
+								<Popover open={venuePickerOpen} onOpenChange={handleVenuePickerOpenChange}>
+									<PopoverTrigger asChild>
+										<Button id="match-venue-trigger" type="button" variant="outline" role="combobox" aria-expanded={venuePickerOpen} className={cn('w-full justify-between px-3 text-left font-normal', !form.venueID && 'text-muted-foreground')}>
+											<span className="truncate">{selectedVenueLabel}</span>
+											<ChevronsUpDown data-icon="inline-end" />
+										</Button>
+									</PopoverTrigger>
+									<PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+										<div className="border-b p-3">
+											<Input placeholder="Filter venue by id, name, city, or country" value={form.venueSearch} onChange={(event) => setForm((current) => ({ ...current, venueSearch: event.target.value }))} autoFocus />
+										</div>
+										<div className="flex max-h-72 flex-col gap-1 overflow-y-auto p-1">
+											<Button type="button" variant="ghost" className={cn('justify-start px-2 text-left font-normal', !form.venueID && 'bg-accent text-accent-foreground')} onClick={() => handleVenueSelect('')}>
+												<Check data-icon="inline-start" className={cn(form.venueID ? 'opacity-0' : 'opacity-100')} />
+												No venue
+											</Button>
+											{loading ? <p className="px-2 py-3 text-sm text-muted-foreground">Loading venues...</p> : null}
+											{!loading && filteredVenueOptions.length === 0 ? <p className="px-2 py-3 text-sm text-muted-foreground">No venues found.</p> : null}
+											{filteredVenueOptions.map((venue) => (
+												<Button key={venue.id} type="button" variant="ghost" className={cn('justify-start px-2 text-left font-normal', form.venueID === String(venue.id) && 'bg-accent text-accent-foreground')} onClick={() => handleVenueSelect(String(venue.id))}>
+													<Check data-icon="inline-start" className={cn(form.venueID === String(venue.id) ? 'opacity-100' : 'opacity-0')} />
+													<span className="truncate">{getVenueOptionLabel(venue, previewLocale)}</span>
+												</Button>
+											))}
+										</div>
+									</PopoverContent>
+								</Popover>
+							</div>
 						</div>
 					</div>
 				</div>
