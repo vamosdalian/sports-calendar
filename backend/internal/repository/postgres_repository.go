@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -1330,11 +1329,10 @@ func mapWriteError(action string, err error) error {
 // ensures the caller only sees one entry per actual match.
 //
 // Two matches are considered the same fixture when ALL of the following hold:
-//   - Same English round name (case-insensitive)
-//   - Same calendar date in UTC (time-of-day differences are tolerated)
-//   - Venue is compatible: both NULL, both the same ID, or one NULL and one set
-//     (a NULL venue means "unknown" and is treated as a wildcard).
-//     If both matches have different non-NULL venue IDs they are distinct.
+// round is intentionally ignored here.
+//   - Same kickoff minute in UTC
+//   - They already belong to the same season detail being loaded
+//   - Venue matches exactly: both NULL or both the same ID
 //
 // When duplicates are found the record with the latest updated_at is returned.
 func deduplicateMatches(matches []domain.Match) []domain.Match {
@@ -1342,23 +1340,26 @@ func deduplicateMatches(matches []domain.Match) []domain.Match {
 		return matches
 	}
 
-	// groupKey identifies a match slot using round + day; venue compatibility
-	// is checked separately to handle the NULL-as-wildcard case.
+	// groupKey identifies a match slot using kickoff time and exact venue match.
 	type groupKey struct {
-		roundEN string
-		minute  string // "2006-01-02 15:04" UTC
+		minute   string // "2006-01-02 15:04" UTC
+		hasVenue bool
+		venueID  int64
 	}
 
 	makeKey := func(m domain.Match) (groupKey, bool) {
-		roundEN := strings.ToLower(strings.TrimSpace(m.Round["en"]))
-		if roundEN == "" {
-			return groupKey{}, false
-		}
 		t, err := time.Parse(time.RFC3339, m.StartsAt)
 		if err != nil {
 			return groupKey{}, false
 		}
-		return groupKey{roundEN: roundEN, minute: t.UTC().Format("2006-01-02 15:04")}, true
+
+		key := groupKey{minute: t.UTC().Format("2006-01-02 15:04")}
+		if m.VenueID != nil {
+			key.hasVenue = true
+			key.venueID = *m.VenueID
+		}
+
+		return key, true
 	}
 
 	// Build a map from groupKey → indices into the matches slice.
@@ -1377,25 +1378,6 @@ func deduplicateMatches(matches []domain.Match) []domain.Match {
 
 	for _, indices := range groups {
 		if len(indices) == 1 {
-			continue
-		}
-
-		// Venue-compatibility check: if any two entries have different
-		// non-NULL venue IDs they represent different fixtures — leave the
-		// group untouched.
-		venueConflict := false
-	outer:
-		for i := 0; i < len(indices); i++ {
-			for j := i + 1; j < len(indices); j++ {
-				va := matches[indices[i]].VenueID
-				vb := matches[indices[j]].VenueID
-				if va != nil && vb != nil && *va != *vb {
-					venueConflict = true
-					break outer
-				}
-			}
-		}
-		if venueConflict {
 			continue
 		}
 
