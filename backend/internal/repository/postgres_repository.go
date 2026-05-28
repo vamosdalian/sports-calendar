@@ -893,6 +893,14 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 		return domain.SeasonDetail{}, fmt.Errorf("iterate matches: %w", err)
 	}
 
+	// Collapse manual placeholders that have been superseded by a TheSportsDB
+	// record for the same real-world fixture.  Both rows live in the database;
+	// the admin view keeps all rows so operators can spot duplicates, while the
+	// public view surfaces only the winner (latest updated_at).
+	if publicOnly {
+		matches = deduplicateMatches(matches)
+	}
+
 	return domain.SeasonDetail{
 		SportSlug:                   sportSlug,
 		SportNames:                  decodeLocalizedText(sportNamesRaw),
@@ -1018,6 +1026,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			}
 			storedTeamIDs = append(storedTeamIDs, storedTeamID)
 		}
+
 		matchResult := normalizeStringSlice(match.Result)
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO matches (
@@ -1312,4 +1321,91 @@ func mapWriteError(action string, err error) error {
 		return domain.ErrNotFound
 	}
 	return fmt.Errorf("%s: %w", action, err)
+}
+
+// deduplicateMatches collapses duplicate match records that represent the same
+// real-world fixture.  The database intentionally stores both manual
+// placeholders and TheSportsDB-sourced records side by side; this function
+// ensures the caller only sees one entry per actual match.
+//
+// Two matches are considered the same fixture when ALL of the following hold:
+// round is intentionally ignored here.
+//   - Same kickoff minute in UTC
+//   - They already belong to the same season detail being loaded
+//   - Venue matches exactly: both NULL or both the same ID
+//
+// When duplicates are found the record with the latest updated_at is returned.
+func deduplicateMatches(matches []domain.Match) []domain.Match {
+	if len(matches) <= 1 {
+		return matches
+	}
+
+	// groupKey identifies a match slot using kickoff time and exact venue match.
+	type groupKey struct {
+		minute   string // "2006-01-02 15:04" UTC
+		hasVenue bool
+		venueID  int64
+	}
+
+	makeKey := func(m domain.Match) (groupKey, bool) {
+		t, err := time.Parse(time.RFC3339, m.StartsAt)
+		if err != nil {
+			return groupKey{}, false
+		}
+
+		key := groupKey{minute: t.UTC().Format("2006-01-02 15:04")}
+		if m.VenueID != nil {
+			key.hasVenue = true
+			key.venueID = *m.VenueID
+		}
+
+		return key, true
+	}
+
+	// Build a map from groupKey → indices into the matches slice.
+	groups := make(map[groupKey][]int, len(matches))
+	for i, m := range matches {
+		k, ok := makeKey(m)
+		if !ok {
+			continue
+		}
+		groups[k] = append(groups[k], i)
+	}
+
+	// For each group with more than one entry, pick the winner and mark the
+	// rest for suppression.
+	suppress := make(map[string]bool) // external_id → true means hide
+
+	for _, indices := range groups {
+		if len(indices) == 1 {
+			continue
+		}
+
+		// Pick the winner: latest updated_at wins.
+		winnerIdx := indices[0]
+		winnerTime, _ := time.Parse(time.RFC3339, matches[winnerIdx].UpdatedAt)
+
+		for _, idx := range indices[1:] {
+			t, _ := time.Parse(time.RFC3339, matches[idx].UpdatedAt)
+			if t.After(winnerTime) {
+				suppress[matches[winnerIdx].ID] = true
+				winnerIdx = idx
+				winnerTime = t
+			} else {
+				suppress[matches[idx].ID] = true
+			}
+		}
+	}
+
+	if len(suppress) == 0 {
+		return matches
+	}
+
+	out := make([]domain.Match, 0, len(matches)-len(suppress))
+	for _, m := range matches {
+		if !suppress[m.ID] {
+			out = append(out, m)
+		}
+	}
+	return out
 }
