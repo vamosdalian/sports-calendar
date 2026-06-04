@@ -38,6 +38,7 @@ export async function generateHomeMetadata(locale: Locale, canonicalPath: string
       description,
     },
     other: {
+      "baidu-site-verification": "codeva-aN3iytXMhj",
       "last-modified": directory.updatedAt,
       "article:modified_time": directory.updatedAt,
     },
