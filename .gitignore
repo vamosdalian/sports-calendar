@@ -236,3 +236,7 @@ backend/config/config.*.yaml
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Claude Code — 只跟踪共享命令，忽略本地配置与临时 worktree
+.claude/settings.local.json
+.claude/worktrees/
