@@ -1,9 +1,12 @@
 // API client for the sports-spider (Transfermarkt crawler) backend.
-// Ported from sports-spider/web/src/lib/api.ts; the only change is that every
-// path is prefixed with the absolute SPIDER_API_BASE_URL so the admin console
-// can call it cross-origin (the original used a Vite dev proxy on /api).
+//
+// The crawler is never exposed publicly. All calls go through the admin Go
+// backend's authenticated reverse proxy at `${API_BASE_URL}/api/spider/*`,
+// which reuses admin auth and forwards to the crawler on the private network.
+// So every request carries the admin bearer token and is same-backend as the
+// rest of the admin API (no CORS, no separate spider origin).
 
-import { SPIDER_API_BASE_URL } from '@/lib/config'
+import { API_BASE_URL } from '@/lib/config'
 
 export type CompetitionType = 'league' | 'cup' | 'international' | 'other'
 export type TeamKind = 'national' | 'club'
@@ -118,48 +121,60 @@ export interface BrowserStatus {
 	waiting_seconds: number | null
 }
 
-async function http<T>(path: string, init?: RequestInit): Promise<T> {
-	const res = await fetch(`${SPIDER_API_BASE_URL}${path}`, {
-		headers: { 'Content-Type': 'application/json' },
+// path is the crawler path (starts with /api/...); it is prefixed with the
+// admin proxy mount so /api/tree/countries -> /api/spider/api/tree/countries.
+async function http<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
+	const res = await fetch(`${API_BASE_URL}/api/spider${path}`, {
 		...init,
+		headers: {
+			'Content-Type': 'application/json',
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
+			...(init?.headers as Record<string, string> | undefined),
+		},
 	})
 	if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
 	return res.json() as Promise<T>
 }
 
-export const spiderApi = {
-	// ── tree expansion ──
-	countries: (): Promise<Country[]> => http('/api/tree/countries'),
-	nationalTeams: (countryId: number): Promise<Team[]> =>
-		http(`/api/tree/countries/${countryId}/national-teams`),
-	countryCompetitions: (countryId: number): Promise<Competition[]> =>
-		http(`/api/tree/countries/${countryId}/competitions`),
-	seasons: (competitionId: string): Promise<Season[]> =>
-		http(`/api/tree/competitions/${competitionId}/seasons`),
-	competitionTeams: (competitionId: string): Promise<Team[]> =>
-		http(`/api/tree/competitions/${competitionId}/teams`),
+export type SpiderApi = ReturnType<typeof createSpiderApi>
 
-	// ── crawl ──
-	enqueue: (body: {
-		kind: CrawlKind
-		target_id: string
-		seasons?: number[]
-		priority?: number
-	}): Promise<{ enqueued: number }> =>
-		http('/api/crawl', { method: 'POST', body: JSON.stringify(body) }),
-	enqueueFallback: (): Promise<{ enqueued: number }> =>
-		http('/api/crawl/fallback', { method: 'POST' }),
-	tasks: (): Promise<CrawlTask[]> => http('/api/crawl/tasks?limit=100'),
+// Builds a crawler API client bound to the current admin token. Recreate it
+// when the token changes (see crawler-page useMemo).
+export function createSpiderApi(token: string | null) {
+	return {
+		// ── tree expansion ──
+		countries: (): Promise<Country[]> => http('/api/tree/countries', token),
+		nationalTeams: (countryId: number): Promise<Team[]> =>
+			http(`/api/tree/countries/${countryId}/national-teams`, token),
+		countryCompetitions: (countryId: number): Promise<Competition[]> =>
+			http(`/api/tree/countries/${countryId}/competitions`, token),
+		seasons: (competitionId: string): Promise<Season[]> =>
+			http(`/api/tree/competitions/${competitionId}/seasons`, token),
+		competitionTeams: (competitionId: string): Promise<Team[]> =>
+			http(`/api/tree/competitions/${competitionId}/teams`, token),
 
-	// ── data browse ──
-	standings: (competitionId: string, seasonId: number): Promise<Standing[]> =>
-		http(`/api/data/standings?competition_id=${competitionId}&season_id=${seasonId}`),
-	squad: (teamId: number, seasonId: number): Promise<Player[]> =>
-		http(`/api/data/squad?team_id=${teamId}&season_id=${seasonId}`),
-	fixtures: (teamId: number, seasonId: number): Promise<Fixture[]> =>
-		http(`/api/data/fixtures?team_id=${teamId}&season_id=${seasonId}`),
+		// ── crawl ──
+		enqueue: (body: {
+			kind: CrawlKind
+			target_id: string
+			seasons?: number[]
+			priority?: number
+		}): Promise<{ enqueued: number }> =>
+			http('/api/crawl', token, { method: 'POST', body: JSON.stringify(body) }),
+		enqueueFallback: (): Promise<{ enqueued: number }> =>
+			http('/api/crawl/fallback', token, { method: 'POST' }),
+		tasks: (): Promise<CrawlTask[]> => http('/api/crawl/tasks?limit=100', token),
 
-	browserStatus: (): Promise<BrowserStatus> => http('/api/browser/status'),
+		// ── data browse ──
+		standings: (competitionId: string, seasonId: number): Promise<Standing[]> =>
+			http(`/api/data/standings?competition_id=${competitionId}&season_id=${seasonId}`, token),
+		squad: (teamId: number, seasonId: number): Promise<Player[]> =>
+			http(`/api/data/squad?team_id=${teamId}&season_id=${seasonId}`, token),
+		fixtures: (teamId: number, seasonId: number): Promise<Fixture[]> =>
+			http(`/api/data/fixtures?team_id=${teamId}&season_id=${seasonId}`, token),
+
+		browserStatus: (): Promise<BrowserStatus> => http('/api/browser/status', token),
+	}
 }
 
 export function formatMarketValue(v: number | null): string {

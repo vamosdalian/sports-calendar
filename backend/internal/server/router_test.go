@@ -152,7 +152,7 @@ func testRouter(t *testing.T) (*gin.Engine, *fakeRepository, *auth.Manager) {
 		t.Fatalf("create test token manager: %v", err)
 	}
 	svc.SetTokenManager(manager)
-	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100)), repo, manager
+	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100), ""), repo, manager
 }
 
 func testRouterWithLogger(t *testing.T, logger *logrus.Logger) (*gin.Engine, *fakeRepository, *auth.Manager) {
@@ -165,7 +165,7 @@ func testRouterWithLogger(t *testing.T, logger *logrus.Logger) (*gin.Engine, *fa
 		t.Fatalf("create test token manager: %v", err)
 	}
 	svc.SetTokenManager(manager)
-	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100)), repo, manager
+	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100), ""), repo, manager
 }
 
 func (r *fakeRepository) GetSeasonSyncTarget(_ context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error) {

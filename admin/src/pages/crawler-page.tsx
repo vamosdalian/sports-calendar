@@ -10,8 +10,9 @@ import {
 	Trophy,
 	Users,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,8 @@ import {
 	type CrawlKind,
 	type CrawlStatus,
 	type CrawlTask,
-	spiderApi,
+	type SpiderApi,
+	createSpiderApi,
 } from '@/lib/spider-api'
 
 const TYPE_LABEL: Record<string, string> = {
@@ -78,7 +80,17 @@ function rowIcon(n: NodeDef) {
 	)
 }
 
-function TreeRow({ node, depth, notify }: { node: NodeDef; depth: number; notify: Notify }) {
+function TreeRow({
+	node,
+	depth,
+	notify,
+	api,
+}: {
+	node: NodeDef
+	depth: number
+	notify: Notify
+	api: SpiderApi
+}) {
 	const [open, setOpen] = useState(false)
 	const [loading, setLoading] = useState(false)
 	const [children, setChildren] = useState<NodeDef[] | null>(null)
@@ -94,8 +106,8 @@ function TreeRow({ node, depth, notify }: { node: NodeDef; depth: number; notify
 			try {
 				if (node.kind === 'country') {
 					const [nts, comps] = await Promise.all([
-						spiderApi.nationalTeams(node.id),
-						spiderApi.countryCompetitions(node.id),
+						api.nationalTeams(node.id),
+						api.countryCompetitions(node.id),
 					])
 					setChildren([
 						...nts.map(
@@ -116,7 +128,7 @@ function TreeRow({ node, depth, notify }: { node: NodeDef; depth: number; notify
 						),
 					])
 				} else if (node.kind === 'competition') {
-					const teams = await spiderApi.competitionTeams(node.id)
+					const teams = await api.competitionTeams(node.id)
 					setChildren(
 						teams.map(
 							(t): NodeDef => ({
@@ -139,7 +151,7 @@ function TreeRow({ node, depth, notify }: { node: NodeDef; depth: number; notify
 
 	async function crawl(kind: CrawlKind, targetId: string) {
 		try {
-			const r = await spiderApi.enqueue({ kind, target_id: targetId })
+			const r = await api.enqueue({ kind, target_id: targetId })
 			notify(`已入队 ${KIND_LABEL[kind]} × ${r.enqueued} 季`, true)
 		} catch (e) {
 			notify(`入队失败: ${(e as Error).message}`, false)
@@ -222,14 +234,16 @@ function TreeRow({ node, depth, notify }: { node: NodeDef; depth: number; notify
 			</div>
 			{open &&
 				children?.map((c) => (
-					<TreeRow key={`${c.kind}:${c.id}`} node={c} depth={depth + 1} notify={notify} />
+					<TreeRow key={`${c.kind}:${c.id}`} node={c} depth={depth + 1} notify={notify} api={api} />
 				))}
 		</div>
 	)
 }
 
 export function CrawlerPage() {
+	const { token } = useAuth()
 	const { showToast } = useToast()
+	const api = useMemo(() => createSpiderApi(token), [token])
 	const [countries, setCountries] = useState<Country[]>([])
 	const [loading, setLoading] = useState(true)
 	const [q, setQ] = useState('')
@@ -240,19 +254,19 @@ export function CrawlerPage() {
 		showToast({ title: msg, tone: ok ? 'success' : 'error' })
 
 	useEffect(() => {
-		spiderApi
+		api
 			.countries()
 			.then(setCountries)
 			.catch((e) => notify(`加载国家失败: ${(e as Error).message}`, false))
 			.finally(() => setLoading(false))
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [])
+	}, [api])
 
 	useEffect(() => {
 		let active = true
 		const tick = async () => {
 			try {
-				const [t, b] = await Promise.all([spiderApi.tasks(), spiderApi.browserStatus()])
+				const [t, b] = await Promise.all([api.tasks(), api.browserStatus()])
 				if (!active) return
 				setTasks(t)
 				setNeedsVerify(b.needs_verification)
@@ -266,7 +280,7 @@ export function CrawlerPage() {
 			active = false
 			clearInterval(id)
 		}
-	}, [])
+	}, [api])
 
 	const filtered = q
 		? countries.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()))
@@ -307,7 +321,7 @@ export function CrawlerPage() {
 								variant="outline"
 								className="h-7 text-xs"
 								onClick={() =>
-									spiderApi
+									api
 										.enqueueFallback()
 										.then(() => notify('已入队兜底发现(fifa + 洲际杯)', true))
 										.catch((e) => notify((e as Error).message, false))
@@ -338,6 +352,7 @@ export function CrawlerPage() {
 											node={{ kind: 'country', id: c.id, name: c.name }}
 											depth={0}
 											notify={notify}
+											api={api}
 										/>
 									))}
 								</div>
