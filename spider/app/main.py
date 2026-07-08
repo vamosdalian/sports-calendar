@@ -3,12 +3,14 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db import init_db
 from app.routers import crawl, data, tree
+from app.scraper.captcha import CaptchaError
 from app.scraper.client import fetcher
 from app.storage import ensure_bucket
 from app.worker import worker
@@ -29,8 +31,6 @@ async def lifespan(app: FastAPI):
         await ensure_bucket()
     except Exception as exc:  # storage is optional for the API to boot
         log.warning("could not ensure bucket: %s", exc)
-    # The headful browser is started lazily on the first scrape so an idle
-    # server never pops a window.
     worker.start()
     log.info("startup complete (QPS limit = %s)", settings.scraper_qps)
     yield
@@ -51,6 +51,22 @@ app.add_middleware(
 app.include_router(tree.router)
 app.include_router(crawl.router)
 app.include_router(data.router)
+
+
+@app.exception_handler(CaptchaError)
+async def captcha_error_handler(request: Request, exc: CaptchaError):
+    """AWS WAF blocked us and 2captcha could not recover a token after retries.
+    Surface a clean 424 (Failed Dependency) instead of a 500 crash."""
+    log.warning("captcha recovery failed for %s: %s", request.url.path, exc)
+    return JSONResponse(
+        status_code=424,
+        content={
+            "error": {
+                "code": "waf_unsolved",
+                "message": f"AWS WAF token could not be recovered via 2captcha: {exc}",
+            }
+        },
+    )
 
 
 @app.get("/api/health")

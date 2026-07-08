@@ -1,17 +1,15 @@
-"""Hybrid fetcher for Transfermarkt (quiet HTTP + browser only for captcha).
+"""Silent HTTP fetcher for Transfermarkt (httpx + 2captcha for the WAF token).
 
 Transfermarkt is behind AWS WAF, which blocks plain HTTP clients with an
-interactive captcha. We solve that once in a real (patched) headful Chromium to
-obtain the ``aws-waf-token`` cookie — then do **all** scraping through a fast,
-silent ``httpx`` client carrying that cookie.
+interactive captcha. We recover the ``aws-waf-token`` cookie **only** via
+2captcha (no browser, no human) and then do all scraping through a fast, silent
+``httpx`` client carrying that cookie.
 
-* The token is persisted to disk, so after the first solve the browser usually
-  never opens again (until the token expires).
-* Only when an ``httpx`` request gets WAF-blocked do we pop the headful browser,
-  let a human solve the captcha, refresh the cookie, and resume over HTTP.
-
-This means the visible browser is idle/closed during normal scraping instead of
-flipping through every page in the foreground.
+* The token is persisted to disk (``waf_cookies.json``), so after a successful
+  solve the token is reused across requests and restarts — 2captcha is called
+  again only once the token expires and an ``httpx`` request gets WAF-blocked.
+* A blocked request triggers a 2captcha solve with a few retries; if every
+  attempt fails the caller gets a clean error (surfaced as a 4xx), never a crash.
 """
 
 from __future__ import annotations
@@ -26,7 +24,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
-from patchright.async_api import async_playwright
 from selectolax.parser import HTMLParser
 
 from app.config import settings
@@ -75,6 +72,9 @@ def _is_captcha(html: str, title: str) -> bool:
 
 @dataclass
 class VerificationState:
+    """Kept for API compatibility (/api/browser/status). With the browser path
+    removed there is no human-in-the-loop, so this stays False."""
+
     needs_verification: bool = False
     url: str | None = None
     since: float | None = None
@@ -104,10 +104,8 @@ def _headers() -> dict[str, str]:
 class BrowserFetcher:
     def __init__(self) -> None:
         self._http: httpx.AsyncClient | None = None
-        self._pw = None
-        self._ctx = None
-        self._lock = asyncio.Lock()       # serialise navigations
-        self._verify_lock = asyncio.Lock()  # only one browser solve at a time
+        self._lock = asyncio.Lock()          # serialise navigations
+        self._verify_lock = asyncio.Lock()   # only one token solve at a time
         self.state = VerificationState()
 
     # ── lifecycle ───────────────────────────────────────────────────────────
@@ -125,7 +123,6 @@ class BrowserFetcher:
         if self._http is not None:
             await self._http.aclose()
             self._http = None
-        await self._close_browser()
 
     # ── cookie persistence ──────────────────────────────────────────────────
     def _load_cookies(self) -> None:
@@ -143,6 +140,7 @@ class BrowserFetcher:
         try:
             _COOKIE_FILE.parent.mkdir(parents=True, exist_ok=True)
             _COOKIE_FILE.write_text(json.dumps(jar))
+            log.info("cached %d WAF cookies to %s", len(jar), _COOKIE_FILE)
         except Exception as exc:  # noqa: BLE001
             log.warning("could not save cookies: %s", exc)
 
@@ -220,7 +218,7 @@ class BrowserFetcher:
                 log.info("httpx error (%s) on %s -> recover token", exc, url)
 
         if blocked:
-            # Refresh the aws-waf-token (2captcha or browser), then retry.
+            # Refresh the aws-waf-token via 2captcha, then retry once.
             await self._refresh_token(url, blocked_html)
             async with self._lock:
                 await rate_limiter.acquire()
@@ -228,43 +226,38 @@ class BrowserFetcher:
                 return _safe_json(resp)
         return None
 
-    # ── browser path (only when WAF-blocked) ─────────────────────────────────
-    async def _ensure_browser(self) -> None:
-        if self._ctx is not None:
-            return
-        self._pw = await async_playwright().start()
-        self._ctx = await self._pw.chromium.launch_persistent_context(
-            user_data_dir=settings.scraper_browser_profile,
-            channel="chromium",
-            headless=settings.scraper_headless,
-            no_viewport=True,
-            user_agent=settings.scraper_user_agent,
-            locale="en-US",
-        )
-        self._ctx.set_default_navigation_timeout(settings.scraper_nav_timeout * 1000)
-
-    async def _close_browser(self) -> None:
-        try:
-            if self._ctx is not None:
-                await self._ctx.close()
-            if self._pw is not None:
-                await self._pw.stop()
-        except Exception:  # noqa: BLE001
-            pass
-        finally:
-            self._ctx = self._pw = None
-
-    # ── token recovery (dispatch) ────────────────────────────────────────────
+    # ── token recovery (2captcha only, with retries) ─────────────────────────
     async def _refresh_token(self, url: str, blocked_html: str | None = None) -> str:
-        """Recover a fresh aws-waf-token. Uses 2captcha when configured (works
-        on a headless server); otherwise falls back to a human solving it in the
-        headful browser."""
-        if settings.captcha_provider == "2captcha" and captcha_solver.enabled:
+        """Recover a fresh aws-waf-token via 2captcha. Retries up to
+        ``captcha_max_attempts`` times; raises CaptchaError if all fail. There is
+        no browser fallback — the caller turns CaptchaError into a 4xx."""
+        if not (settings.captcha_provider == "2captcha" and captcha_solver.enabled):
+            raise CaptchaError(
+                "2captcha is not configured (TWOCAPTCHA_API_KEY missing); "
+                "no browser fallback available"
+            )
+
+        attempts = max(1, settings.captcha_max_attempts)
+        last_error: Exception | None = None
+        for i in range(1, attempts + 1):
             try:
-                return await self._refresh_via_2captcha(url, blocked_html)
+                html = await self._refresh_via_2captcha(url, blocked_html)
+                if i > 1:
+                    log.info("2captcha solve succeeded on attempt %d/%d", i, attempts)
+                return html
             except CaptchaError as exc:
-                log.warning("2captcha solve failed (%s); falling back to browser", exc)
-        return await self._refresh_via_browser(url)
+                last_error = exc
+                log.warning(
+                    "2captcha solve attempt %d/%d failed: %s", i, attempts, exc
+                )
+                # Force a fresh challenge on the next attempt (stale gokuProps is
+                # a common reason for ERROR_CAPTCHA_UNSOLVABLE).
+                blocked_html = None
+                if i < attempts:
+                    await asyncio.sleep(min(2 * i, 5))
+        raise CaptchaError(
+            f"2captcha failed after {attempts} attempts: {last_error}"
+        )
 
     async def _refresh_via_2captcha(self, url: str, blocked_html: str | None) -> str:
         """Hand the AWS WAF challenge to 2captcha, inject the returned token into
@@ -272,8 +265,8 @@ class BrowserFetcher:
         async with self._verify_lock:
             html = blocked_html
             if not html or "gokuProps" not in html:
-                # No interstitial in hand (e.g. the request timed out) — fetch
-                # one so the solver has the challenge params.
+                # No interstitial in hand (e.g. the request timed out, or we are
+                # retrying) — fetch a fresh one so the solver has current params.
                 await rate_limiter.acquire()
                 html = (await self._http.get(url)).text
 
@@ -286,53 +279,6 @@ class BrowserFetcher:
 
             await rate_limiter.acquire()
             return (await self._http.get(url)).text
-
-    async def _refresh_via_browser(self, url: str) -> str:
-        """Open the headful browser, (let a human) pass the captcha, refresh the
-        token cookie into the httpx client, then close the browser again."""
-        async with self._verify_lock:
-            await self._ensure_browser()
-            page = self._ctx.pages[0] if self._ctx.pages else await self._ctx.new_page()
-            await page.goto(url, wait_until="domcontentloaded")
-            html = await page.content()
-            title = await page.title()
-
-            if _is_captcha(html, title):
-                await self._await_human(page, url)
-                html = await page.content()
-
-            await self._sync_cookies()
-            await self._close_browser()
-            return html
-
-    async def _await_human(self, page, url: str) -> None:
-        log.warning("AWS WAF captcha — waiting for human verification: %s", url)
-        self.state = VerificationState(True, url, time.monotonic())
-        try:
-            await page.bring_to_front()
-        except Exception:  # noqa: BLE001
-            pass
-        deadline = time.monotonic() + settings.scraper_verification_timeout
-        while time.monotonic() < deadline:
-            await asyncio.sleep(3)
-            html = await page.content()
-            title = await page.title()
-            if not _is_captcha(html, title):
-                log.info("captcha solved, resuming over HTTP")
-                self.state = VerificationState(False)
-                return
-        self.state = VerificationState(False)
-        raise TimeoutError(
-            f"captcha not solved within {settings.scraper_verification_timeout}s"
-        )
-
-    async def _sync_cookies(self) -> None:
-        cookies = await self._ctx.cookies()
-        jar = {c["name"]: c["value"] for c in cookies}
-        for k, v in jar.items():
-            self._http.cookies.set(k, v)
-        self._save_cookies(jar)
-        log.info("synced %d cookies from browser into httpx", len(jar))
 
 
 # Process-wide singleton (name kept as `fetcher` for the parsers).

@@ -27,25 +27,21 @@ class Settings(BaseSettings):
     scraper_max_retries: int = 4
     store_raw_html: bool = True
 
-    # Browser fetcher (needed because Transfermarkt is behind AWS WAF captcha).
-    # Headful so a human can solve the captcha once; the aws-waf-token is then
-    # cached in the persistent profile and reused for subsequent requests.
-    scraper_headless: bool = False
+    # Directory where the recovered aws-waf-token is cached (waf_cookies.json).
+    # Persisted so a valid token is reused across requests/restarts and we only
+    # call 2captcha again once it expires and httpx gets WAF-blocked.
     scraper_browser_profile: str = ".browser_profile"
-    scraper_nav_timeout: int = 60
-    # Seconds to wait for a human to solve the captcha before giving up.
-    scraper_verification_timeout: int = 600
 
-    # Captcha provider for recovering the aws-waf-token when httpx gets blocked.
-    #   "browser"  -> pop a headful Chromium and let a human solve it (default,
-    #                 good for local dev)
-    #   "2captcha" -> hand the AWS WAF challenge to 2captcha and run unattended
-    #                 (use this on a headless server)
-    captcha_provider: str = "browser"
+    # AWS WAF token recovery. 2captcha is the ONLY mechanism — there is no
+    # browser/headful fallback. When httpx is WAF-blocked the challenge is handed
+    # to 2captcha; on success the token is cached and reused.
+    captcha_provider: str = "2captcha"
     twocaptcha_api_key: str = ""
     twocaptcha_base_url: str = "https://api.2captcha.com"
     captcha_poll_interval: int = 5  # seconds between getTaskResult polls
     captcha_timeout: int = 180  # give up on a single solve after this many seconds
+    # Retry a failed 2captcha solve this many times before surfacing a 4xx.
+    captcha_max_attempts: int = 3
 
     # API
     api_host: str = "0.0.0.0"
