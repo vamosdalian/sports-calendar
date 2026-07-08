@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/auth-provider'
 import { ProtectedRoute } from '@/components/protected-route'
 import { AdminShell } from '@/components/layout/admin-shell'
 import { Toaster } from '@/components/ui/sonner'
+import { CrawlerPage } from '@/pages/crawler-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { LeaguesPage } from '@/pages/leagues-page'
 import { LoginPage } from '@/pages/login-page'
@@ -31,6 +32,7 @@ export default function App() {
 					}
 				>
 					<Route index element={<DashboardPage />} />
+					<Route path="crawler" element={<CrawlerPage />} />
 					<Route path="locales" element={<LocalesPage />} />
 					<Route path="venues" element={<VenuesPage />} />
 					<Route path="sports" element={<SportsPage />} />

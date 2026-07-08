@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets & local state (injected at runtime, never baked into the image)
+.env
+.browser_profile/
+
+# Frontend (built in its own image)
+web/node_modules/
+web/dist/
+web/.vite/
+
+# VCS / editor / OS
+.git/
+.gitignore
+.DS_Store
+.claude/
+docs/
+scripts/samples/
+README.md

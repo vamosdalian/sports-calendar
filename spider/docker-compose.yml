@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: tm_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tm
+      POSTGRES_PASSWORD: tm_pass
+      POSTGRES_DB: transfermarkt
+    # Internal only — no host port. The app reaches it by service name over the
+    # compose network. For ad-hoc DB access use `docker compose exec postgres`
+    # or a local override file.
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tm -d transfermarkt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: tm_rustfs
+    restart: unless-stopped
+    environment:
+      # S3-compatible credentials
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_CONSOLE_ENABLE: "true"
+    # Internal only — no host port (avoids clashing with anything already on
+    # :9000). The app reaches it by service name over the compose network.
+    volumes:
+      - rustfs_data:/data
+    command: ["/data"]
+
+  app:
+    build: .
+    container_name: tm_app
+    restart: unless-stopped
+    # Secrets and scraper tuning come from .env (TWOCAPTCHA_API_KEY,
+    # CAPTCHA_PROVIDER=2captcha, SCRAPER_QPS, ...). The host/endpoint values
+    # below override .env so the app reaches the other containers by service
+    # name instead of localhost.
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tm:tm_pass@postgres:5432/transfermarkt
+      S3_ENDPOINT_URL: http://rustfs:9000
+      # Unattended on a headless server — never pop a browser.
+      CAPTCHA_PROVIDER: "2captcha"
+      SCRAPER_HEADLESS: "true"
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+    volumes:
+      # Persist the cached aws-waf-token so a restart doesn't re-solve a captcha.
+      - browser_profile:/app/.browser_profile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+    # Only host-exposed port of the whole stack. Bound to 127.0.0.1 so the
+    # public can't hit the (unauthenticated) API directly — the server's
+    # cloudflared tunnel reverse-proxies https://spider-api.sports-calendar.com
+    # to http://localhost:8001. 8001 avoids clashing with the Go backend (5959).
+    # The admin console (Vite → CF Worker) calls this API cross-origin; CORS is
+    # locked to the admin origin via CORS_ORIGINS in .env.
+    ports:
+      - "127.0.0.1:8001:8000"
+
+volumes:
+  pg_data:
+  rustfs_data:
+  browser_profile:
