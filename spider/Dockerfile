@@ -1,8 +1,8 @@
 # ── Backend image: FastAPI + scraper worker ──────────────────────────────────
-# Runs the API and the in-process crawl worker. Captcha is solved unattended via
-# 2captcha (CAPTCHA_PROVIDER=2captcha), so no display/Chromium is needed at
-# runtime. The headful-browser fallback (CAPTCHA_PROVIDER=browser) needs a real
-# display and does NOT work in this headless container — keep 2captcha funded.
+# Runs the API and the in-process crawl worker. The AWS WAF token is recovered
+# unattended via 2captcha (the only mechanism — there is no browser fallback),
+# so no display/Chromium is needed at runtime. Keep 2captcha funded, otherwise
+# WAF-blocked requests surface a 4xx after the configured retries.
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
