@@ -15,6 +15,7 @@ type Config struct {
 	TheSportsDB     TheSportsDBConfig     `yaml:"theSportsDB"`
 	RefreshExecutor RefreshExecutorConfig `yaml:"refreshExecutor"`
 	AdminAuth       AdminAuthConfig       `yaml:"adminAuth"`
+	Spider          SpiderConfig          `yaml:"spider"`
 }
 
 type ServerConfig struct {
@@ -48,6 +49,14 @@ type RefreshExecutorConfig struct {
 type AdminAuthConfig struct {
 	Secret         string `yaml:"secret"`
 	TokenTTLMinute int    `yaml:"tokenTTLMinutes"`
+}
+
+// SpiderConfig points the admin-only reverse proxy at the sports-spider
+// (Transfermarkt crawler) backend. When UpstreamURL is empty the /api/spider/*
+// proxy is disabled and returns 503. The crawler is never exposed publicly; the
+// admin console reaches it only through this authenticated proxy.
+type SpiderConfig struct {
+	UpstreamURL string `yaml:"upstreamURL"`
 }
 
 func Load(path string) (Config, error) {

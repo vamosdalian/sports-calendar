@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	stdhttputil "net/http/httputil"
 	"strings"
 	"time"
 
@@ -17,7 +18,9 @@ import (
 	"github.com/vamosdalian/sports-calendar/backend/internal/service"
 )
 
-func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limiter) *gin.Engine {
+// spiderUpstream is the base URL of the sports-spider backend the admin-only
+// proxy forwards to; empty disables the proxy.
+func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limiter, spiderUpstream string) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
@@ -28,6 +31,15 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	router.Use(requestLogger(logger))
 	router.Use(rateLimitMiddleware(limiter))
 	handler := &Handler{service: svc}
+	if spiderUpstream != "" {
+		proxy, err := newSpiderProxy(spiderUpstream)
+		if err != nil {
+			logger.WithError(err).Error("invalid spider upstream URL; spider proxy disabled")
+		} else {
+			handler.spiderProxy = proxy
+			logger.WithField("upstream", spiderUpstream).Info("spider proxy enabled")
+		}
+	}
 
 	router.GET("/healthz", handler.healthz)
 
@@ -74,13 +86,21 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	admin.PUT("/:sport/:league/seasons/:season", handler.updateSeason)
 	admin.DELETE("/:sport/:league/seasons/:season", handler.deleteSeason)
 
+	// Admin-only reverse proxy to the sports-spider crawler backend. Reuses
+	// admin auth; the crawler is never exposed publicly. Mounted as its own
+	// /api/spider subtree (a catch-all here would conflict with /api/:sport).
+	spider := api.Group("/spider")
+	spider.Use(adminAuthMiddleware(svc))
+	spider.Any("/*path", handler.proxySpider)
+
 	router.GET("/ics/:sport/:league/:season/matches.ics", handler.getSeasonICS)
 
 	return router
 }
 
 type Handler struct {
-	service *service.Service
+	service     *service.Service
+	spiderProxy *stdhttputil.ReverseProxy
 }
 
 func (h *Handler) healthz(c *gin.Context) {

@@ -24,3 +24,12 @@ refreshExecutor:
 adminAuth:
   secret: CHANGE_ME_LONG_RANDOM_SECRET
   tokenTTLMinutes: 30
+
+# Admin-only reverse proxy to the sports-spider (Transfermarkt crawler) backend.
+# The crawler is not exposed publicly; the admin "Crawler" page reaches it through
+# /api/spider/* which reuses admin auth. Leave upstreamURL empty to disable.
+# On the server the spider app container is reachable on the shared docker network
+# (sports-calendar-net) as http://tm_app:8000. For local dev use the host port,
+# e.g. http://localhost:8001.
+spider:
+  upstreamURL: ""

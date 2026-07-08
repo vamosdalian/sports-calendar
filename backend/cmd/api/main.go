@@ -94,7 +94,7 @@ func main() {
 	scheduler.Start()
 	defer scheduler.Stop()
 
-	router := server.NewRouter(logger, svc, rate.NewLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond), cfg.RateLimit.Burst))
+	router := server.NewRouter(logger, svc, rate.NewLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond), cfg.RateLimit.Burst), cfg.Spider.UpstreamURL)
 
 	address := fmt.Sprintf(":%d", cfg.Server.Port)
 	logger.WithField("addr", address).Info("starting API server")
