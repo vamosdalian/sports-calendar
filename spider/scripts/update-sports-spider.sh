@@ -50,7 +50,7 @@ docker run -d \
   --restart unless-stopped \
   --network sports-calendar-net \
   --env-file "${ENV_FILE}" \
-  -e S3_ENDPOINT_URL=http://tm_rustfs:9000 \
+  -e S3_ENDPOINT_URL=http://rustfs:9000 \
   -e CAPTCHA_PROVIDER=2captcha \
   -e API_HOST=0.0.0.0 \
   -e API_PORT=8000 \
