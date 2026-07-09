@@ -1,5 +1,11 @@
-name: Release Backend Image
+name: Release Spider Image
 
+# Builds and publishes the Transfermarkt crawler (spider/) image to GHCR.
+#
+# Triggered by a published GitHub Release whose tag ends in `-sp`
+# (e.g. v1.0.0-sp), so it runs INSTEAD of the backend workflow — a normal
+# vX.Y.Z release builds the backend, a vX.Y.Z-sp release builds the spider.
+# Also runnable manually via workflow_dispatch.
 on:
   release:
     types:
@@ -7,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to publish to GHCR
+        description: Release tag to publish to GHCR (e.g. v1.0.0-sp)
         required: true
         type: string
 
@@ -16,24 +22,19 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/sports-calendar-api
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/sports-spider
 
 jobs:
   publish:
-    name: Build and publish backend image
+    name: Build and publish spider image
     runs-on: ubuntu-latest
-    # Skip releases tagged `-sp` — those build the spider image instead
-    # (see spider-release.yml). A plain vX.Y.Z release builds the backend.
-    if: ${{ github.event_name == 'workflow_dispatch' || !endsWith(github.event.release.tag_name, '-sp') }}
+    # Only build for -sp releases (or manual dispatch). Plain releases are the
+    # backend's job and are ignored here.
+    if: ${{ github.event_name == 'workflow_dispatch' || endsWith(github.event.release.tag_name, '-sp') }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
 
       - name: Derive release version
         id: version
@@ -59,12 +60,14 @@ jobs:
           echo "image_repo=$image_repo" >> "$GITHUB_OUTPUT"
           echo "publish_latest=$([[ "$prerelease" == "true" ]] && echo false || echo true)" >> "$GITHUB_OUTPUT"
 
-      - name: Run backend tests
-        working-directory: backend
-        run: go test ./...
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Syntax check
+        working-directory: spider
+        run: python -m compileall app
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -85,18 +88,18 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}
             type=raw,value=latest,enable=${{ steps.version.outputs.publish_latest == 'true' }}
           labels: |
-            org.opencontainers.image.title=sports-calendar-api
-            org.opencontainers.image.description=Sports Calendar backend API
+            org.opencontainers.image.title=sports-spider
+            org.opencontainers.image.description=Transfermarkt crawler (FastAPI + scraper worker)
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
 
-      - name: Build and push backend image
+      - name: Build and push spider image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: backend/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          context: spider
+          file: spider/Dockerfile
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
