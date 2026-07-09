@@ -3,9 +3,11 @@
 # to keep a raw-HTML snapshot of every fetched page.
 #
 # No docker-compose: rustfs is a long-lived standalone container on the shared
-# sports-calendar-net, so the app reaches it by container name (tm_rustfs). Run
-# this ONCE; spider updates (update-sports-spider.sh) never touch it. Data lives
-# in the named volume sports-spider_rustfs_data and survives restarts.
+# sports-calendar-net. The app reaches it at http://rustfs:9000 via the
+# `rustfs` network alias — botocore rejects endpoint hosts with an underscore,
+# so we can't use the container name `tm_rustfs` directly. Run this ONCE; spider
+# updates (update-sports-spider.sh) never touch it. Data lives in the named
+# volume sports-spider_rustfs_data and survives restarts.
 set -euo pipefail
 
 NAME="tm_rustfs"
@@ -19,6 +21,7 @@ docker run -d \
   --name "${NAME}" \
   --restart unless-stopped \
   --network sports-calendar-net \
+  --network-alias rustfs \
   -e RUSTFS_ACCESS_KEY=rustfsadmin \
   -e RUSTFS_SECRET_KEY=rustfsadmin \
   -e RUSTFS_CONSOLE_ENABLE=true \
