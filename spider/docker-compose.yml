@@ -56,9 +56,8 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://tm:tm_pass@postgres:5432/transfermarkt
       S3_ENDPOINT_URL: http://rustfs:9000
-      # Unattended on a headless server — never pop a browser.
+      # Unattended: AWS WAF token is recovered via 2captcha only (no browser).
       CAPTCHA_PROVIDER: "2captcha"
-      SCRAPER_HEADLESS: "true"
       API_HOST: 0.0.0.0
       API_PORT: "8000"
     volumes:

@@ -2,11 +2,9 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 
-# Scraping. Transfermarkt sits behind AWS WAF (captcha), so a plain HTTP
-# client is not enough — we drive a real (patched) Chromium and reuse the
-# aws-waf-token across requests. httpx is kept for lightweight internal use.
+# Scraping. Transfermarkt sits behind AWS WAF (captcha); the aws-waf-token is
+# recovered via 2captcha (no browser) and reused across requests over httpx.
 httpx==0.28.1
-patchright==1.60.1
 selectolax==0.3.27
 tenacity==9.0.0
 
