@@ -1,17 +1,16 @@
-// A read-only viewer for data the crawler has already stored: competition
-// standings / fixtures and team squad / fixtures. Opened from a row in the
-// crawler selection tree so, after a task finishes, the result can be browsed
-// without leaving the admin console.
+// A read-only page for data the crawler has already stored: competition
+// standings / fixtures and team squad / fixtures. Reached by clicking a
+// competition/team row in the crawler selection tree, which navigates here
+// (a full page rather than a dialog so browsing does not dim the console).
 
-import { Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-} from '@/components/ui/dialog'
+import { useAuth } from '@/components/use-auth'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import {
 	Select,
 	SelectContent,
@@ -31,14 +30,10 @@ import {
 import {
 	type Fixture,
 	type Player,
-	type SpiderApi,
 	type Standing,
+	createSpiderApi,
 	formatMarketValue,
 } from '@/lib/spider-api'
-
-export type DataTarget =
-	| { kind: 'competition'; id: string; name: string }
-	| { kind: 'team'; id: number; name: string }
 
 type Tab = 'standings' | 'fixtures' | 'squad'
 
@@ -67,20 +62,17 @@ function fmtKickoff(iso: string | null): string {
 	})
 }
 
-export function CrawlerDataDialog({
-	target,
-	open,
-	onOpenChange,
-	api,
-}: {
-	target: DataTarget | null
-	open: boolean
-	onOpenChange: (v: boolean) => void
-	api: SpiderApi
-}) {
+export function CrawlerDataPage() {
+	const { kind = '', id = '' } = useParams()
+	const [params] = useSearchParams()
+	const { token } = useAuth()
+	const api = useMemo(() => createSpiderApi(token), [token])
+
+	const isComp = kind === 'competition'
+	const name = params.get('name') ?? id
 	const seasons = useMemo(() => recentSeasons(), [])
 	const [season, setSeason] = useState(seasons[0].id)
-	const [tab, setTab] = useState<Tab>('fixtures')
+	const [tab, setTab] = useState<Tab>(isComp ? 'standings' : 'fixtures')
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [standings, setStandings] = useState<Standing[]>([])
@@ -89,45 +81,34 @@ export function CrawlerDataDialog({
 	// team_id -> name, so standings (which only carry team_id) stay readable.
 	const [teamNames, setTeamNames] = useState<Record<number, string>>({})
 
-	const isComp = target?.kind === 'competition'
-
-	// Reset the active tab whenever the target changes to one whose default view
-	// differs (competitions lead with standings, teams with fixtures).
-	useEffect(() => {
-		if (!target) return
-		setTab(target.kind === 'competition' ? 'standings' : 'fixtures')
-	}, [target])
-
 	// For competitions, fetch the roster once to label standings/fixtures rows.
 	useEffect(() => {
-		if (!open || target?.kind !== 'competition') return
+		if (!isComp) return
 		let active = true
 		api
-			.competitionTeams(target.id)
+			.competitionTeams(id)
 			.then((ts) => {
-				if (!active) return
-				setTeamNames(Object.fromEntries(ts.map((t) => [t.id, t.name])))
+				if (active) setTeamNames(Object.fromEntries(ts.map((t) => [t.id, t.name])))
 			})
 			.catch(() => {})
 		return () => {
 			active = false
 		}
-	}, [open, target, api])
+	}, [isComp, id, api])
 
 	useEffect(() => {
-		if (!open || !target) return
 		let active = true
 		setLoading(true)
 		setError(null)
 		const run = async () => {
 			try {
-				if (target.kind === 'competition') {
-					if (tab === 'standings') setStandings(await api.standings(target.id, season))
-					else setFixtures(await api.competitionFixtures(target.id, season))
+				if (isComp) {
+					if (tab === 'standings') setStandings(await api.standings(id, season))
+					else setFixtures(await api.competitionFixtures(id, season))
 				} else if (tab === 'squad') {
-					setSquad(await api.squad(target.id, season))
+					setSquad(await api.squad(Number(id), season))
 				} else {
-					setFixtures(await api.fixtures(target.id, season))
+					setFixtures(await api.fixtures(Number(id), season))
 				}
 			} catch (e) {
 				if (active) setError((e as Error).message)
@@ -139,22 +120,34 @@ export function CrawlerDataDialog({
 		return () => {
 			active = false
 		}
-	}, [open, target, tab, season, api])
+	}, [isComp, id, tab, season, api])
 
-	const teamLabel = (id: number | null) =>
-		id == null ? '—' : (teamNames[id] ?? String(id))
+	if (kind !== 'competition' && kind !== 'team') return <Navigate to="/crawler" replace />
+
+	const teamLabel = (tid: number | null) =>
+		tid == null ? '—' : (teamNames[tid] ?? String(tid))
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-4xl">
-				<DialogHeader>
-					<DialogTitle className="flex items-center gap-2 text-base">
-						<span className="truncate">{target?.name}</span>
-						<span className="text-xs font-normal text-muted-foreground">已抓取数据</span>
-					</DialogTitle>
-				</DialogHeader>
+		<div className="flex flex-1 flex-col gap-4">
+			<div className="flex items-center gap-3">
+				<Button asChild variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+					<Link to="/crawler" aria-label="返回爬虫">
+						<ArrowLeft className="h-4 w-4" />
+					</Link>
+				</Button>
+				<div className="min-w-0">
+					<h1 className="flex items-center gap-2 truncate text-lg font-semibold">
+						{name}
+						<Badge variant="outline" className="shrink-0">
+							{isComp ? '赛事' : '球队'}
+						</Badge>
+					</h1>
+					<p className="text-xs text-muted-foreground">已抓取数据 · 选择赛季与类别浏览</p>
+				</div>
+			</div>
 
-				<div className="flex items-center justify-between gap-3">
+			<Card>
+				<CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
 					<Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
 						<TabsList>
 							{isComp ? (
@@ -182,25 +175,26 @@ export function CrawlerDataDialog({
 							))}
 						</SelectContent>
 					</Select>
-				</div>
-
-				<div className="max-h-[60vh] min-h-[8rem] overflow-auto rounded-md border">
-					{loading ? (
-						<div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
-							<Loader2 className="h-4 w-4 animate-spin" /> 加载中…
-						</div>
-					) : error ? (
-						<div className="p-6 text-sm text-destructive">加载失败: {error}</div>
-					) : tab === 'standings' ? (
-						<StandingsTable rows={standings} teamLabel={teamLabel} />
-					) : tab === 'squad' ? (
-						<SquadTable rows={squad} />
-					) : (
-						<FixturesTable rows={fixtures} isComp={isComp} teamLabel={teamLabel} />
-					)}
-				</div>
-			</DialogContent>
-		</Dialog>
+				</CardHeader>
+				<CardContent>
+					<div className="overflow-x-auto rounded-md border">
+						{loading ? (
+							<div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+								<Loader2 className="h-4 w-4 animate-spin" /> 加载中…
+							</div>
+						) : error ? (
+							<div className="p-6 text-sm text-destructive">加载失败: {error}</div>
+						) : tab === 'standings' ? (
+							<StandingsTable rows={standings} teamLabel={teamLabel} />
+						) : tab === 'squad' ? (
+							<SquadTable rows={squad} />
+						) : (
+							<FixturesTable rows={fixtures} isComp={isComp} teamLabel={teamLabel} />
+						)}
+					</div>
+				</CardContent>
+			</Card>
+		</div>
 	)
 }
 
