@@ -3,6 +3,7 @@ import {
 	CalendarDays,
 	ChevronDown,
 	ChevronRight,
+	Eye,
 	Flag,
 	Loader2,
 	Search,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { CrawlerDataDialog, type DataTarget } from '@/components/crawler-data-dialog'
 import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
 import { Badge } from '@/components/ui/badge'
@@ -85,11 +87,13 @@ function TreeRow({
 	depth,
 	notify,
 	api,
+	onView,
 }: {
 	node: NodeDef
 	depth: number
 	notify: Notify
 	api: SpiderApi
+	onView: (t: DataTarget) => void
 }) {
 	const [open, setOpen] = useState(false)
 	const [loading, setLoading] = useState(false)
@@ -190,6 +194,14 @@ function TreeRow({
 					{node.kind === 'competition' && (
 						<>
 							<Button
+								variant="ghost"
+								className="h-6 px-2 text-xs"
+								onClick={() => onView({ kind: 'competition', id: node.id, name: node.name })}
+							>
+								<Eye className="mr-1 h-3.5 w-3.5" />
+								查看
+							</Button>
+							<Button
 								variant="secondary"
 								className="h-6 px-2 text-xs"
 								onClick={() => crawl('competition_clubs', node.id)}
@@ -215,6 +227,14 @@ function TreeRow({
 					{node.kind === 'team' && (
 						<>
 							<Button
+								variant="ghost"
+								className="h-6 px-2 text-xs"
+								onClick={() => onView({ kind: 'team', id: node.id, name: node.name })}
+							>
+								<Eye className="mr-1 h-3.5 w-3.5" />
+								查看
+							</Button>
+							<Button
 								variant="secondary"
 								className="h-6 px-2 text-xs"
 								onClick={() => crawl('team_squad', String(node.id))}
@@ -234,7 +254,14 @@ function TreeRow({
 			</div>
 			{open &&
 				children?.map((c) => (
-					<TreeRow key={`${c.kind}:${c.id}`} node={c} depth={depth + 1} notify={notify} api={api} />
+					<TreeRow
+						key={`${c.kind}:${c.id}`}
+						node={c}
+						depth={depth + 1}
+						notify={notify}
+						api={api}
+						onView={onView}
+					/>
 				))}
 		</div>
 	)
@@ -249,6 +276,7 @@ export function CrawlerPage() {
 	const [q, setQ] = useState('')
 	const [tasks, setTasks] = useState<CrawlTask[]>([])
 	const [needsVerify, setNeedsVerify] = useState(false)
+	const [viewTarget, setViewTarget] = useState<DataTarget | null>(null)
 
 	const notify: Notify = (msg, ok = false) =>
 		showToast({ title: msg, tone: ok ? 'success' : 'error' })
@@ -353,6 +381,7 @@ export function CrawlerPage() {
 											depth={0}
 											notify={notify}
 											api={api}
+											onView={setViewTarget}
 										/>
 									))}
 								</div>
@@ -406,6 +435,13 @@ export function CrawlerPage() {
 					</Card>
 				</section>
 			</div>
+
+			<CrawlerDataDialog
+				target={viewTarget}
+				open={viewTarget !== null}
+				onOpenChange={(v) => !v && setViewTarget(null)}
+				api={api}
+			/>
 		</div>
 	)
 }
