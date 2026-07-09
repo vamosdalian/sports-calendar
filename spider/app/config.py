@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     scraper_max_retries: int = 4
     store_raw_html: bool = True
 
+    # Optional upstream proxy for ALL Transfermarkt traffic. Routing through a
+    # good-reputation (e.g. residential, EU) IP makes AWS WAF stop serving the
+    # captcha interstitial, so scraping succeeds without any captcha solve. The
+    # server's own datacenter IP (Beijing/Aliyun) is challenged on every request.
+    # Format: "http://user:pass@host:port" (or socks5://...). Empty = direct.
+    scraper_proxy: str = ""
+
     # Directory where the recovered aws-waf-token is cached (waf_cookies.json).
     # Persisted so a valid token is reused across requests/restarts and we only
     # call 2captcha again once it expires and httpx gets WAF-blocked.

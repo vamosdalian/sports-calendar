@@ -89,6 +89,17 @@ class VerificationState:
         }
 
 
+def _redact_proxy(proxy: str) -> str:
+    """Hide the user:pass in a proxy URL before logging it."""
+    try:
+        parsed = httpx.URL(proxy)
+        if parsed.username or parsed.password:
+            return str(parsed.copy_with(username="***", password="***"))
+    except Exception:  # noqa: BLE001
+        return "<proxy>"
+    return proxy
+
+
 def _headers() -> dict[str, str]:
     return {
         "User-Agent": settings.scraper_user_agent,
@@ -111,11 +122,15 @@ class BrowserFetcher:
     # ── lifecycle ───────────────────────────────────────────────────────────
     async def start(self) -> None:
         if self._http is None:
+            proxy = settings.scraper_proxy or None
+            if proxy:
+                log.info("scraper routing through proxy %s", _redact_proxy(proxy))
             self._http = httpx.AsyncClient(
                 base_url=settings.scraper_base_url,
                 timeout=settings.scraper_timeout,
                 follow_redirects=True,
                 headers=_headers(),
+                proxy=proxy,
             )
             self._load_cookies()
 
