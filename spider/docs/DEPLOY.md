@@ -1,76 +1,83 @@
 # 部署（线上 / 容器化）
 
-爬虫后端用 `docker compose` 一键拉起:`postgres` + `rustfs` + `app`(FastAPI + 抓取 worker)。
-前端已并入 sports-calendar 的 **admin** 控制台(菜单「Crawler」),不再由本栈托管;admin 跨域调用本栈的 `app` API。
+爬虫后端镜像化部署,**不用 docker-compose**:和后端一样每个容器独立 `docker run`,都挂在共享网络 `sports-calendar-net` 上,靠容器名互相解析。`app`(FastAPI + 抓取 worker)是唯一会更新的容器;`tm_rustfs`(原始 HTML 快照)与主库 `sports-calendar-postgres` 启动后不再变更。**数据库复用主库**里的 `transfermarkt` 库,本栈不自带 Postgres。前端已并入 **admin** 控制台(菜单「Crawler」),由 admin 经 Go 后端鉴权 proxy 跨栈调用。
 
 ```
-admin(CF Worker) ──HTTPS──> cloudflared ──/api──> app:8000(宿主 127.0.0.1:8001) ──> postgres / rustfs
-  (浏览器 fetch)              (spider-api.sports-calendar.com)   └─ 抓取 worker ──2captcha──> Transfermarkt
+admin(CF Worker) ──HTTPS──> api.sports-calendar.com/api/spider/*  (Go 后端鉴权)
+                              └─ ReverseProxy ──> app:8000(宿主 127.0.0.1:8001)
+                                   ├─ 抓取 worker ──SCRAPER_PROXY(德国住宅 IP)──> Transfermarkt
+                                   ├─ 数据 ──> sports-calendar-postgres / transfermarkt
+                                   └─ 原始 HTML ──> rustfs
 ```
 
 ## 前置
 
 - 一台装了 Docker + Docker Compose 的 Linux 主机(这里复用 `ssh sports-calendar` = root@39.102.211.97)
-- 一个有余额的 **2captcha** 账号(无人值守解 AWS WAF 验证码的关键)
-- 主机上已运行的 cloudflared 隧道(与 sports-calendar 其它服务共用)
+- 已运行的 `sports-calendar-postgres`(主库,在 `sports-calendar-net` 上)
+- 一个**住宅代理**(EU 出口,过 AWS WAF 的关键;见 `../README.md` 反爬一节)
+- 共享 docker 网络 `sports-calendar-net`(external)
 
-## 步骤
+## 发布流程(打 tag → GitHub Action → 服务器脚本更新)
 
-1. 准备环境变量:
+与后端一致,但 **spider 用带 `-sp` 后缀的独立 tag**,以只触发 spider 构建:
+
+1. **发 Release** `vX.Y.Z-sp`(如 `v1.0.0-sp`)。`spider-release.yml` 只在 `-sp` 结尾时构建,`backend-release.yml` 则跳过 `-sp` —— 两条版本线互不干扰。
+2. Action 构建并推送 `ghcr.io/vamosdalian/sports-spider:vX.Y.Z-sp`(+ `latest`)。首次推送后需把该 GHCR package 设为 **public**(服务器无 GHCR 登录,靠公开镜像拉取)。
+3. 服务器更新:
 
    ```bash
-   cp .env.example .env
+   ssh sports-calendar '/root/script/update-sports-spider.sh v1.0.0-sp'
    ```
 
-   线上必须确认 `.env` 里这几项:
+   脚本先拉镜像成功才动容器,把 `SPIDER_TAG` 写入 `.env`,只重建 `app`(rustfs 不动)。
+
+## 首次 / 手动部署
+
+1. `/opt/sports-spider/.env` 里确认(**没有 docker-compose.yml 了**):
 
    | 变量 | 线上取值 | 说明 |
    |------|---------|------|
-   | `CAPTCHA_PROVIDER` | `2captcha` | 无人值守解码;`browser` 仅用于本地有显示器时(compose 已覆盖为 2captcha) |
-   | `TWOCAPTCHA_API_KEY` | 你的 key | 没有则 WAF 拦截后会卡住 |
+   | `DATABASE_URL` | `postgresql+asyncpg://sports_calendar:<pass>@sports-calendar-postgres:5432/transfermarkt` | 复用主库,密码 URL 编码 |
+   | `SCRAPER_PROXY` | `http://user:pass@host:port` | 住宅 EU 代理,过 WAF 的关键 |
    | `SCRAPER_QPS` | `0.5`(保持 < 1) | 限流,避免被封 |
-   | `CORS_ORIGINS` | admin 线上源(如 `https://admin.sports-calendar.com`) | 浏览器跨域调用 API 的白名单,必须填对 |
+   | `TWOCAPTCHA_API_KEY` | 你的 key(可选) | 挂好代理后通常用不到,留作兜底 |
+   | `CORS_ORIGINS` | admin 线上源 | 经 Go 后端 proxy 调用时一般不需要,保留即可 |
 
-   > `DATABASE_URL`、`S3_ENDPOINT_URL`、`CAPTCHA_PROVIDER`、`SCRAPER_HEADLESS` 在 `docker-compose.yml` 的 `app.environment` 里已被覆盖为容器内服务名/无头值,**无需手改 `.env` 里的 localhost 值**。`.env` 只负责密钥、`CORS_ORIGINS` 与抓取调参。
+   > `S3_ENDPOINT_URL=http://tm_rustfs:9000` / `CAPTCHA_PROVIDER=2captcha` 由 `docker run` 的 `-e` 覆盖,无需写进 `.env`。`DATABASE_URL` / `SCRAPER_PROXY` / 密钥只在 `.env`(不入库)。
 
-2. 启动整栈:
+2. 一次性起 rustfs(之后不再动):
 
    ```bash
-   docker compose up -d --build
+   /root/script/start-rustfs.sh
    ```
 
-   首次会建表、确保 rustfs bucket 存在、启动抓取 worker。
+3. 部署 / 更新 app(拉 GHCR 镜像并重建容器):
 
-3. 验证:
+   ```bash
+   /root/script/update-sports-spider.sh v1.0.0-sp
+   ```
+
+4. 验证:
 
    ```bash
    curl -fsS http://127.0.0.1:8001/api/health          # {"status":"ok",...}
-   curl -fsS http://127.0.0.1:8001/api/browser/status  # {"needs_verification":false,...}
+   curl -fsS http://127.0.0.1:8001/api/tree/countries  # 200 + 国家列表
+   docker logs tm_app | grep proxy                      # scraper routing through proxy ***
    ```
 
 ## 架构要点
 
-- **端口 / 暴露面**:`postgres` / `rustfs` 全在 compose 内网,无宿主端口。**唯一对宿主开放的是 `app` 的 `127.0.0.1:8001`**,由服务器上单独运行的 cloudflared 反代到公网。绑 `127.0.0.1` 意味着公网扫不到这个口,只有本机的 cloudflared 能连;`8001` 避开 Go 后端的 `5959`。
-- **无人值守打码**:`app` 是 headless 容器,**不含 Chromium**。WAF 被拦时走 2captcha 直接拿回 `aws-waf-token`。`CAPTCHA_PROVIDER=browser` 的弹窗兜底在本容器内**不可用**(无显示器),所以请确保 2captcha 有余额。
-- **token 持久化**:`aws-waf-token` 缓存在命名卷 `browser_profile`(挂到 `/app/.browser_profile`),重启不必重新解码。
-- **数据持久化**:`pg_data`(Postgres)、`rustfs_data`(原始 HTML 快照)均为命名卷。
-
-## 公网访问:Cloudflare Tunnel(服务器上单独运行)
-
-后端无鉴权,所以**不直接对公网开端口**。本栈只把 API 暴露在 `127.0.0.1:8001`,公网入口由服务器上**单独运行的 cloudflared** 反代:
-
-- Public Hostname `spider-api.sports-calendar.com` → `http://localhost:8001`
-- 加对应 DNS 记录(CNAME 到隧道)
-- admin 侧构建时设 `VITE_SPIDER_API_BASE_URL=https://spider-api.sports-calendar.com`
-- spider 侧 `.env` 的 `CORS_ORIGINS` 填 admin 线上源
-
-> 由于 API 无鉴权、仅靠 CORS 限源,后续可在该 hostname 上加 Cloudflare Access(注意:浏览器 fetch 场景需用支持的鉴权方式,别把 admin 的 XHR 挡在登录页外)。
+- **无 compose**:三个容器(`sports-calendar-postgres`、`tm_rustfs`、`tm_app`)都独立 `docker run`,同在 `sports-calendar-net`,用容器名互相解析(app→`tm_rustfs`、admin Go 后端→`tm_app:8000`)。更新 app 不影响另两个。
+- **端口 / 暴露面**:`tm_rustfs` 无宿主端口。唯一对宿主开放的是 `app` 的 `127.0.0.1:8001`(仅本机,公网扫不到),由 admin 经 Go 后端的鉴权 `/api/spider` proxy 访问。**爬虫不直接对公网开放。**
+- **数据库**:复用 `sports-calendar-postgres` 里的独立库 `transfermarkt`,凭证同 `sports_calendar`。
+- **无人值守过 WAF**:主要靠 `SCRAPER_PROXY`(住宅好 IP,WAF 不挑战);2captcha 仅休眠兜底,无浏览器/人工路径。
+- **持久化**:`aws-waf-token` 在命名卷 `sports-spider_browser_profile`;原始 HTML 快照在 `sports-spider_rustfs_data`;结构化数据在主库(随主库备份)。
 
 ## 运维
 
 ```bash
-docker compose logs -f app        # 看抓取 / 2captcha 日志
-docker compose ps                 # 健康状态
-docker compose restart app        # 重启后端(token 仍在卷里)
-docker compose down               # 停整栈(保留命名卷里的数据)
+docker logs -f tm_app                          # 看抓取 / 代理日志
+docker ps                                      # 健康状态
+docker restart tm_app                          # 重启后端(token 仍在卷里)
+/root/script/update-sports-spider.sh <tag>     # 升级到指定镜像 tag(只重建 app)
 ```
