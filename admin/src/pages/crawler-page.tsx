@@ -12,8 +12,8 @@ import {
 	Users,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-import { CrawlerDataDialog, type DataTarget } from '@/components/crawler-data-dialog'
 import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +67,11 @@ function statusVariant(s: CrawlStatus): BadgeVariant {
 // Notify: ok=true renders a green success toast, otherwise a red error toast.
 type Notify = (msg: string, ok?: boolean) => void
 
+// A competition/team the user asked to view; onView navigates to its data page.
+type ViewTarget =
+	| { kind: 'competition'; id: string; name: string }
+	| { kind: 'team'; id: number; name: string }
+
 type NodeDef =
 	| { kind: 'country'; id: number; name: string }
 	| { kind: 'competition'; id: string; name: string; ctype: string }
@@ -93,7 +98,7 @@ function TreeRow({
 	depth: number
 	notify: Notify
 	api: SpiderApi
-	onView: (t: DataTarget) => void
+	onView: (t: ViewTarget) => void
 }) {
 	const [open, setOpen] = useState(false)
 	const [loading, setLoading] = useState(false)
@@ -270,16 +275,21 @@ function TreeRow({
 export function CrawlerPage() {
 	const { token } = useAuth()
 	const { showToast } = useToast()
+	const navigate = useNavigate()
 	const api = useMemo(() => createSpiderApi(token), [token])
 	const [countries, setCountries] = useState<Country[]>([])
 	const [loading, setLoading] = useState(true)
 	const [q, setQ] = useState('')
 	const [tasks, setTasks] = useState<CrawlTask[]>([])
 	const [needsVerify, setNeedsVerify] = useState(false)
-	const [viewTarget, setViewTarget] = useState<DataTarget | null>(null)
 
 	const notify: Notify = (msg, ok = false) =>
 		showToast({ title: msg, tone: ok ? 'success' : 'error' })
+
+	// Open the data page for a competition/team, carrying its display name so the
+	// page can show it without an extra lookup.
+	const openData = (t: ViewTarget) =>
+		navigate(`/crawler/${t.kind}/${t.id}?name=${encodeURIComponent(t.name)}`)
 
 	useEffect(() => {
 		api
@@ -381,7 +391,7 @@ export function CrawlerPage() {
 											depth={0}
 											notify={notify}
 											api={api}
-											onView={setViewTarget}
+											onView={openData}
 										/>
 									))}
 								</div>
@@ -435,13 +445,6 @@ export function CrawlerPage() {
 					</Card>
 				</section>
 			</div>
-
-			<CrawlerDataDialog
-				target={viewTarget}
-				open={viewTarget !== null}
-				onOpenChange={(v) => !v && setViewTarget(null)}
-				api={api}
-			/>
 		</div>
 	)
 }
