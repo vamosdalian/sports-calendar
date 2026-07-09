@@ -172,6 +172,11 @@ export function createSpiderApi(token: string | null) {
 			http(`/api/data/squad?team_id=${teamId}&season_id=${seasonId}`, token),
 		fixtures: (teamId: number, seasonId: number): Promise<Fixture[]> =>
 			http(`/api/data/fixtures?team_id=${teamId}&season_id=${seasonId}`, token),
+		competitionFixtures: (competitionId: string, seasonId: number): Promise<Fixture[]> =>
+			http(
+				`/api/data/fixtures?competition_id=${competitionId}&season_id=${seasonId}`,
+				token,
+			),
 
 		browserStatus: (): Promise<BrowserStatus> => http('/api/browser/status', token),
 	}
