@@ -219,7 +219,7 @@ func (r *PostgresRepository) ListAdminTeams(ctx context.Context, sportSlug, leag
 func (r *PostgresRepository) GetSeasonSyncTarget(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error) {
 	var target domain.LeagueSyncTarget
 	err := r.pool.QueryRow(ctx, `
-		SELECT l.id, l.slug, l.sync_interval, se.id, se.slug, se.label
+		SELECT l.id, l.slug, l.sync_interval, l.provider, l.external_ref, se.id, se.slug, se.label, se.start_year
 		FROM seasons se
 		JOIN leagues l ON l.id = se.league_id
 		JOIN sports s ON s.id = l.sport_id
@@ -228,9 +228,12 @@ func (r *PostgresRepository) GetSeasonSyncTarget(ctx context.Context, sportSlug,
 		&target.LeagueID,
 		&target.LeagueSlug,
 		&target.SyncInterval,
+		&target.Provider,
+		&target.ExternalRef,
 		&target.SeasonID,
 		&target.SeasonSlug,
 		&target.SeasonLabel,
+		&target.SeasonStartYear,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

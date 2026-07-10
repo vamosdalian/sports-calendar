@@ -919,10 +919,10 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 
 func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.LeagueSyncTarget, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT l.id, l.slug, l.sync_interval, se.id, se.slug, se.label
+		SELECT l.id, l.slug, l.sync_interval, l.provider, l.external_ref, se.id, se.slug, se.label, se.start_year
 		FROM leagues l
 		JOIN LATERAL (
-			SELECT id, slug, label
+			SELECT id, slug, label, start_year
 			FROM seasons
 			WHERE league_id = l.id
 			ORDER BY start_year DESC, end_year DESC, slug DESC
@@ -942,9 +942,12 @@ func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.Leag
 			&target.LeagueID,
 			&target.LeagueSlug,
 			&target.SyncInterval,
+			&target.Provider,
+			&target.ExternalRef,
 			&target.SeasonID,
 			&target.SeasonSlug,
 			&target.SeasonLabel,
+			&target.SeasonStartYear,
 		); scanErr != nil {
 			return nil, fmt.Errorf("scan sync target: %w", scanErr)
 		}

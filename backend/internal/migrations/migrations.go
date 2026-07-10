@@ -158,6 +158,17 @@ var allMigrations = []migration{
 			`ALTER TABLE matches ADD COLUMN IF NOT EXISTS result TEXT[] NOT NULL DEFAULT '{}'`,
 		},
 	},
+	{
+		version: 7,
+		name:    "league_provider",
+		statements: []string{
+			// provider selects which upstream feeds a league. Existing leagues
+			// stay on TheSportsDB; per-league opt-in to the local spider crawler
+			// sets provider='spider' + external_ref to the Transfermarkt code.
+			`ALTER TABLE leagues ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'thesportsdb'`,
+			`ALTER TABLE leagues ADD COLUMN IF NOT EXISTS external_ref TEXT NOT NULL DEFAULT ''`,
+		},
+	},
 }
 
 func Run(ctx context.Context, pool *pgxpool.Pool, logger *logrus.Logger) error {
