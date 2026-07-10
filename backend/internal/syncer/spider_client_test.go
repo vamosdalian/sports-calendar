@@ -166,6 +166,37 @@ func TestSpiderFetcherFetchLeagueSnapshot(t *testing.T) {
 	}
 }
 
+func TestParseSpiderRef(t *testing.T) {
+	cases := []struct {
+		ref       string
+		startYear int
+		wantCode  string
+		wantSaiso int
+		wantErr   bool
+	}{
+		{"GB1", 2025, "GB1", 2025, false},
+		{"CSL@-1", 2026, "CSL", 2025, false},
+		{"MLS@0", 2026, "MLS", 2026, false},
+		{"", 2026, "", 0, true},
+		{"CSL@x", 2026, "", 0, true},
+	}
+	for _, tc := range cases {
+		code, saiso, err := parseSpiderRef(tc.ref, tc.startYear)
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("parseSpiderRef(%q): expected error", tc.ref)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("parseSpiderRef(%q): %v", tc.ref, err)
+		}
+		if code != tc.wantCode || saiso != tc.wantSaiso {
+			t.Fatalf("parseSpiderRef(%q) = %q,%d; want %q,%d", tc.ref, code, saiso, tc.wantCode, tc.wantSaiso)
+		}
+	}
+}
+
 func TestSpiderFetcherRequiresExternalRef(t *testing.T) {
 	fetcher := newTestSpiderFetcher(t, "http://127.0.0.1:1")
 	_, err := fetcher.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{

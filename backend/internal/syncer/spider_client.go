@@ -81,20 +81,20 @@ func NewSpiderFetcher(baseURL string, timeout time.Duration, logger *logrus.Logg
 }
 
 func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.LeagueSyncTarget) (domain.LeagueSnapshot, error) {
-	competition := strings.TrimSpace(target.ExternalRef)
-	if competition == "" {
-		return domain.LeagueSnapshot{}, fmt.Errorf("spider league %s has no external_ref (Transfermarkt code)", target.LeagueSlug)
-	}
 	if target.SeasonStartYear <= 0 {
 		return domain.LeagueSnapshot{}, fmt.Errorf("spider league %s season %s has no start year", target.LeagueSlug, target.SeasonSlug)
+	}
+	competition, saisonID, err := parseSpiderRef(target.ExternalRef, target.SeasonStartYear)
+	if err != nil {
+		return domain.LeagueSnapshot{}, fmt.Errorf("spider league %s: %w", target.LeagueSlug, err)
 	}
 
 	// Best-effort: ask the spider to (re)crawl this competition/season so the
 	// next read is fresh. Failures here must not fail the sync — we still serve
 	// whatever the crawler already has.
-	c.triggerCrawl(ctx, competition, target.SeasonStartYear)
+	c.triggerCrawl(ctx, competition, saisonID)
 
-	fixtures, err := c.fetchFixtures(ctx, competition, target.SeasonStartYear)
+	fixtures, err := c.fetchFixtures(ctx, competition, saisonID)
 	if err != nil {
 		return domain.LeagueSnapshot{}, err
 	}
@@ -140,7 +140,7 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 		teams = append(teams, team)
 	}
 
-	dataSourceNote := englishText(fmt.Sprintf("Synced from Transfermarkt competition %s for season %d", competition, target.SeasonStartYear))
+	dataSourceNote := englishText(fmt.Sprintf("Synced from Transfermarkt competition %s (saison_id %d)", competition, saisonID))
 	return domain.LeagueSnapshot{
 		Target:         target,
 		DataSourceNote: dataSourceNote,
@@ -148,6 +148,35 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 		Venues:         nil,
 		Matches:        matches,
 	}, nil
+}
+
+// parseSpiderRef splits a league's external_ref into a Transfermarkt
+// competition code and the saison_id to crawl. The ref is "CODE" or
+// "CODE@OFFSET"; the saison_id is startYear+offset. Transfermarkt's saison_id
+// convention differs per competition: European split-year leagues use the
+// season's start year as-is (offset 0, e.g. "GB1"), whereas single-calendar-year
+// leagues like the Chinese Super League file the year-N season under saison_id
+// N-1, needing "CSL@-1".
+func parseSpiderRef(externalRef string, startYear int) (string, int, error) {
+	trimmed := strings.TrimSpace(externalRef)
+	if trimmed == "" {
+		return "", 0, fmt.Errorf("has no external_ref (Transfermarkt code)")
+	}
+	code := trimmed
+	offset := 0
+	if at := strings.LastIndex(trimmed, "@"); at >= 0 {
+		code = strings.TrimSpace(trimmed[:at])
+		offsetText := strings.TrimSpace(trimmed[at+1:])
+		parsed, err := strconv.Atoi(offsetText)
+		if err != nil {
+			return "", 0, fmt.Errorf("invalid season offset %q in external_ref %q", offsetText, externalRef)
+		}
+		offset = parsed
+	}
+	if code == "" {
+		return "", 0, fmt.Errorf("invalid external_ref %q", externalRef)
+	}
+	return code, startYear + offset, nil
 }
 
 func (c *SpiderFetcher) triggerCrawl(ctx context.Context, competition string, season int) {
