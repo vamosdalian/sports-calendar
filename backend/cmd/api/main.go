@@ -74,7 +74,28 @@ func main() {
 	}
 	svc.SetSportsDataProvider(client)
 
-	leagueSyncer, err := syncer.NewLeagueSyncer(logger, repo, client)
+	// The admin catalog/browse dropdowns stay on TheSportsDB; only per-league
+	// sync is routed. Leagues with provider='spider' fetch from the local
+	// Transfermarkt crawler, everything else keeps using TheSportsDB.
+	routedFetchers := map[string]syncer.SnapshotFetcher{}
+	if cfg.Spider.UpstreamURL != "" {
+		spiderFetcher, spiderErr := syncer.NewSpiderFetcher(
+			cfg.Spider.UpstreamURL,
+			time.Duration(cfg.TheSportsDB.TimeoutSeconds)*time.Second,
+			logger,
+		)
+		if spiderErr != nil {
+			logger.WithError(spiderErr).Fatal("create spider fetcher")
+		}
+		routedFetchers[syncer.ProviderSpider] = spiderFetcher
+		logger.WithField("upstream", cfg.Spider.UpstreamURL).Info("spider snapshot fetcher enabled")
+	}
+	routingFetcher, err := syncer.NewRoutingFetcher(client, routedFetchers)
+	if err != nil {
+		logger.WithError(err).Fatal("create routing fetcher")
+	}
+
+	leagueSyncer, err := syncer.NewLeagueSyncer(logger, repo, routingFetcher)
 	if err != nil {
 		logger.WithError(err).Fatal("create league syncer")
 	}
