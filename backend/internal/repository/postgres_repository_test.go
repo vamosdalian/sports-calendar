@@ -70,6 +70,64 @@ func TestDeduplicateMatchesIgnoresTeamsWhenTimeAndVenueMatch(t *testing.T) {
 	}
 }
 
+func TestDeduplicateMatchesKeepsVenuelessDifferentTeamsAtSameTime(t *testing.T) {
+	// Spider/Transfermarkt fixtures carry no venue; distinct matchups kicking
+	// off at the same minute must not be collapsed.
+	matches := []domain.Match{
+		{
+			ID:         "tm:1",
+			StartsAt:   "2026-06-01T12:00:00Z",
+			VenueID:    nil,
+			HomeTeamID: 1001,
+			AwayTeamID: 1002,
+			UpdatedAt:  "2026-06-01T10:00:00Z",
+		},
+		{
+			ID:         "tm:2",
+			StartsAt:   "2026-06-01T12:00:00Z",
+			VenueID:    nil,
+			HomeTeamID: 1003,
+			AwayTeamID: 1004,
+			UpdatedAt:  "2026-06-01T11:00:00Z",
+		},
+	}
+
+	got := deduplicateMatches(matches)
+	if len(got) != 2 {
+		t.Fatalf("expected venue-less distinct teams to remain visible, got %d matches", len(got))
+	}
+}
+
+func TestDeduplicateMatchesMergesVenuelessSameTeamsAtSameTime(t *testing.T) {
+	// The same venue-less fixture synced twice should still collapse to one.
+	matches := []domain.Match{
+		{
+			ID:         "tm:1",
+			StartsAt:   "2026-06-01T12:00:00Z",
+			VenueID:    nil,
+			HomeTeamID: 1001,
+			AwayTeamID: 1002,
+			UpdatedAt:  "2026-06-01T10:00:00Z",
+		},
+		{
+			ID:         "tm:1-dup",
+			StartsAt:   "2026-06-01T12:00:00Z",
+			VenueID:    nil,
+			HomeTeamID: 1002, // order-insensitive
+			AwayTeamID: 1001,
+			UpdatedAt:  "2026-06-01T11:00:00Z",
+		},
+	}
+
+	got := deduplicateMatches(matches)
+	if len(got) != 1 {
+		t.Fatalf("expected same venue-less fixture to deduplicate, got %d matches", len(got))
+	}
+	if got[0].ID != "tm:1-dup" {
+		t.Fatalf("expected latest updated match to win, got %q", got[0].ID)
+	}
+}
+
 func TestDeduplicateMatchesKeepsDifferentVenuesAtSameTime(t *testing.T) {
 	venueA := int64(10)
 	venueB := int64(20)
