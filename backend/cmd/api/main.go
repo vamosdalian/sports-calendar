@@ -8,6 +8,11 @@ import (
 	"os"
 	"time"
 
+	// Embed the IANA timezone database in the binary so time.LoadLocation works
+	// on the minimal alpine image (which ships no tzdata). The spider fetcher
+	// reinterprets Transfermarkt kickoff times in Europe/Berlin.
+	_ "time/tzdata"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
