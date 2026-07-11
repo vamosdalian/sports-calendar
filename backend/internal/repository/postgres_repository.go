@@ -987,6 +987,33 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 		return fmt.Errorf("update league metadata: %w", err)
 	}
 
+	// Prune teams that are no longer part of this league's roster before
+	// upserting the new one. On a routine sync this only clears genuinely
+	// departed teams; on a provider switch the whole roster changes id/slug, so
+	// this removes the old provider's teams that would otherwise collide with the
+	// new ones on the (league_id, slug) unique constraint (upsert only handles
+	// the id conflict). Teams still referenced by an admin-created manual match
+	// are kept. Skipped when the snapshot is empty to avoid wiping a league on a
+	// transient upstream hiccup.
+	keepTeamIDs := collectSnapshotTeamIDs(snapshot)
+	if len(keepTeamIDs) > 0 {
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM teams t
+			WHERE t.league_id = $1
+			  AND NOT (t.id = ANY($2))
+			  AND NOT EXISTS (
+			    SELECT 1
+			    FROM matches m
+			    JOIN seasons s ON s.id = m.season_id
+			    WHERE s.league_id = $1
+			      AND m.external_id LIKE 'manual:%'
+			      AND t.id = ANY(m.teams)
+			  )
+		`, snapshot.Target.LeagueID, keepTeamIDs); err != nil {
+			return fmt.Errorf("prune stale teams: %w", err)
+		}
+	}
+
 	teamIDs := make(map[int64]int64, len(snapshot.Teams))
 	teams := append([]domain.TeamSyncRecord(nil), snapshot.Teams...)
 	sort.Slice(teams, func(i, j int) bool {
@@ -1084,6 +1111,29 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 	}
 	tx = nil
 	return nil
+}
+
+// collectSnapshotTeamIDs returns every team id the snapshot will store: the
+// roster teams plus any team referenced by a match (which is upserted as a
+// placeholder if missing from the roster). Used to prune teams no longer present.
+func collectSnapshotTeamIDs(snapshot domain.LeagueSnapshot) []int64 {
+	seen := make(map[int64]bool, len(snapshot.Teams)+2*len(snapshot.Matches))
+	ids := make([]int64, 0, len(snapshot.Teams)+2*len(snapshot.Matches))
+	add := func(id int64) {
+		if id != 0 && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	for _, team := range snapshot.Teams {
+		add(team.ID)
+	}
+	for _, match := range snapshot.Matches {
+		for _, teamID := range match.Teams {
+			add(teamID)
+		}
+	}
+	return ids
 }
 
 func normalizeStringSlice(value []string) []string {
