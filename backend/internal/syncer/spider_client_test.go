@@ -166,6 +166,75 @@ func TestSpiderFetcherFetchLeagueSnapshot(t *testing.T) {
 	}
 }
 
+func TestSpiderTranslationsOverlay(t *testing.T) {
+	tr, err := loadSpiderTranslations()
+	if err != nil {
+		t.Fatalf("load translations: %v", err)
+	}
+
+	// Known CSL team (Shanghai Port, Transfermarkt id 27190) gets a zh overlay
+	// merged onto the English name from the crawler.
+	names := tr.teamNames(27190, "Shanghai Port")
+	if names["en"] != "Shanghai Port" {
+		t.Fatalf("expected english name preserved, got %q", names["en"])
+	}
+	if names["zh"] != "上海海港" {
+		t.Fatalf("expected zh overlay, got %q", names["zh"])
+	}
+
+	// Unknown id: English only, no crash.
+	plain := tr.teamNames(999999999, "Some Club")
+	if plain["en"] != "Some Club" || len(plain) != 1 {
+		t.Fatalf("expected english-only names for unknown id, got %v", plain)
+	}
+}
+
+func TestSpiderFetcherAppliesTeamTranslations(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodPost {
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write([]byte(`{"enqueued":1}`))
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(writer).Encode([]map[string]any{
+			{
+				"match_id":       1,
+				"competition_id": "CSL",
+				"season_id":      2025,
+				"kickoff":        "2026-03-15T19:35:00",
+				"home_team_id":   27190, // Shanghai Port -> 上海海港
+				"away_team_id":   3183,  // Shanghai Shenhua -> 上海申花
+				"home_name":      "Shanghai Port",
+				"away_name":      "Shanghai Shenhua",
+			},
+		})
+	}))
+	defer server.Close()
+
+	fetcher := newTestSpiderFetcher(t, server.URL)
+	snapshot, err := fetcher.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{
+		LeagueSlug:      "csl",
+		Provider:        ProviderSpider,
+		ExternalRef:     "CSL@-1",
+		SeasonStartYear: 2026,
+	})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+
+	byID := map[int64]domain.LocalizedText{}
+	for _, tm := range snapshot.Teams {
+		byID[tm.ID] = tm.Names
+	}
+	if got := byID[27190+spiderTeamIDOffset]["zh"]; got != "上海海港" {
+		t.Fatalf("expected home zh name, got %q", got)
+	}
+	if got := byID[3183+spiderTeamIDOffset]["zh"]; got != "上海申花" {
+		t.Fatalf("expected away zh name, got %q", got)
+	}
+}
+
 func TestParseSpiderRef(t *testing.T) {
 	cases := []struct {
 		ref       string

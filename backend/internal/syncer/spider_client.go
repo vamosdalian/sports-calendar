@@ -3,6 +3,7 @@ package syncer
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,50 @@ import (
 
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 )
+
+// spiderTranslationsJSON holds localized name overlays merged into spider
+// snapshots at sync time. The crawler only yields English names; these entries
+// (keyed by Transfermarkt id) add other locales so they survive every re-sync.
+//
+//go:embed spider_translations.json
+var spiderTranslationsJSON []byte
+
+type spiderTranslations struct {
+	Teams map[string]domain.LocalizedText `json:"teams"`
+}
+
+func loadSpiderTranslations() (spiderTranslations, error) {
+	var tr spiderTranslations
+	if len(spiderTranslationsJSON) == 0 {
+		return spiderTranslations{Teams: map[string]domain.LocalizedText{}}, nil
+	}
+	if err := json.Unmarshal(spiderTranslationsJSON, &tr); err != nil {
+		return spiderTranslations{}, fmt.Errorf("parse spider translations: %w", err)
+	}
+	if tr.Teams == nil {
+		tr.Teams = map[string]domain.LocalizedText{}
+	}
+	return tr, nil
+}
+
+// teamNames returns the localized names for a Transfermarkt team: its English
+// name from the crawler plus any overlay locales (zh, ...) for that id.
+func (t spiderTranslations) teamNames(sourceID int64, englishName string) domain.LocalizedText {
+	names := englishText(englishName)
+	overlay, ok := t.Teams[strconv.FormatInt(sourceID, 10)]
+	if !ok {
+		return names
+	}
+	if names == nil {
+		names = domain.LocalizedText{}
+	}
+	for locale, value := range overlay {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			names[locale] = trimmed
+		}
+	}
+	return names
+}
 
 // ProviderSpider is the leagues.provider value that routes a league's sync to
 // the local Transfermarkt crawler instead of TheSportsDB.
@@ -37,10 +82,11 @@ const spiderSourceTimeZone = "Europe/Berlin"
 // (Transfermarkt). It reads already-crawled fixtures from the spider's data API
 // and best-effort triggers a fresh crawl so subsequent syncs converge.
 type SpiderFetcher struct {
-	baseURL    string
-	httpClient *http.Client
-	logger     *logrus.Logger
-	location   *time.Location
+	baseURL      string
+	httpClient   *http.Client
+	logger       *logrus.Logger
+	location     *time.Location
+	translations spiderTranslations
 }
 
 type spiderFixture struct {
@@ -72,11 +118,16 @@ func NewSpiderFetcher(baseURL string, timeout time.Duration, logger *logrus.Logg
 	if err != nil {
 		return nil, fmt.Errorf("load spider source timezone %q: %w", spiderSourceTimeZone, err)
 	}
+	translations, err := loadSpiderTranslations()
+	if err != nil {
+		return nil, err
+	}
 	return &SpiderFetcher{
-		baseURL:    trimmed,
-		httpClient: &http.Client{Timeout: timeout},
-		logger:     logger,
-		location:   location,
+		baseURL:      trimmed,
+		httpClient:   &http.Client{Timeout: timeout},
+		logger:       logger,
+		location:     location,
+		translations: translations,
 	}, nil
 }
 
@@ -116,16 +167,18 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 		awayID := *fx.AwayTeamID + spiderTeamIDOffset
 		homeName := strvalue(fx.HomeName)
 		awayName := strvalue(fx.AwayName)
-		registerSpiderTeam(teamMap, homeID, homeName)
-		registerSpiderTeam(teamMap, awayID, awayName)
+		homeNames := c.translations.teamNames(*fx.HomeTeamID, homeName)
+		awayNames := c.translations.teamNames(*fx.AwayTeamID, awayName)
+		registerSpiderTeam(teamMap, homeID, homeName, homeNames)
+		registerSpiderTeam(teamMap, awayID, awayName, awayNames)
 
 		status := spiderMatchStatus(fx, startsAt)
 		matches = append(matches, domain.MatchSyncRecord{
 			ExternalID: spiderExternalID(fx, competition, startsAt),
 			Teams:      []int64{homeID, awayID},
 			TeamNames: []domain.LocalizedText{
-				englishText(homeName),
-				englishText(awayName),
+				homeNames,
+				awayNames,
 			},
 			Round:    spiderRound(fx.Matchday),
 			VenueID:  nil,
@@ -255,14 +308,14 @@ func (c *SpiderFetcher) parseKickoff(value *string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func registerSpiderTeam(teamMap map[int64]domain.TeamSyncRecord, id int64, name string) {
+func registerSpiderTeam(teamMap map[int64]domain.TeamSyncRecord, id int64, name string, names domain.LocalizedText) {
 	if _, exists := teamMap[id]; exists {
 		return
 	}
 	teamMap[id] = domain.TeamSyncRecord{
 		ID:        id,
 		Slug:      slugify(name, strconv.FormatInt(id, 10)),
-		Names:     englishText(name),
+		Names:     names,
 		ShortName: emptyLocalizedText(),
 	}
 }

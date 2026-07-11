@@ -1,0 +1,21 @@
+{
+  "_comment": "Localized name overlays merged into spider (Transfermarkt) snapshots at sync time, keyed by Transfermarkt team id. The crawler only yields English names; entries here add other locales (e.g. zh) that survive every re-sync. Add teams as new competitions are localized.",
+  "teams": {
+    "3176": { "zh": "北京国安" },
+    "65791": { "zh": "成都蓉城" },
+    "99249": { "zh": "重庆铜梁龙" },
+    "98080": { "zh": "大连英博" },
+    "9982": { "zh": "河南队" },
+    "50973": { "zh": "辽宁铁人" },
+    "8536": { "zh": "青岛海牛" },
+    "70662": { "zh": "青岛西海岸" },
+    "3182": { "zh": "山东泰山" },
+    "27190": { "zh": "上海海港" },
+    "3183": { "zh": "上海申花" },
+    "51120": { "zh": "深圳新鹏城" },
+    "3187": { "zh": "天津津门虎" },
+    "70657": { "zh": "武汉三镇" },
+    "93753": { "zh": "云南玉昆" },
+    "17276": { "zh": "浙江队" }
+  }
+}
