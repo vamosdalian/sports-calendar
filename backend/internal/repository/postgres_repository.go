@@ -1331,23 +1331,28 @@ func mapWriteError(action string, err error) error {
 // placeholders and TheSportsDB-sourced records side by side; this function
 // ensures the caller only sees one entry per actual match.
 //
-// Two matches are considered the same fixture when ALL of the following hold:
-// round is intentionally ignored here.
-//   - Same kickoff minute in UTC
-//   - They already belong to the same season detail being loaded
-//   - Venue matches exactly: both NULL or both the same ID
+// Two matches are considered the same fixture when they share a kickoff minute
+// (UTC) within the season being loaded and ONE of:
+//   - the same venue ID — a physical venue hosts one match per slot, so the
+//     team pair is intentionally ignored (lets a corrected/re-synced record
+//     supersede an earlier one); or
+//   - both have no venue — then the team pair distinguishes them, because a
+//     venue-less source (the spider/Transfermarkt feed) can legitimately have
+//     several distinct fixtures kicking off at the same minute.
 //
-// When duplicates are found the record with the latest updated_at is returned.
+// round is intentionally ignored throughout. When duplicates are found the
+// record with the latest updated_at is returned.
 func deduplicateMatches(matches []domain.Match) []domain.Match {
 	if len(matches) <= 1 {
 		return matches
 	}
 
-	// groupKey identifies a match slot using kickoff time and exact venue match.
 	type groupKey struct {
 		minute   string // "2006-01-02 15:04" UTC
 		hasVenue bool
 		venueID  int64
+		teamLo   int64 // only set when hasVenue is false
+		teamHi   int64
 	}
 
 	makeKey := func(m domain.Match) (groupKey, bool) {
@@ -1360,6 +1365,12 @@ func deduplicateMatches(matches []domain.Match) []domain.Match {
 		if m.VenueID != nil {
 			key.hasVenue = true
 			key.venueID = *m.VenueID
+		} else {
+			teamLo, teamHi := m.HomeTeamID, m.AwayTeamID
+			if teamLo > teamHi {
+				teamLo, teamHi = teamHi, teamLo
+			}
+			key.teamLo, key.teamHi = teamLo, teamHi
 		}
 
 		return key, true
