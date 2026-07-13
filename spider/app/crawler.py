@@ -70,15 +70,41 @@ def _to_int(v) -> int | None:
 
 
 # ── Queue ────────────────────────────────────────────────────────────────────
+_REOPENABLE_STATUSES = (
+    CrawlStatus.done,
+    CrawlStatus.failed,
+    CrawlStatus.cancelled,
+)
+
+
 async def enqueue(
     session, kind: CrawlKind, target_id: str, season_id: int = NO_SEASON,
     priority: int = 100,
 ) -> None:
-    """Insert a task, skipping if an identical one already exists (dedup)."""
+    """Insert a task, or re-open an existing one that already finished.
+
+    Tasks are deduped by ``(kind, target_id, season_id)``. A task still
+    ``pending``/``running`` is left untouched so we never duplicate in-flight
+    work. But one that already reached a terminal state (``done``/``failed``/
+    ``cancelled``) is reset back to ``pending`` so the worker crawls it again —
+    otherwise a competition/season is only ever crawled once and its data
+    freezes forever.
+    """
     stmt = insert(models.CrawlTask).values(
         kind=kind, target_id=str(target_id), season_id=season_id,
         priority=priority, status=CrawlStatus.pending,
-    ).on_conflict_do_nothing(constraint="uq_crawl_task")
+    )
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_crawl_task",
+        set_={
+            "status": CrawlStatus.pending,
+            "priority": stmt.excluded.priority,
+            "started_at": None,
+            "finished_at": None,
+            "last_error": None,
+        },
+        where=models.CrawlTask.status.in_(_REOPENABLE_STATUSES),
+    )
     await session.execute(stmt)
 
 
