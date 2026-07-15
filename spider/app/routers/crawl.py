@@ -24,26 +24,34 @@ _SEASON_KINDS = {
 }
 
 
-@router.post("", response_model=dict)
+@router.post("", response_model=schemas.CrawlEnqueueOut)
 async def enqueue(
     payload: schemas.CrawlEnqueueIn, session: AsyncSession = Depends(get_session)
 ):
     """Queue a crawl task. Season-scoped kinds fan out over the given seasons
-    (defaulting to the last 5)."""
+    (defaulting to the last 5).
+
+    The returned task ids can be polled via ``GET /api/crawl/tasks/{id}``, which
+    is how a caller waits for fresh data rather than reading whatever the
+    previous run happened to leave behind.
+    """
+    task_ids = []
     if payload.kind in _SEASON_KINDS:
         seasons = payload.seasons or crawler.recent_seasons()
         for s in seasons:
-            await crawler.enqueue(
-                session, payload.kind, payload.target_id, s, payload.priority
+            task_ids.append(
+                await crawler.enqueue(
+                    session, payload.kind, payload.target_id, s, payload.priority
+                )
             )
-        n = len(seasons)
     else:
-        await crawler.enqueue(
-            session, payload.kind, payload.target_id, NO_SEASON, payload.priority
+        task_ids.append(
+            await crawler.enqueue(
+                session, payload.kind, payload.target_id, NO_SEASON, payload.priority
+            )
         )
-        n = 1
     await session.commit()
-    return {"enqueued": n}
+    return {"enqueued": len(task_ids), "task_ids": task_ids}
 
 
 @router.post("/fallback", response_model=dict)

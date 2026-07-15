@@ -94,6 +94,12 @@ class CrawlEnqueueIn(BaseModel):
     priority: int = 100
 
 
+class CrawlEnqueueOut(BaseModel):
+    enqueued: int
+    # Poll these via GET /api/crawl/tasks/{id} to wait for the crawl to finish.
+    task_ids: list[uuid.UUID]
+
+
 class CrawlTaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
