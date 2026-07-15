@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,9 @@ func newTestSpiderFetcher(t *testing.T, baseURL string) *SpiderFetcher {
 	if err != nil {
 		t.Fatalf("new spider fetcher: %v", err)
 	}
+	// Keep polling snappy in tests; the production defaults are seconds/minutes.
+	fetcher.pollInterval = time.Millisecond
+	fetcher.pollTimeout = 2 * time.Second
 	return fetcher
 }
 
@@ -38,7 +42,14 @@ func TestSpiderFetcherFetchLeagueSnapshot(t *testing.T) {
 				t.Fatalf("unexpected crawl target_id: %v", payload["target_id"])
 			}
 			writer.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(writer).Encode(map[string]any{"enqueued": 1})
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"enqueued": 1, "task_ids": []string{"task-1"},
+			})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/crawl/tasks/task-1":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"id": "task-1", "status": "done", "message": "240 场比赛",
+			})
 		case request.Method == http.MethodGet && request.URL.Path == "/api/data/fixtures":
 			if got := request.URL.Query().Get("competition_id"); got != "CSL" {
 				t.Fatalf("unexpected competition_id: %q", got)
@@ -163,6 +174,124 @@ func TestSpiderFetcherFetchLeagueSnapshot(t *testing.T) {
 	sort.Slice(teamIDs, func(i, j int) bool { return teamIDs[i] < teamIDs[j] })
 	if teamIDs[0] != wantAway || teamIDs[1] != wantHome {
 		t.Fatalf("unexpected team id set: %v", teamIDs)
+	}
+}
+
+// A crawl that fails (Transfermarkt 502s, WAF unsolved, ...) must abort the
+// sync *before* fixtures are read. Otherwise the caller would ingest whatever
+// the failed run left behind — which is how a bad crawl once wiped a season.
+func TestSpiderFetcherFailedCrawlAbortsSync(t *testing.T) {
+	var fixturesRead bool
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/api/crawl":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"enqueued": 1, "task_ids": []string{"task-1"},
+			})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/crawl/tasks/task-1":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"id": "task-1", "status": "failed",
+				"last_error": "FetchError: upstream returned HTTP 502",
+			})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/data/fixtures":
+			fixturesRead = true
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode([]map[string]any{})
+		default:
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	fetcher := newTestSpiderFetcher(t, server.URL)
+	_, err := fetcher.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{
+		LeagueSlug: "csl", Provider: ProviderSpider,
+		ExternalRef: "CSL", SeasonSlug: "2025", SeasonStartYear: 2025,
+	})
+	if err == nil {
+		t.Fatalf("expected sync to fail when the crawl failed")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Fatalf("expected the upstream error to surface, got: %v", err)
+	}
+	if fixturesRead {
+		t.Fatalf("fixtures must not be read after a failed crawl")
+	}
+}
+
+// The crawler is asynchronous: the fetcher must wait for the run it triggered
+// rather than reading the previous run's data.
+func TestSpiderFetcherWaitsForRunningCrawl(t *testing.T) {
+	var polls int
+	var fixturesReadAt int
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/api/crawl":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"enqueued": 1, "task_ids": []string{"task-1"},
+			})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/crawl/tasks/task-1":
+			polls++
+			status := "running"
+			if polls >= 3 {
+				status = "done"
+			}
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{"id": "task-1", "status": status})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/data/fixtures":
+			fixturesReadAt = polls
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode([]map[string]any{})
+		default:
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	fetcher := newTestSpiderFetcher(t, server.URL)
+	if _, err := fetcher.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{
+		LeagueSlug: "csl", Provider: ProviderSpider,
+		ExternalRef: "CSL", SeasonSlug: "2025", SeasonStartYear: 2025,
+	}); err != nil {
+		t.Fatalf("fetch snapshot: %v", err)
+	}
+	if polls < 3 {
+		t.Fatalf("expected to poll until done, polled %d times", polls)
+	}
+	if fixturesReadAt != 3 {
+		t.Fatalf("fixtures were read after %d polls; want only once the task was done (3)", fixturesReadAt)
+	}
+}
+
+// A crawl that never finishes must time out rather than hang the sync forever.
+func TestSpiderFetcherCrawlTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/api/crawl":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"enqueued": 1, "task_ids": []string{"task-1"},
+			})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/crawl/tasks/task-1":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{"id": "task-1", "status": "pending"})
+		default:
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	fetcher := newTestSpiderFetcher(t, server.URL)
+	fetcher.pollTimeout = 50 * time.Millisecond
+	_, err := fetcher.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{
+		LeagueSlug: "csl", Provider: ProviderSpider,
+		ExternalRef: "CSL", SeasonSlug: "2025", SeasonStartYear: 2025,
+	})
+	if err == nil {
+		t.Fatalf("expected a timeout error for a crawl that never finishes")
 	}
 }
 

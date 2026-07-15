@@ -43,8 +43,21 @@ current_task_id: ContextVar[uuid.UUID | None] = ContextVar(
 rate_limiter = AsyncRateLimiter(qps=settings.scraper_qps, burst=1)
 
 _CAPTCHA_MARKERS = ("awsWafCookieDomainList", "Human Verification", "gokuProps")
+# Statuses that mean "the WAF is challenging us" -> recover the token and retry.
+# Anything else in the 4xx/5xx range is a real upstream error and must surface
+# as a FetchError (see _raise_for_error).
 _BLOCK_STATUS = {403, 405, 429, 503}
 _COOKIE_FILE = Path(settings.scraper_browser_profile) / "waf_cookies.json"
+
+
+class FetchError(RuntimeError):
+    """Upstream returned a real HTTP error rather than a WAF challenge.
+
+    Raised instead of handing the error page to the parsers: a 502 interstitial
+    parses cleanly into *zero* fixtures, which used to be indistinguishable from
+    "this competition genuinely has no matches" and would overwrite a good
+    season with an empty one.
+    """
 
 
 def _looks_blocked(resp: httpx.Response) -> bool:
@@ -54,6 +67,13 @@ def _looks_blocked(resp: httpx.Response) -> bool:
         return True
     head = resp.text[:4000]
     return any(m in head for m in _CAPTCHA_MARKERS)
+
+
+def _raise_for_error(resp: httpx.Response, url: str) -> None:
+    """Turn a non-WAF error response into a FetchError. Callers only reach this
+    once _looks_blocked has ruled out a challenge."""
+    if resp.status_code >= 400:
+        raise FetchError(f"upstream returned HTTP {resp.status_code} for {url}")
 
 
 def _safe_json(resp: httpx.Response):
@@ -183,6 +203,7 @@ class BrowserFetcher:
                     blocked_html = resp.text  # WAF interstitial -> feeds the solver
                     log.info("httpx WAF-blocked (%s) on %s", resp.status_code, url)
                 else:
+                    _raise_for_error(resp, url)
                     status_code = resp.status_code
                     html = resp.text
             except (httpx.TimeoutException, httpx.TransportError) as exc:
@@ -227,6 +248,7 @@ class BrowserFetcher:
                     blocked_html = resp.text
                     log.info("httpx WAF-blocked (%s) on %s", resp.status_code, url)
                 else:
+                    _raise_for_error(resp, url)
                     return _safe_json(resp)
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 blocked = True
@@ -238,6 +260,7 @@ class BrowserFetcher:
             async with self._lock:
                 await rate_limiter.acquire()
                 resp = await self._http.get(path, params=params)
+                _raise_for_error(resp, url)
                 return _safe_json(resp)
         return None
 
@@ -293,7 +316,11 @@ class BrowserFetcher:
             log.info("injected aws-waf-token from 2captcha into httpx")
 
             await rate_limiter.acquire()
-            return (await self._http.get(url)).text
+            # The token is fresh, so anything still failing here is a genuine
+            # upstream error — don't hand the error page back to the parsers.
+            resp = await self._http.get(url)
+            _raise_for_error(resp, url)
+            return resp.text
 
 
 # Process-wide singleton (name kept as `fetcher` for the parsers).

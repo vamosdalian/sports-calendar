@@ -33,14 +33,38 @@ const spiderTeamIDOffset int64 = 100_000_000_000
 // a new competition and adjust if the source ever localizes differently.
 const spiderSourceTimeZone = "Europe/Berlin"
 
+// How long to wait for a triggered crawl to reach a terminal state, and how
+// often to check. A warm crawl takes ~10s; the headroom covers queue wait when
+// several leagues sync at once.
+const (
+	spiderCrawlPollInterval = 3 * time.Second
+	spiderCrawlPollTimeout  = 5 * time.Minute
+)
+
 // SpiderFetcher pulls a league snapshot from the local sports-spider crawler
-// (Transfermarkt). It reads already-crawled fixtures from the spider's data API
-// and best-effort triggers a fresh crawl so subsequent syncs converge.
+// (Transfermarkt). It triggers a crawl, waits for that crawl to finish, and
+// only then reads the fixtures — so a sync always reflects the run it asked
+// for. If the crawl fails (e.g. Transfermarkt 502s), the sync fails too and the
+// existing data is left untouched rather than being overwritten with nothing.
 type SpiderFetcher struct {
-	baseURL    string
-	httpClient *http.Client
-	logger     *logrus.Logger
-	location   *time.Location
+	baseURL      string
+	httpClient   *http.Client
+	logger       *logrus.Logger
+	location     *time.Location
+	pollInterval time.Duration
+	pollTimeout  time.Duration
+}
+
+type spiderEnqueueResponse struct {
+	Enqueued int      `json:"enqueued"`
+	TaskIDs  []string `json:"task_ids"`
+}
+
+type spiderTask struct {
+	ID        string  `json:"id"`
+	Status    string  `json:"status"`
+	Message   *string `json:"message"`
+	LastError *string `json:"last_error"`
 }
 
 type spiderFixture struct {
@@ -73,10 +97,12 @@ func NewSpiderFetcher(baseURL string, timeout time.Duration, logger *logrus.Logg
 		return nil, fmt.Errorf("load spider source timezone %q: %w", spiderSourceTimeZone, err)
 	}
 	return &SpiderFetcher{
-		baseURL:    trimmed,
-		httpClient: &http.Client{Timeout: timeout},
-		logger:     logger,
-		location:   location,
+		baseURL:      trimmed,
+		httpClient:   &http.Client{Timeout: timeout},
+		logger:       logger,
+		location:     location,
+		pollInterval: spiderCrawlPollInterval,
+		pollTimeout:  spiderCrawlPollTimeout,
 	}, nil
 }
 
@@ -89,10 +115,17 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 		return domain.LeagueSnapshot{}, fmt.Errorf("spider league %s: %w", target.LeagueSlug, err)
 	}
 
-	// Best-effort: ask the spider to (re)crawl this competition/season so the
-	// next read is fresh. Failures here must not fail the sync — we still serve
-	// whatever the crawler already has.
-	c.triggerCrawl(ctx, competition, saisonID)
+	// Ask the spider to (re)crawl this competition/season, then wait for that
+	// crawl to finish before reading. Reading straight after triggering would
+	// race the crawler's async worker and return the *previous* run's fixtures,
+	// which is how a single bad crawl used to propagate into the calendar.
+	taskIDs, err := c.triggerCrawl(ctx, competition, saisonID)
+	if err != nil {
+		return domain.LeagueSnapshot{}, fmt.Errorf("spider league %s: %w", target.LeagueSlug, err)
+	}
+	if err := c.waitForCrawl(ctx, taskIDs); err != nil {
+		return domain.LeagueSnapshot{}, fmt.Errorf("spider league %s: %w", target.LeagueSlug, err)
+	}
 
 	fixtures, err := c.fetchFixtures(ctx, competition, saisonID)
 	if err != nil {
@@ -179,31 +212,100 @@ func parseSpiderRef(externalRef string, startYear int) (string, int, error) {
 	return code, startYear + offset, nil
 }
 
-func (c *SpiderFetcher) triggerCrawl(ctx context.Context, competition string, season int) {
+// triggerCrawl queues a fixtures crawl and returns the task ids to wait on.
+func (c *SpiderFetcher) triggerCrawl(ctx context.Context, competition string, season int) ([]string, error) {
 	body, err := json.Marshal(map[string]any{
 		"kind":      "competition_fixtures",
 		"target_id": competition,
 		"seasons":   []int{season},
 	})
 	if err != nil {
-		c.logger.WithError(err).Warn("spider: marshal crawl request")
-		return
+		return nil, fmt.Errorf("marshal crawl request: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/crawl", bytes.NewReader(body))
 	if err != nil {
-		c.logger.WithError(err).Warn("spider: build crawl request")
-		return
+		return nil, fmt.Errorf("build crawl request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		c.logger.WithError(err).WithField("competition", competition).Warn("spider: trigger crawl (ignored)")
-		return
+		return nil, fmt.Errorf("trigger crawl: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
-		c.logger.WithFields(logrus.Fields{"competition": competition, "status": response.StatusCode}).Warn("spider: trigger crawl returned error (ignored)")
+		return nil, fmt.Errorf("trigger crawl: unexpected status %d", response.StatusCode)
 	}
+
+	var payload spiderEnqueueResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode crawl response: %w", err)
+	}
+	if len(payload.TaskIDs) == 0 {
+		return nil, fmt.Errorf("trigger crawl: spider returned no task ids")
+	}
+	return payload.TaskIDs, nil
+}
+
+// waitForCrawl polls each task until it reaches a terminal state. Any outcome
+// other than "done" is an error: the crawl did not produce trustworthy data, so
+// the caller must abandon the sync rather than read a half-written season.
+func (c *SpiderFetcher) waitForCrawl(ctx context.Context, taskIDs []string) error {
+	ctx, cancel := context.WithTimeout(ctx, c.pollTimeout)
+	defer cancel()
+
+	for _, id := range taskIDs {
+		for {
+			task, err := c.fetchTask(ctx, id)
+			if err != nil {
+				return err
+			}
+			switch task.Status {
+			case "done":
+				c.logger.WithFields(logrus.Fields{"task": id, "message": derefString(task.Message)}).Debug("spider: crawl task done")
+			case "failed", "cancelled", "skipped":
+				return fmt.Errorf("crawl task %s ended as %s: %s", id, task.Status, derefString(task.LastError))
+			default: // pending / running
+				select {
+				case <-ctx.Done():
+					return fmt.Errorf("crawl task %s still %s after %s: %w", id, task.Status, c.pollTimeout, ctx.Err())
+				case <-time.After(c.pollInterval):
+					continue
+				}
+			}
+			break
+		}
+	}
+	return nil
+}
+
+func (c *SpiderFetcher) fetchTask(ctx context.Context, taskID string) (spiderTask, error) {
+	endpoint := c.baseURL + "/api/crawl/tasks/" + url.PathEscape(taskID)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return spiderTask{}, fmt.Errorf("build crawl task request: %w", err)
+	}
+	request.Header.Set("Accept", "application/json")
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return spiderTask{}, fmt.Errorf("request crawl task %s: %w", taskID, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return spiderTask{}, fmt.Errorf("request crawl task %s: unexpected status %d", taskID, response.StatusCode)
+	}
+	var task spiderTask
+	if err := json.NewDecoder(response.Body).Decode(&task); err != nil {
+		return spiderTask{}, fmt.Errorf("decode crawl task %s: %w", taskID, err)
+	}
+	return task, nil
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (c *SpiderFetcher) fetchFixtures(ctx context.Context, competition string, season int) ([]spiderFixture, error) {

@@ -11,7 +11,7 @@ from app.config import settings
 from app.db import init_db
 from app.routers import crawl, data, tree
 from app.scraper.captcha import CaptchaError
-from app.scraper.client import fetcher
+from app.scraper.client import FetchError, fetcher
 from app.storage import ensure_bucket
 from app.worker import worker
 
@@ -64,6 +64,22 @@ async def captcha_error_handler(request: Request, exc: CaptchaError):
             "error": {
                 "code": "waf_unsolved",
                 "message": f"AWS WAF token could not be recovered via 2captcha: {exc}",
+            }
+        },
+    )
+
+
+@app.exception_handler(FetchError)
+async def fetch_error_handler(request: Request, exc: FetchError):
+    """Transfermarkt returned an HTTP error (502, 500, 404, ...). Surface it as
+    a 502 rather than letting an error page be parsed into an empty result."""
+    log.warning("upstream fetch failed for %s: %s", request.url.path, exc)
+    return JSONResponse(
+        status_code=502,
+        content={
+            "error": {
+                "code": "upstream_error",
+                "message": str(exc),
             }
         },
     )

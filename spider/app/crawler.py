@@ -9,6 +9,7 @@ lives in the routers — only the heavy *ingest* work goes through here.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import date, datetime
 
 from sqlalchemy import select
@@ -80,7 +81,7 @@ _REOPENABLE_STATUSES = (
 async def enqueue(
     session, kind: CrawlKind, target_id: str, season_id: int = NO_SEASON,
     priority: int = 100,
-) -> None:
+) -> uuid.UUID:
     """Insert a task, or re-open an existing one that already finished.
 
     Tasks are deduped by ``(kind, target_id, season_id)``. A task still
@@ -89,6 +90,9 @@ async def enqueue(
     ``cancelled``) is reset back to ``pending`` so the worker crawls it again —
     otherwise a competition/season is only ever crawled once and its data
     freezes forever.
+
+    Returns the task id either way, so a caller (e.g. the calendar backend) can
+    poll it to completion instead of racing the worker.
     """
     stmt = insert(models.CrawlTask).values(
         kind=kind, target_id=str(target_id), season_id=season_id,
@@ -104,8 +108,20 @@ async def enqueue(
             "last_error": None,
         },
         where=models.CrawlTask.status.in_(_REOPENABLE_STATUSES),
-    )
-    await session.execute(stmt)
+    ).returning(models.CrawlTask.id)
+    task_id = (await session.execute(stmt)).scalar_one_or_none()
+    if task_id is None:
+        # Conflicted on a task that is still pending/running, so the WHERE above
+        # suppressed the update and RETURNING yielded nothing. That in-flight
+        # task is exactly what the caller should wait on.
+        task_id = await session.scalar(
+            select(models.CrawlTask.id).where(
+                models.CrawlTask.kind == kind,
+                models.CrawlTask.target_id == str(target_id),
+                models.CrawlTask.season_id == season_id,
+            )
+        )
+    return task_id
 
 
 async def claim_next_pending():
