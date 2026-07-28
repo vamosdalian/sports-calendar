@@ -214,6 +214,11 @@ web/yarn-debug.log*
 web/yarn-error.log*
 web/.env*
 !web/.env.example
+# Committed on purpose: NEXT_PUBLIC_* is inlined at build time, and the web
+# Worker is built by Cloudflare from Git — so the build needs these values in
+# the repo. Both are public by nature (they ship in every page's HTML), so this
+# file must never hold anything secret.
+!web/.env.production
 web/.dev.vars
 web/next-env.d.ts
 
