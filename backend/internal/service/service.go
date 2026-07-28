@@ -76,7 +76,10 @@ type Service struct {
 	provider     sportsDataProvider
 	refresher    syncScheduleRefresher
 	executor     refreshExecutor
+	webBaseURL   string
 }
+
+const defaultWebBaseURL = "https://sports-calendar.com"
 
 type SportDirectoryItem = domain.SportDirectoryItem
 type LeagueReference = domain.LeagueReference
@@ -96,6 +99,27 @@ type LeaguesResponse struct {
 
 func New(repo repository) *Service {
 	return &Service{repo: repo}
+}
+
+// SetWebBaseURL overrides the public web app address used when a feed needs to
+// send a subscriber back to the site. Empty values keep the default.
+func (s *Service) SetWebBaseURL(baseURL string) {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return
+	}
+	s.webBaseURL = baseURL
+}
+
+func (s *Service) seasonPageURL(sportSlug, leagueSlug, seasonSlug, locale string) string {
+	baseURL := s.webBaseURL
+	if baseURL == "" {
+		baseURL = defaultWebBaseURL
+	}
+	if locale != "zh" {
+		locale = "en"
+	}
+	return fmt.Sprintf("%s/%s/%s/%s/%s", baseURL, locale, sportSlug, leagueSlug, seasonSlug)
 }
 
 func (s *Service) SetSyncScheduleRefresher(refresher syncScheduleRefresher) {
@@ -312,7 +336,19 @@ func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, sea
 		var found bool
 		filteredMatches, teamNames, found = filterMatchesByTeam(detail.Matches, teamSlug)
 		if !found {
-			return nil, ErrNotFound
+			// The season exists but this team slug does not, so the caller is a
+			// client replaying a URL saved before the slug changed. Answering 404
+			// leaves it retrying forever with nothing the user can see, so serve a
+			// notice calendar telling them to re-subscribe instead.
+			return ics.BuildExpiredFeedCalendar(ics.ExpiredFeedPayload{
+				SportSlug:      detail.SportSlug,
+				LeagueSlug:     detail.LeagueSlug,
+				LeagueNames:    detail.LeagueNames,
+				Locale:         locale,
+				SeasonLabel:    detail.SeasonLabel,
+				TeamSlug:       teamSlug,
+				ResubscribeURL: s.seasonPageURL(detail.SportSlug, detail.LeagueSlug, seasonSlug, locale),
+			}, time.Now().UTC())
 		}
 	}
 	return ics.BuildCalendar(ics.CalendarPayload{

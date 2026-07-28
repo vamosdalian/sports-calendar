@@ -33,3 +33,9 @@ adminAuth:
 # e.g. http://localhost:8001.
 spider:
   upstreamURL: ""
+
+# Public web app address, used when a calendar has to send a subscriber back to
+# the site — e.g. a team feed whose slug went stale links here to re-subscribe.
+# Defaults to https://sports-calendar.com when omitted.
+site:
+  webBaseURL: https://sports-calendar.com

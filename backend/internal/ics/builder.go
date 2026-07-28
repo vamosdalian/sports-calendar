@@ -68,6 +68,98 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// BuildExpiredFeedCalendar renders the one-event calendar served when a team
+// feed's slug is stale. The event is an all-day entry on the day the feed is
+// generated, so it keeps moving to "today" on every refresh and stays visible
+// until the subscriber replaces the URL.
+func BuildExpiredFeedCalendar(payload ExpiredFeedPayload, now time.Time) ([]byte, error) {
+	locale := normalizeLocale(payload.Locale)
+	labels := localizedExpiredLabels(locale)
+
+	calendar := ical.NewCalendar()
+	calendar.Props.SetText(ical.PropProductID, fmt.Sprintf("-//sports-calendar//season-feed//%s", strings.ToUpper(locale)))
+	calendar.Props.SetText(ical.PropVersion, "2.0")
+	calendar.Props.SetText(ical.PropCalendarScale, "GREGORIAN")
+	calendar.Props.SetText(ical.PropMethod, "PUBLISH")
+
+	leagueName := domain.PickLocalized(payload.LeagueNames, locale)
+	if leagueName == "" {
+		leagueName = payload.LeagueSlug
+	}
+	calendarName := fmt.Sprintf("%s %s - %s", leagueName, payload.SeasonLabel, labels.CalendarSuffix)
+	calendar.Props.SetText(ical.PropName, calendarName)
+	calendar.Props.SetText("X-WR-CALNAME", calendarName)
+
+	day := now.UTC().Truncate(24 * time.Hour)
+	event := ical.NewEvent()
+	event.Props.SetText(ical.PropUID, fmt.Sprintf("expired-%s-%s-%s@sports-calendar.com", payload.LeagueSlug, payload.SeasonLabel, payload.TeamSlug))
+	event.Props.SetDateTime(ical.PropDateTimeStamp, now)
+	event.Props.SetDateTime(ical.PropLastModified, now)
+	event.Props.Set(buildSequence(now))
+	event.Props.SetDate(ical.PropDateTimeStart, day)
+	event.Props.SetDate(ical.PropDateTimeEnd, day.AddDate(0, 0, 1))
+	event.Props.SetText(ical.PropSummary, labels.Summary)
+	event.Props.SetText(ical.PropDescription, buildExpiredDescription(payload, labels))
+	if payload.ResubscribeURL != "" {
+		// SetText would stamp VALUE=TEXT on a property clients expect as a URI,
+		// which is what makes the link tappable in the event detail view.
+		urlProp := ical.NewProp(ical.PropURL)
+		urlProp.Value = payload.ResubscribeURL
+		event.Props.Set(urlProp)
+	}
+	event.Props.SetText(ical.PropStatus, "CONFIRMED")
+	// TRANSPARENT so the notice never makes the subscriber look busy all day.
+	event.Props.SetText(ical.PropTransparency, "TRANSPARENT")
+
+	categories := ical.NewProp(ical.PropCategories)
+	categories.SetTextList([]string{payload.SportSlug, payload.LeagueSlug, payload.TeamSlug})
+	event.Props.Set(categories)
+
+	calendar.Children = append(calendar.Children, event.Component)
+
+	var buf bytes.Buffer
+	if err := ical.NewEncoder(&buf).Encode(calendar); err != nil {
+		return nil, fmt.Errorf("encode expired calendar: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+type expiredLabels struct {
+	CalendarSuffix string
+	Summary        string
+	Reason         string
+	HowToFix       string
+}
+
+func localizedExpiredLabels(locale string) expiredLabels {
+	if locale == "zh" {
+		return expiredLabels{
+			CalendarSuffix: "订阅已过期",
+			Summary:        "⚠️ 订阅已过期，请重新订阅",
+			Reason:         "原因：数据源更新后，球队标识 %q 已不再对应该赛季的任何球队，这个订阅链接已失效，不会再更新赛程。",
+			HowToFix:       "解决办法：删除当前订阅，然后打开下面的页面，重新选择球队并订阅。",
+		}
+	}
+	return expiredLabels{
+		CalendarSuffix: "Subscription expired",
+		Summary:        "⚠️ Subscription expired — please re-subscribe",
+		Reason:         "Why: after a data source update, the team id %q no longer matches any team in this season, so this subscription URL is dead and will never receive fixtures again.",
+		HowToFix:       "How to fix: remove this subscription, then open the page below to pick the team and subscribe again.",
+	}
+}
+
+func buildExpiredDescription(payload ExpiredFeedPayload, labels expiredLabels) string {
+	lines := []string{
+		fmt.Sprintf(labels.Reason, payload.TeamSlug),
+		"",
+		labels.HowToFix,
+	}
+	if payload.ResubscribeURL != "" {
+		lines = append(lines, "", payload.ResubscribeURL)
+	}
+	return strings.Join(lines, "\n")
+}
+
 func resolveLastModified(matchUpdatedAt, feedUpdatedAt string, fallback time.Time) time.Time {
 	for _, value := range []string{matchUpdatedAt, feedUpdatedAt} {
 		if value == "" {

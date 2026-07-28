@@ -63,6 +63,7 @@ func main() {
 	}
 
 	svc := service.New(repo)
+	svc.SetWebBaseURL(cfg.Site.WebBaseURL)
 	tokenManager, err := auth.NewManager(cfg.AdminAuth.Secret, time.Duration(cfg.AdminAuth.TokenTTLMinute)*time.Minute)
 	if err != nil {
 		logger.WithError(err).Fatal("create auth token manager")

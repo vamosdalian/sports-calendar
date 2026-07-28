@@ -1267,15 +1267,50 @@ func TestICSFeedByLocaleAndTeam(t *testing.T) {
 	}
 }
 
-func TestICSFeedByTeamNotFound(t *testing.T) {
+func TestICSFeedByUnknownTeamServesExpiryNotice(t *testing.T) {
 	router, _, _ := testRouter(t)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics?team=unknown-team", nil)
 
 	router.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusNotFound {
+	if recorder.Code != http.StatusOK {
 		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "SUMMARY:⚠️ Subscription expired") {
+		t.Fatalf("expected expiry notice summary body=%s", body)
+	}
+	if !strings.Contains(body, "URL:https://sports-calendar.com/en/football/csl/2026") {
+		t.Fatalf("expected re-subscribe url body=%s", body)
+	}
+	if !strings.Contains(body, "unknown-team") {
+		t.Fatalf("expected notice to name the stale slug body=%s", body)
+	}
+	if strings.Count(body, "BEGIN:VEVENT") != 1 {
+		t.Fatalf("expected exactly one notice event body=%s", body)
+	}
+	if strings.Contains(body, "csl-2026-r1-guoan-shenhua@sports-calendar.com") {
+		t.Fatalf("expected no fixtures in the notice feed body=%s", body)
+	}
+}
+
+func TestICSFeedByUnknownTeamNoticeLocalized(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics?lang=zh&team=unknown-team", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "SUMMARY:⚠️ 订阅已过期，请重新订阅") {
+		t.Fatalf("expected localized notice summary body=%s", body)
+	}
+	if !strings.Contains(body, "URL:https://sports-calendar.com/zh/football/csl/2026") {
+		t.Fatalf("expected localized re-subscribe url body=%s", body)
 	}
 }
 
