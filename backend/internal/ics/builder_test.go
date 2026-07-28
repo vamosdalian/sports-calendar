@@ -244,3 +244,67 @@ func TestBuildCalendarFinishedMatchSummaryIncludesScore(t *testing.T) {
 		t.Fatalf("did not expect score line for scheduled match body=%s", body)
 	}
 }
+
+func TestBuildExpiredFeedCalendar(t *testing.T) {
+	content, err := backendics.BuildExpiredFeedCalendar(backendics.ExpiredFeedPayload{
+		SportSlug:      "football",
+		LeagueSlug:     "csl",
+		LeagueNames:    domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+		Locale:         "zh",
+		SeasonLabel:    "2026",
+		TeamSlug:       "zhejiang-professional",
+		ResubscribeURL: "https://sports-calendar.com/zh/football/csl/2026",
+	}, time.Date(2026, 3, 10, 15, 4, 5, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("build expired calendar: %v", err)
+	}
+
+	body := string(content)
+	if !strings.Contains(body, "NAME:中超 2026 - 订阅已过期") {
+		t.Fatalf("expected localized calendar name body=%s", body)
+	}
+	if !strings.Contains(body, "SUMMARY:⚠️ 订阅已过期，请重新订阅") {
+		t.Fatalf("expected localized summary body=%s", body)
+	}
+	if !strings.Contains(body, "zhejiang-professional") {
+		t.Fatalf("expected the stale slug in the notice body=%s", body)
+	}
+	if !strings.Contains(body, "URL:https://sports-calendar.com/zh/football/csl/2026") {
+		t.Fatalf("expected re-subscribe url as a URI property body=%s", body)
+	}
+	// All-day on the generation date, so the notice keeps moving to "today".
+	if !strings.Contains(body, "DTSTART;VALUE=DATE:20260310") || !strings.Contains(body, "DTEND;VALUE=DATE:20260311") {
+		t.Fatalf("expected all-day notice on the generation date body=%s", body)
+	}
+	if !strings.Contains(body, "UID:expired-csl-2026-zhejiang-professional@sports-calendar.com") {
+		t.Fatalf("expected stable notice uid body=%s", body)
+	}
+	if !strings.Contains(body, "TRANSP:TRANSPARENT") {
+		t.Fatalf("expected notice to stay free body=%s", body)
+	}
+	if strings.Count(body, "BEGIN:VEVENT") != 1 {
+		t.Fatalf("expected exactly one event body=%s", body)
+	}
+}
+
+func TestBuildExpiredFeedCalendarDefaultsToEnglish(t *testing.T) {
+	content, err := backendics.BuildExpiredFeedCalendar(backendics.ExpiredFeedPayload{
+		SportSlug:      "football",
+		LeagueSlug:     "csl",
+		SeasonLabel:    "2026",
+		TeamSlug:       "gone-fc",
+		ResubscribeURL: "https://sports-calendar.com/en/football/csl/2026",
+	}, time.Date(2026, 3, 10, 15, 4, 5, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("build expired calendar: %v", err)
+	}
+
+	body := string(content)
+	if !strings.Contains(body, "SUMMARY:⚠️ Subscription expired") {
+		t.Fatalf("expected english summary body=%s", body)
+	}
+	// No localized league name available, so the slug has to carry the calendar name.
+	if !strings.Contains(body, "NAME:csl 2026 - Subscription expired") {
+		t.Fatalf("expected slug fallback in calendar name body=%s", body)
+	}
+}

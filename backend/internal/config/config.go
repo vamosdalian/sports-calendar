@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,6 +17,14 @@ type Config struct {
 	RefreshExecutor RefreshExecutorConfig `yaml:"refreshExecutor"`
 	AdminAuth       AdminAuthConfig       `yaml:"adminAuth"`
 	Spider          SpiderConfig          `yaml:"spider"`
+	Site            SiteConfig            `yaml:"site"`
+}
+
+// SiteConfig points generated content back at the public web app. WebBaseURL is
+// where an expired team feed sends subscribers to re-subscribe, so it must be
+// the address users actually browse, not the API host.
+type SiteConfig struct {
+	WebBaseURL string `yaml:"webBaseURL"`
 }
 
 type ServerConfig struct {
@@ -108,6 +117,10 @@ func Load(path string) (Config, error) {
 	if cfg.AdminAuth.TokenTTLMinute <= 0 {
 		cfg.AdminAuth.TokenTTLMinute = 30
 	}
+	if cfg.Site.WebBaseURL == "" {
+		cfg.Site.WebBaseURL = "https://sports-calendar.com"
+	}
+	cfg.Site.WebBaseURL = strings.TrimRight(cfg.Site.WebBaseURL, "/")
 
 	return cfg, nil
 }
