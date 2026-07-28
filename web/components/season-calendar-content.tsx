@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { AnalyticsEvent, track } from "../lib/analytics";
 import { formatMatchLocation, matchLabel, type Match } from "../lib/catalog";
-import type { Locale } from "../lib/site";
+import { toTeamPath, type Locale } from "../lib/site";
 import { LocalizedMatchTime } from "./localized-match-time";
 import { LocalizedMonthCalendars } from "./localized-month-calendars";
 
@@ -159,17 +159,17 @@ export function SeasonCalendarContent({
                 className="h-10 appearance-none rounded-full bg-header px-4 pr-10 text-sm font-medium leading-5 text-white outline-none transition hover:bg-header/90"
                 value={selectedTeamSlug || "all"}
                 onChange={(event) => {
-                  const nextSearchParams = new URLSearchParams(search);
+                  // Picking a team navigates to that team's own page instead of
+                  // filtering in place. The filtered view used to live behind a
+                  // ?team= query string, which search engines cannot index and
+                  // users cannot meaningfully share.
                   if (event.target.value === "all") {
-                    nextSearchParams.delete("team");
-                  } else {
-                    nextSearchParams.set("team", event.target.value);
+                    return;
                   }
 
-                  const nextSearch = nextSearchParams.toString();
-                  const nextUrl = nextSearch ? `${pathname}?${nextSearch}` : pathname;
+                  const nextUrl = toTeamPath(locale, sportSlug, leagueSlug, seasonSlug, event.target.value);
                   startTransition(() => {
-                    router.replace(nextUrl);
+                    router.push(nextUrl);
                   });
                 }}
               >
