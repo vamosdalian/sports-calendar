@@ -84,6 +84,18 @@ export type SeasonPageData = {
   season: Season;
 };
 
+/**
+ * A single team's view of a season: only their fixtures, split by home and
+ * away, plus the rest of the league for cross-linking.
+ */
+export type TeamPageData = SeasonPageData & {
+  team: Team;
+  homeMatches: Match[];
+  awayMatches: Match[];
+  /** Every other team in the season, for internal links. */
+  otherTeams: Team[];
+};
+
 const defaultApiBaseUrl = process.env.NODE_ENV === "production"
   ? "https://api.sports-calendar.com"
   : "http://localhost:8080";
@@ -265,6 +277,129 @@ export async function getSeasonPageData(
       matches,
     },
   };
+}
+
+/**
+ * Distinct teams appearing in a season's fixtures, sorted for display.
+ *
+ * Teams are derived from the fixtures rather than fetched separately — the
+ * season payload already carries both sides of every match, so there is no
+ * team endpoint to call.
+ */
+export function buildTeamOptions(matches: Match[], locale: Locale): Team[] {
+  const teamsBySlug = new Map<string, string>();
+
+  for (const match of matches) {
+    if (match.homeTeam?.slug && match.homeTeam.name) {
+      teamsBySlug.set(match.homeTeam.slug, match.homeTeam.name);
+    }
+    if (match.awayTeam?.slug && match.awayTeam.name) {
+      teamsBySlug.set(match.awayTeam.slug, match.awayTeam.name);
+    }
+  }
+
+  const collator = new Intl.Collator(locale, { sensitivity: "base" });
+  return Array.from(teamsBySlug.entries(), ([slug, name]) => ({ slug, name })).sort((left, right) =>
+    collator.compare(left.name, right.name),
+  );
+}
+
+/**
+ * Why this distinguishes the two failures: a missing season is a genuine 404,
+ * but a missing team in an existing season usually means the slug went stale
+ * after a data-source switch. Those URLs are already shared, so the caller
+ * sends them back to the season page instead of serving a dead end.
+ */
+export type TeamPageResult =
+  | { kind: "ok"; data: TeamPageData }
+  | { kind: "season-not-found" }
+  | { kind: "team-not-found" };
+
+export async function getTeamPageData(
+  sportSlug: string,
+  leagueSlug: string,
+  seasonSlug: string,
+  teamSlug: string,
+  locale: Locale,
+): Promise<TeamPageResult> {
+  const season = await getSeasonPageData(sportSlug, leagueSlug, seasonSlug, locale);
+  if (!season) {
+    return { kind: "season-not-found" };
+  }
+
+  const teams = buildTeamOptions(season.season.matches, locale);
+  const team = teams.find((option) => option.slug === teamSlug);
+  if (!team) {
+    return { kind: "team-not-found" };
+  }
+
+  const homeMatches: Match[] = [];
+  const awayMatches: Match[] = [];
+  for (const match of season.season.matches) {
+    if (match.homeTeam?.slug === teamSlug) {
+      homeMatches.push(match);
+    } else if (match.awayTeam?.slug === teamSlug) {
+      awayMatches.push(match);
+    }
+  }
+
+  const teamMatches = [...homeMatches, ...awayMatches];
+
+  const data: TeamPageData = {
+    ...season,
+    // Narrow the season to this team so the page renders only their fixtures.
+    // This is also what keeps the HTML small: a full league season is hundreds
+    // of matches, one team is a few dozen.
+    season: {
+      ...season.season,
+      matches: teamMatches,
+      groups: season.season.groups
+        .map((group) => ({
+          ...group,
+          matches: group.matches.filter((match) => matchIncludesTeam(match, teamSlug)),
+        }))
+        .filter((group) => group.matches.length > 0),
+    },
+    team,
+    homeMatches,
+    awayMatches,
+    otherTeams: teams.filter((option) => option.slug !== teamSlug),
+  };
+
+  return { kind: "ok", data };
+}
+
+function matchIncludesTeam(match: Match, teamSlug: string) {
+  return match.homeTeam?.slug === teamSlug || match.awayTeam?.slug === teamSlug;
+}
+
+/**
+ * Every team page route, for the sitemap.
+ *
+ * Deliberately not used by generateStaticParams: prerendering a few hundred
+ * team pages at build time would fetch every season payload again and risks
+ * blowing the Cloudflare build budget. The pages are generated on demand and
+ * then held in the ISR cache; the sitemap is what gets them discovered.
+ */
+export async function getAllTeamRoutes() {
+  try {
+    const seasonRoutes = await getAllSeasonRoutes();
+    const routes: Array<{ sport: string; league: string; season: string; team: string }> = [];
+
+    for (const route of seasonRoutes) {
+      const season = await getSeasonPageData(route.sport, route.league, route.season, "en");
+      if (!season) {
+        continue;
+      }
+      for (const team of buildTeamOptions(season.season.matches, "en")) {
+        routes.push({ ...route, team: team.slug });
+      }
+    }
+
+    return routes;
+  } catch {
+    return [];
+  }
 }
 
 export async function getAllSeasonRoutes() {

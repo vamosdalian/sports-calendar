@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { formatMatchLocation, getLeagueSeasons, getLeagues, getSeasonFeedUrl, getSeasonPageData, getSeasonSubscriptionUrl, matchLabel, type Match, type Team } from "../lib/catalog";
+import { buildTeamOptions, formatMatchLocation, getLeagueSeasons, getLeagues, getSeasonFeedUrl, getSeasonPageData, getSeasonSubscriptionUrl, matchLabel, type Match, type Team } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
 import { locales, siteUrl, type Locale, toPath, toTutorialPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
@@ -182,23 +182,6 @@ function InfoSection({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-function buildTeamOptions(matches: Match[], locale: Locale) {
-  const teamsBySlug = new Map<string, string>();
-
-  for (const match of matches) {
-    if (match.homeTeam?.slug && match.homeTeam.name) {
-      teamsBySlug.set(match.homeTeam.slug, match.homeTeam.name);
-    }
-    if (match.awayTeam?.slug && match.awayTeam.name) {
-      teamsBySlug.set(match.awayTeam.slug, match.awayTeam.name);
-    }
-  }
-
-  const collator = new Intl.Collator(locale, { sensitivity: "base" });
-  return Array.from(teamsBySlug.entries(), ([slug, name]) => ({ slug, name })).sort((left, right) =>
-    collator.compare(left.name, right.name),
-  );
-}
 
 function buildSeasonStructuredData({
   canonicalUrl,

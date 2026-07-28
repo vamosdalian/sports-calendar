@@ -38,9 +38,27 @@
   "browserDefaultLabel": "Browser default",
   "contactUsLabel": "Contact us",
   "contactEmailAriaLabel": "Send email to support@sports-calendar.com",
-  "weekDays": ["S", "M", "T", "W", "T", "F", "S"],
+  "weekDays": [
+    "S",
+    "M",
+    "T",
+    "W",
+    "T",
+    "F",
+    "S"
+  ],
   "seasonTitle": "{leagueName} {seasonLabel} Season Calendar",
   "metaTitleHome": "Sports Schedule Calendar for Apple Calendar, Google Calendar & Outlook | sports-calendar.com",
   "metaDescriptionHome": "Browse sports schedule calendars and subscribe to live season feeds for Apple Calendar, Google Calendar, and Outlook with automatic updates.",
-  "metaTitleSeason": "{leagueName} {seasonLabel} Season Calendar | sports-calendar.com"
+  "metaTitleSeason": "{leagueName} {seasonLabel} Season Calendar | sports-calendar.com",
+  "metaTitleTeam": "{teamName} {seasonLabel} Fixtures & Calendar | sports-calendar.com",
+  "metaDescriptionTeam": "All {teamName} {leagueName} {seasonLabel} fixtures with kick-off times in your time zone. Subscribe once and every match updates automatically in Apple Calendar, Google Calendar or Outlook.",
+  "teamTitle": "{teamName} {seasonLabel} Fixtures",
+  "teamSubscribeLead": "Subscribe to {teamName} fixtures and every kick-off, reschedule and venue change lands in your calendar automatically.",
+  "homeMatchesLabel": "Home",
+  "awayMatchesLabel": "Away",
+  "otherTeamsLabel": "Other teams in {leagueName}",
+  "backToLeagueLabel": "All {leagueName} fixtures",
+  "teamMatchCountLabel": "{count} matches",
+  "nextMatchLabel": "Next match"
 }

@@ -34,6 +34,15 @@ export function toPath(locale: Locale, sport?: string, league?: string, season?:
   return `/${locale}/${sport}/${league}/${season}/`;
 }
 
+/**
+ * Team pages live under an explicit `teams/` segment rather than directly
+ * under the season. A bare `[team]` segment would swallow every other path
+ * below the season, colliding with anything added later (per-match pages).
+ */
+export function toTeamPath(locale: Locale, sport: string, league: string, season: string, team: string) {
+  return `/${locale}/${sport}/${league}/${season}/teams/${team}/`;
+}
+
 export function toTutorialPath(locale: Locale, slug: string) {
   return `/${locale}/tutorials/${slug}/`;
 }

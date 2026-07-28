@@ -1,8 +1,8 @@
 import type { MetadataRoute } from "next";
 
-import { getAllSeasonRoutes, getLeagues, getSeasonPageData } from "../lib/catalog";
+import { getAllSeasonRoutes, getAllTeamRoutes, getLeagues, getSeasonPageData } from "../lib/catalog";
 import { getTutorialSlugs } from "../lib/tutorials";
-import { locales, siteUrl, toPath, toTutorialPath } from "../lib/site";
+import { locales, siteUrl, toPath, toTeamPath, toTutorialPath } from "../lib/site";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const directory = await getLeagues("en");
@@ -43,11 +43,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
+  const lastModifiedBySeason = new Map<string, Date>();
   for (const route of seasonEntries) {
+    lastModifiedBySeason.set(`${route.sport}/${route.league}/${route.season}`, route.lastModified);
     for (const locale of locales) {
       entries.push({
         url: `${siteUrl}${toPath(locale, route.sport, route.league, route.season)}`,
         lastModified: route.lastModified,
+      });
+    }
+  }
+
+  // Team pages are generated on demand rather than prerendered, so the sitemap
+  // is the only way crawlers find them.
+  const teamRoutes = await getAllTeamRoutes();
+  for (const route of teamRoutes) {
+    const lastModified =
+      lastModifiedBySeason.get(`${route.sport}/${route.league}/${route.season}`) ?? homeLastModified;
+    for (const locale of locales) {
+      entries.push({
+        url: `${siteUrl}${toTeamPath(locale, route.sport, route.league, route.season, route.team)}`,
+        lastModified,
       });
     }
   }
