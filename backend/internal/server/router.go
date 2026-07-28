@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	stdhttputil "net/http/httputil"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,14 +14,16 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
+	"github.com/vamosdalian/sports-calendar/backend/internal/analytics"
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 	"github.com/vamosdalian/sports-calendar/backend/internal/httputil"
 	"github.com/vamosdalian/sports-calendar/backend/internal/service"
 )
 
 // spiderUpstream is the base URL of the sports-spider backend the admin-only
-// proxy forwards to; empty disables the proxy.
-func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limiter, spiderUpstream string) *gin.Engine {
+// proxy forwards to; empty disables the proxy. recorder may be nil, which
+// disables ICS fetch analytics.
+func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limiter, spiderUpstream string, recorder *analytics.Recorder) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
@@ -30,7 +33,7 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	})
 	router.Use(requestLogger(logger))
 	router.Use(rateLimitMiddleware(limiter))
-	handler := &Handler{service: svc}
+	handler := &Handler{service: svc, recorder: recorder}
 	if spiderUpstream != "" {
 		proxy, err := newSpiderProxy(spiderUpstream)
 		if err != nil {
@@ -58,6 +61,7 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	admin.PUT("/locales/:code", handler.updateAdminLocale)
 	admin.DELETE("/locales/:code", handler.deleteAdminLocale)
 	admin.GET("/refresh-queue", handler.getRefreshQueue)
+	admin.GET("/analytics/ics", handler.getICSAnalytics)
 	admin.GET("/sports", handler.listAdminSports)
 	admin.GET("/venues", handler.listAdminVenues)
 	admin.GET("/thesportsdb/sports", handler.listTheSportsDBSports)
@@ -101,6 +105,7 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 type Handler struct {
 	service     *service.Service
 	spiderProxy *stdhttputil.ReverseProxy
+	recorder    *analytics.Recorder
 }
 
 func (h *Handler) healthz(c *gin.Context) {
@@ -151,12 +156,17 @@ func (h *Handler) getSeasonICS(c *gin.Context) {
 	content, err := h.service.BuildSeasonICS(c.Request.Context(), c.Param("sport"), c.Param("league"), c.Param("season"), locale, teamSlug)
 	if err != nil {
 		if err == service.ErrNotFound {
+			// Recorded too: a rising 404 count on a feed means subscribers are
+			// still polling a URL that no longer resolves.
+			h.recordICSFetch(c, teamSlug, locale, http.StatusNotFound)
 			httputil.JSONError(c, http.StatusNotFound, "not_found", "season feed not found")
 			return
 		}
+		h.recordICSFetch(c, teamSlug, locale, http.StatusInternalServerError)
 		httputil.JSONError(c, http.StatusInternalServerError, "ics_failed", err.Error())
 		return
 	}
+	h.recordICSFetch(c, teamSlug, locale, http.StatusOK)
 
 	c.Header("Content-Type", ical.MIMEType+"; charset=utf-8")
 	c.Header("Cache-Control", "public, s-maxage=900, stale-while-revalidate=3600")
@@ -166,6 +176,67 @@ func (h *Handler) getSeasonICS(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", filename))
 	c.Data(http.StatusOK, ical.MIMEType+"; charset=utf-8", content)
+}
+
+func (h *Handler) getICSAnalytics(c *gin.Context) {
+	trendDays := 0
+	if raw := c.Query("trendDays"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			httputil.JSONError(c, http.StatusBadRequest, "invalid_request", "trendDays must be an integer")
+			return
+		}
+		trendDays = parsed
+	}
+
+	overview, err := h.service.GetICSAnalyticsOverview(c.Request.Context(), trendDays)
+	if err != nil {
+		if err == service.ErrNotFound {
+			httputil.JSONError(c, http.StatusServiceUnavailable, "analytics_disabled", "ics analytics is not enabled")
+			return
+		}
+		httputil.JSONError(c, http.StatusInternalServerError, "analytics_failed", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, overview)
+}
+
+// recordICSFetch queues one feed pull for analytics. It never blocks and never
+// fails the response.
+func (h *Handler) recordICSFetch(c *gin.Context, teamSlug, locale string, status int) {
+	if h.recorder == nil {
+		return
+	}
+	userAgent := c.Request.UserAgent()
+	h.recorder.Record(analytics.FetchEvent{
+		SportSlug:      c.Param("sport"),
+		LeagueSlug:     c.Param("league"),
+		SeasonSlug:     c.Param("season"),
+		TeamSlug:       teamSlug,
+		Locale:         locale,
+		Client:         analytics.ClassifyUserAgent(userAgent),
+		UserAgent:      userAgent,
+		SubscriberHash: h.recorder.SubscriberHash(clientIP(c), userAgent),
+		Status:         status,
+	})
+}
+
+// clientIP resolves the caller address behind Cloudflare. gin's ClientIP only
+// consults X-Forwarded-For once proxies are declared trusted, so the
+// Cloudflare-specific header is preferred: it is set by the edge and cannot be
+// spoofed by the client the way X-Forwarded-For can.
+func clientIP(c *gin.Context) string {
+	if ip := strings.TrimSpace(c.GetHeader("CF-Connecting-IP")); ip != "" {
+		return ip
+	}
+	if forwarded := c.GetHeader("X-Forwarded-For"); forwarded != "" {
+		if first, _, found := strings.Cut(forwarded, ","); found {
+			return strings.TrimSpace(first)
+		}
+		return strings.TrimSpace(forwarded)
+	}
+	return c.ClientIP()
 }
 
 func (h *Handler) createSport(c *gin.Context) {

@@ -130,12 +130,20 @@ theSportsDB:
 adminAuth:
   secret: CHANGE_ME_LONG_RANDOM_SECRET
   tokenTTLMinutes: 30
+
+analytics:
+  enabled: true
+  subscriberSalt: ""
 ```
 
 注意：
 
 1. `adminAuth.secret` 必须替换为长度足够的随机值。
 2. 不要把生产密钥提交到 Git。
+3. `analytics` 段控制 ICS 订阅统计（admin 的 Subscriptions 页）。日历客户端会按固定周期
+   回源拉取 feed，所以这份日志是唯一能反映「真实活跃订阅数」的数据，明细保留 90 天、
+   日聚合永久保留。留空 `subscriberSalt` 时会从 `adminAuth.secret` 派生；一旦改动，
+   所有老订阅者会被当成新客户端，去重计数会断档。设 `enabled: false` 可完全关闭。
 
 ## 3.4 通过 GitHub Release 自动构建后端镜像
 

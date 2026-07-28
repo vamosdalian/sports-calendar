@@ -1,6 +1,6 @@
 "use client"
 
-import { BugIcon, ChartNoAxesCombinedIcon, FlagIcon, LanguagesIcon, LogOutIcon, MapPinnedIcon, ShieldCheckIcon } from "lucide-react"
+import { BugIcon, CalendarCheckIcon, ChartNoAxesCombinedIcon, FlagIcon, LanguagesIcon, LogOutIcon, MapPinnedIcon, ShieldCheckIcon } from "lucide-react"
 import { Link, NavLink, useLocation } from "react-router-dom"
 
 import { useAuth } from "@/components/use-auth"
@@ -25,6 +25,12 @@ const navItems = [
     url: "/",
     icon: ChartNoAxesCombinedIcon,
     match: (pathname: string) => pathname === "/",
+  },
+  {
+    title: "Subscriptions",
+    url: "/subscriptions",
+    icon: CalendarCheckIcon,
+    match: (pathname: string) => pathname.startsWith("/subscriptions"),
   },
   {
     title: "Locales",

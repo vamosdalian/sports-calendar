@@ -169,6 +169,48 @@ var allMigrations = []migration{
 			`ALTER TABLE leagues ADD COLUMN IF NOT EXISTS external_ref TEXT NOT NULL DEFAULT ''`,
 		},
 	},
+	{
+		version: 8,
+		name:    "ics_analytics",
+		statements: []string{
+			// Calendar clients re-fetch a feed on their own schedule, so these
+			// rows are the only honest measure of how many live subscriptions a
+			// feed actually has. subscriber_hash is a salted digest of IP+UA --
+			// enough to count distinct clients, never reversible to an address.
+			`CREATE TABLE IF NOT EXISTS ics_fetch_logs (
+			    id BIGSERIAL PRIMARY KEY,
+			    sport_slug TEXT NOT NULL,
+			    league_slug TEXT NOT NULL,
+			    season_slug TEXT NOT NULL,
+			    team_slug TEXT NOT NULL DEFAULT '',
+			    locale TEXT NOT NULL DEFAULT '',
+			    client TEXT NOT NULL DEFAULT 'other',
+			    user_agent TEXT NOT NULL DEFAULT '',
+			    subscriber_hash TEXT NOT NULL DEFAULT '',
+			    status SMALLINT NOT NULL DEFAULT 200,
+			    fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+			// Detail rows are pruned after 90 days, so the retention sweep and
+			// the hourly rollup both scan by time first.
+			`CREATE INDEX IF NOT EXISTS ics_fetch_logs_fetched_at_idx ON ics_fetch_logs (fetched_at)`,
+			`CREATE INDEX IF NOT EXISTS ics_fetch_logs_feed_idx ON ics_fetch_logs (league_slug, season_slug, fetched_at)`,
+			// Rollups are kept forever: they are small and they are what the
+			// growth trend is read from once the detail rows are gone.
+			`CREATE TABLE IF NOT EXISTS ics_daily_stats (
+			    day DATE NOT NULL,
+			    sport_slug TEXT NOT NULL,
+			    league_slug TEXT NOT NULL,
+			    season_slug TEXT NOT NULL,
+			    team_slug TEXT NOT NULL DEFAULT '',
+			    client TEXT NOT NULL DEFAULT 'other',
+			    fetch_count BIGINT NOT NULL DEFAULT 0,
+			    subscriber_count BIGINT NOT NULL DEFAULT 0,
+			    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			    PRIMARY KEY (day, sport_slug, league_slug, season_slug, team_slug, client)
+			)`,
+			`CREATE INDEX IF NOT EXISTS ics_daily_stats_day_idx ON ics_daily_stats (day)`,
+		},
+	},
 }
 
 func Run(ctx context.Context, pool *pgxpool.Pool, logger *logrus.Logger) error {

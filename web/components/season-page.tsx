@@ -108,11 +108,13 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
           <SeasonCalendarContent
             allTeamsLabel={t("allTeamsLabel")}
             leagueCalendarLabel={t("leagueCalendarLabel")}
+            leagueSlug={leagueSlug}
             locale={locale}
             matches={data.season.matches}
             noMatchesLabel={t("noMatches")}
             copySubscriptionLinkLabel={t("copySubscriptionLinkLabel")}
             seasonSlug={data.season.slug}
+            sportSlug={sportSlug}
             subscribeLabel={t("subscribeLabel")}
             subscriptionBaseUrl={subscriptionUrl}
             subscriptionCopyBaseUrl={subscriptionCopyUrl}

@@ -11,6 +11,7 @@ import type {
 	ExternalLeaguesResponse,
 	ExternalSeasonsResponse,
 	ExternalSportsResponse,
+	ICSAnalyticsOverview,
 	LeagueSeasonsResponse,
 	RefreshQueueSnapshot,
 	SeasonDetailResponse,
@@ -53,6 +54,9 @@ export const api = {
 	},
 	getRefreshQueue(token: string) {
 		return request<RefreshQueueSnapshot>('/api/admin/refresh-queue', { token })
+	},
+	getICSAnalytics(token: string, trendDays = 30) {
+		return request<ICSAnalyticsOverview>(`/api/admin/analytics/ics?trendDays=${trendDays}`, { token })
 	},
 	listAdminLocales(token: string) {
 		return request<AdminLocalesResponse>('/api/admin/locales', { token })

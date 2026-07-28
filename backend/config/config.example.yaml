@@ -39,3 +39,17 @@ spider:
 # Defaults to https://sports-calendar.com when omitted.
 site:
   webBaseURL: https://sports-calendar.com
+
+# ICS fetch analytics. Calendar clients re-poll a subscribed feed on their own
+# schedule, so these logs are the only honest measure of how many live
+# subscriptions each feed has, and which calendar apps subscribers use.
+# Raw detail rows are pruned after 90 days; the daily rollup is kept forever.
+#
+# subscriberSalt is mixed into the pseudonymous subscriber digest so a stored
+# hash cannot be brute-forced back to an IP address (the IP itself is never
+# stored). Keep it stable: changing it makes every returning client look new
+# and resets the distinct-subscriber counts. Defaults to a value derived from
+# adminAuth.secret.
+analytics:
+  enabled: true
+  subscriberSalt: ""

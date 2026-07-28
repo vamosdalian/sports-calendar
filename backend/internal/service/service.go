@@ -76,6 +76,7 @@ type Service struct {
 	provider     sportsDataProvider
 	refresher    syncScheduleRefresher
 	executor     refreshExecutor
+	analytics    analyticsStore
 	webBaseURL   string
 }
 
