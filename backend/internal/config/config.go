@@ -18,6 +18,23 @@ type Config struct {
 	AdminAuth       AdminAuthConfig       `yaml:"adminAuth"`
 	Spider          SpiderConfig          `yaml:"spider"`
 	Site            SiteConfig            `yaml:"site"`
+	Analytics       AnalyticsConfig       `yaml:"analytics"`
+}
+
+// AnalyticsConfig controls ICS fetch analytics. SubscriberSalt is mixed into
+// the pseudonymous subscriber digest so a stored hash cannot be brute-forced
+// back to an IP address. It must stay stable across restarts: changing it
+// makes every returning client look new and resets distinct-subscriber counts.
+// When omitted it is derived from the admin auth secret, which is already
+// persistent and deployment-specific.
+type AnalyticsConfig struct {
+	Enabled        *bool  `yaml:"enabled"`
+	SubscriberSalt string `yaml:"subscriberSalt"`
+}
+
+// IsEnabled reports whether fetch analytics should run. Absent config means on.
+func (c AnalyticsConfig) IsEnabled() bool {
+	return c.Enabled == nil || *c.Enabled
 }
 
 // SiteConfig points generated content back at the public web app. WebBaseURL is
@@ -121,6 +138,13 @@ func Load(path string) (Config, error) {
 		cfg.Site.WebBaseURL = "https://sports-calendar.com"
 	}
 	cfg.Site.WebBaseURL = strings.TrimRight(cfg.Site.WebBaseURL, "/")
+
+	if cfg.Analytics.SubscriberSalt == "" {
+		// Derive from the admin secret rather than generating randomly: a
+		// random salt would change on every restart and silently reset the
+		// distinct-subscriber counts.
+		cfg.Analytics.SubscriberSalt = "ics-analytics:" + cfg.AdminAuth.Secret
+	}
 
 	return cfg, nil
 }

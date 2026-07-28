@@ -4,6 +4,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 
 import { usePathname, useRouter } from "next/navigation";
 
+import { AnalyticsEvent, track } from "../lib/analytics";
 import { formatMatchLocation, matchLabel, type Match } from "../lib/catalog";
 import type { Locale } from "../lib/site";
 import { LocalizedMatchTime } from "./localized-match-time";
@@ -26,9 +27,11 @@ type SeasonCalendarContentProps = {
   leagueCalendarLabel: string;
   locale: Locale;
   matches: Match[];
+  leagueSlug: string;
   noMatchesLabel: string;
   pageTitle: string;
   seasonSlug: string;
+  sportSlug: string;
   subscribeLabel: string;
   subscriptionBaseUrl: string;
   subscriptionCopyBaseUrl: string;
@@ -42,11 +45,13 @@ export function SeasonCalendarContent({
   allTeamsLabel,
   copySubscriptionLinkLabel,
   leagueCalendarLabel,
+  leagueSlug,
   locale,
   matches,
   noMatchesLabel,
   pageTitle,
   seasonSlug,
+  sportSlug,
   subscribeLabel,
   subscriptionBaseUrl,
   subscriptionCopyBaseUrl,
@@ -117,12 +122,27 @@ export function SeasonCalendarContent({
     };
   }, [isMenuOpen]);
 
+  // Feed identity carried on every conversion event, so the dashboard can
+  // compare subscribe rates per league, per season and per locale.
+  function subscriptionEventData() {
+    return {
+      sport: sportSlug,
+      league: leagueSlug,
+      season: seasonSlug,
+      locale,
+      team: selectedTeamSlug || "all",
+    };
+  }
+
   async function handleCopySubscriptionLink() {
     const didCopy = await copyText(subscriptionCopyUrl);
     if (!didCopy) {
       return;
     }
 
+    // Only counted once the copy actually succeeded — a failed clipboard write
+    // is not a conversion.
+    track(AnalyticsEvent.SubscribeCopy, subscriptionEventData());
     setCopyState("copied");
   }
 
@@ -180,6 +200,7 @@ export function SeasonCalendarContent({
               <a
                 href={subscriptionUrl}
                 className="inline-flex h-10 items-center rounded-l-full bg-header px-4 py-2 text-sm font-medium text-white transition hover:bg-header/90"
+                onClick={() => track(AnalyticsEvent.SubscribeClick, subscriptionEventData())}
               >
                 {subscribeLabel}
               </a>

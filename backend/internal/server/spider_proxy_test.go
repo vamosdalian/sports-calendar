@@ -42,7 +42,7 @@ func spiderTestRouter(t *testing.T, upstream string) (*gin.Engine, *auth.Manager
 		t.Fatalf("create test token manager: %v", err)
 	}
 	svc.SetTokenManager(manager)
-	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100), upstream), manager
+	return NewRouter(logger, svc, rate.NewLimiter(rate.Limit(100), 100), upstream, nil), manager
 }
 
 func TestSpiderProxyRequiresAuth(t *testing.T) {

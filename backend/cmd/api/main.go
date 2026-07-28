@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
+	"github.com/vamosdalian/sports-calendar/backend/internal/analytics"
 	"github.com/vamosdalian/sports-calendar/backend/internal/auth"
 	"github.com/vamosdalian/sports-calendar/backend/internal/config"
 	"github.com/vamosdalian/sports-calendar/backend/internal/migrations"
@@ -121,7 +122,24 @@ func main() {
 	scheduler.Start()
 	defer scheduler.Stop()
 
-	router := server.NewRouter(logger, svc, rate.NewLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond), cfg.RateLimit.Burst), cfg.Spider.UpstreamURL)
+	// ICS fetch analytics. Calendar clients poll their subscribed feeds on a
+	// fixed schedule, so these logs — not page views — are what shows how many
+	// live subscriptions exist and which clients they use.
+	var recorder *analytics.Recorder
+	if cfg.Analytics.IsEnabled() {
+		recorder = analytics.NewRecorder(repo, cfg.Analytics.SubscriberSalt, logger)
+		recorder.Start()
+		defer recorder.Stop()
+
+		maintainer := analytics.NewMaintainer(repo, logger)
+		maintainer.Start()
+		defer maintainer.Stop()
+		logger.Info("ics fetch analytics enabled")
+	}
+
+	svc.SetAnalyticsStore(repo)
+
+	router := server.NewRouter(logger, svc, rate.NewLimiter(rate.Limit(cfg.RateLimit.RequestsPerSecond), cfg.RateLimit.Burst), cfg.Spider.UpstreamURL, recorder)
 
 	address := fmt.Sprintf(":%d", cfg.Server.Port)
 	logger.WithField("addr", address).Info("starting API server")

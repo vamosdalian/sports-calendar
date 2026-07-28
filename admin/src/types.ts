@@ -230,3 +230,40 @@ export type SeasonDetailResponse = {
 	groups: MatchGroup[]
 	updatedAt: string
 }
+
+export type ICSAnalyticsTotals = {
+	subscribersToday: number
+	subscribers7d: number
+	subscribers30d: number
+	fetchesToday: number
+	fetches7d: number
+}
+
+export type ICSAnalyticsTrendPoint = {
+	day: string
+	subscribers: number
+	fetches: number
+}
+
+export type ICSAnalyticsFeedRow = {
+	sportSlug: string
+	leagueSlug: string
+	seasonSlug: string
+	teamSlug: string
+	subscribers: number
+	fetches: number
+}
+
+export type ICSAnalyticsClientRow = {
+	client: string
+	subscribers: number
+	fetches: number
+}
+
+export type ICSAnalyticsOverview = {
+	generatedAt: string
+	totals: ICSAnalyticsTotals
+	trend: ICSAnalyticsTrendPoint[]
+	feeds: ICSAnalyticsFeedRow[]
+	clients: ICSAnalyticsClientRow[]
+}

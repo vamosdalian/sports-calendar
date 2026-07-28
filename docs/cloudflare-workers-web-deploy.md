@@ -77,6 +77,22 @@ SPORTS_CALENDAR_PUBLIC_API_BASE_URL=https://api.sports-calendar.com
 NEXT_INC_CACHE_R2_PREFIX=incremental-cache
 ```
 
+### Umami 埋点变量（构建时生效）
+
+```env
+NEXT_PUBLIC_UMAMI_SCRIPT_URL=https://<umami-host>/script.js
+NEXT_PUBLIC_UMAMI_WEBSITE_ID=<website-uuid>
+```
+
+两个都留空时不会渲染埋点脚本，站点行为与接入前完全一致。
+
+⚠️ 与上面几个变量不同，`NEXT_PUBLIC_*` 由 Next.js 在**构建时内联进产物**，不是运行时读取。
+只在 Cloudflare 控制台配置 Worker 环境变量**不会生效**——必须让它们出现在执行
+`npm run deploy` 的那个环境里（`web/.env.local`、CI secrets 或 shell 变量均可），
+否则部署出去的站点会静默地没有埋点。
+
+验证方式：部署后打开线上页面查看源码，应能看到 `<script src=".../script.js" data-website-id="...">`。
+
 ## 首次准备 Cloudflare 资源
 
 在首次部署前，先创建 OpenNext 使用的 R2 bucket：

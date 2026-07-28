@@ -14,6 +14,7 @@ import { LocalesPage } from '@/pages/locales-page'
 import { MatchesPage } from '@/pages/matches-page'
 import { SeasonsPage } from '@/pages/seasons-page'
 import { SportsPage } from '@/pages/sports-page'
+import { SubscriptionsPage } from '@/pages/subscriptions-page'
 import { TeamsPage } from '@/pages/teams-page'
 import { VenuesPage } from '@/pages/venues-page'
 
@@ -33,6 +34,7 @@ export default function App() {
 					}
 				>
 					<Route index element={<DashboardPage />} />
+					<Route path="subscriptions" element={<SubscriptionsPage />} />
 					<Route path="crawler" element={<CrawlerPage />} />
 					<Route path="crawler/:kind/:id" element={<CrawlerDataPage />} />
 					<Route path="locales" element={<LocalesPage />} />

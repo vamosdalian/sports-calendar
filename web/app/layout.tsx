@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 
 import type { Metadata } from "next";
+import Script from "next/script";
 import { getLocale } from "next-intl/server";
 
 import { TimeZoneProvider } from "../components/time-zone-provider";
+import { ANALYTICS_SCRIPT_URL, ANALYTICS_WEBSITE_ID, isAnalyticsEnabled } from "../lib/analytics";
 import { defaultLocale, isLocale } from "../lib/site";
 
 import "./globals.css";
@@ -27,6 +29,17 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang={locale}>
       <body className="font-sans antialiased">
         <TimeZoneProvider>{children}</TimeZoneProvider>
+        {isAnalyticsEnabled() ? (
+          // Self-hosted, cookie-free analytics: no consent banner needed, and
+          // afterInteractive keeps it off the critical rendering path so it
+          // cannot affect the Core Web Vitals that the SEO strategy depends on.
+          <Script
+            src={ANALYTICS_SCRIPT_URL}
+            data-website-id={ANALYTICS_WEBSITE_ID}
+            strategy="afterInteractive"
+            defer
+          />
+        ) : null}
       </body>
     </html>
   );
