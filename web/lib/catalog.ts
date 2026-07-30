@@ -85,13 +85,11 @@ export type SeasonPageData = {
 };
 
 /**
- * A single team's view of a season: only their fixtures, split by home and
- * away, plus the rest of the league for cross-linking.
+ * A single team's view of a season: only their fixtures, in one chronological
+ * list, plus the rest of the league for cross-linking.
  */
 export type TeamPageData = SeasonPageData & {
   team: Team;
-  homeMatches: Match[];
-  awayMatches: Match[];
   /** Every other team in the season, for internal links. */
   otherTeams: Team[];
 };
@@ -333,17 +331,11 @@ export async function getTeamPageData(
     return { kind: "team-not-found" };
   }
 
-  const homeMatches: Match[] = [];
-  const awayMatches: Match[] = [];
-  for (const match of season.season.matches) {
-    if (match.homeTeam?.slug === teamSlug) {
-      homeMatches.push(match);
-    } else if (match.awayTeam?.slug === teamSlug) {
-      awayMatches.push(match);
-    }
-  }
-
-  const teamMatches = [...homeMatches, ...awayMatches];
+  // One chronological list rather than a home/away split: a supporter reads a
+  // fixture list to find the next few matches, and splitting it buries them.
+  const teamMatches = season.season.matches
+    .filter((match) => matchIncludesTeam(match, teamSlug))
+    .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
 
   const data: TeamPageData = {
     ...season,
@@ -361,8 +353,6 @@ export async function getTeamPageData(
         .filter((group) => group.matches.length > 0),
     },
     team,
-    homeMatches,
-    awayMatches,
     otherTeams: teams.filter((option) => option.slug !== teamSlug),
   };
 
