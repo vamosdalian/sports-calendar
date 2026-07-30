@@ -55,6 +55,7 @@
   "metaDescriptionTeam": "All {teamName} {leagueName} {seasonLabel} fixtures with kick-off times in your time zone. Subscribe once and every match updates automatically in Apple Calendar, Google Calendar or Outlook.",
   "teamTitle": "{teamName} {seasonLabel} Fixtures",
   "teamSubscribeLead": "Subscribe to {teamName} fixtures and every kick-off, reschedule and venue change lands in your calendar automatically.",
+  "teamFixturesLabel": "All fixtures",
   "homeMatchesLabel": "Home",
   "awayMatchesLabel": "Away",
   "otherTeamsLabel": "Other teams in {leagueName}",

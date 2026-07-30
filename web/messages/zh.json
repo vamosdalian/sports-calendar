@@ -55,6 +55,7 @@
   "metaDescriptionTeam": "{teamName} {leagueName} {seasonLabel} 全部赛程,开赛时间自动按你的时区显示。订阅一次,之后每场比赛的时间改动和场地变更都会自动同步到 iPhone 日历、Google 日历或 Outlook。",
   "teamTitle": "{teamName} {seasonLabel} 赛程",
   "teamSubscribeLead": "订阅 {teamName} 赛程,此后每场比赛的开赛时间、改期和场地变更都会自动进入你的日历。",
+  "teamFixturesLabel": "全部赛程",
   "homeMatchesLabel": "主场",
   "awayMatchesLabel": "客场",
   "otherTeamsLabel": "{leagueName} 其他球队",

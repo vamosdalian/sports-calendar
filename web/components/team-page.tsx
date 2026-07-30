@@ -128,19 +128,14 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
           ) : null}
 
           <MatchListSection
-            countLabel={t("teamMatchCountLabel", { count: data.homeMatches.length })}
+            awayLabel={t("awayMatchesLabel")}
+            countLabel={t("teamMatchCountLabel", { count: data.season.matches.length })}
             emptyLabel={t("noMatches")}
+            homeLabel={t("homeMatchesLabel")}
             locale={locale}
-            matches={data.homeMatches}
-            title={t("homeMatchesLabel")}
-          />
-
-          <MatchListSection
-            countLabel={t("teamMatchCountLabel", { count: data.awayMatches.length })}
-            emptyLabel={t("noMatches")}
-            locale={locale}
-            matches={data.awayMatches}
-            title={t("awayMatchesLabel")}
+            matches={data.season.matches}
+            teamSlug={teamSlug}
+            title={t("teamFixturesLabel")}
           />
 
           <InfoSection title={t("otherTeamsLabel", { leagueName })}>
@@ -203,29 +198,31 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
 }
 
 function MatchListSection({
+  awayLabel,
   countLabel,
   emptyLabel,
+  homeLabel,
   locale,
   matches,
+  teamSlug,
   title,
 }: {
+  awayLabel: string;
   countLabel: string;
   emptyLabel: string;
+  homeLabel: string;
   locale: Locale;
   matches: Match[];
+  teamSlug: string;
   title: string;
 }) {
-  const sorted = [...matches].sort(
-    (left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
-  );
-
   return (
     <InfoSection title={`${title} · ${countLabel}`}>
-      {sorted.length === 0 ? (
+      {matches.length === 0 ? (
         <p className="text-sm text-ink/75">{emptyLabel}</p>
       ) : (
         <ul className="space-y-2 text-sm text-ink/75">
-          {sorted.map((match) => (
+          {matches.map((match) => (
             <li
               key={match.id}
               className="flex flex-col gap-1 rounded-2xl bg-white/35 px-4 py-3 sm:flex-row sm:items-center"
@@ -235,6 +232,11 @@ function MatchListSection({
               <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
               <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
               <span>
+                {/* The list is chronological rather than split by venue, so each
+                    row still says which side of the fixture this team is on. */}
+                <span className="mr-2 rounded-full bg-white/60 px-2 py-0.5 text-xs text-ink/65">
+                  {match.homeTeam?.slug === teamSlug ? homeLabel : awayLabel}
+                </span>
                 {matchLabel(match)}
                 {formatMatchLocation(match) ? (
                   <span className="text-ink/55"> · {formatMatchLocation(match)}</span>
