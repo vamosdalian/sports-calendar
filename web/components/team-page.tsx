@@ -6,8 +6,8 @@ import { getTranslations } from "next-intl/server";
 
 import {
   formatMatchLocation,
-  getSeasonFeedUrl,
-  getSeasonSubscriptionUrl,
+  getLeagueFeedUrl,
+  getLeagueSubscriptionUrl,
   getTeamPageData,
   matchLabel,
   type Match,
@@ -51,8 +51,9 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
   ) as Record<Locale, string>;
 
   // The team-scoped feed the backend already supports; no new endpoint needed.
-  const subscriptionUrl = getSeasonSubscriptionUrl(sportSlug, leagueSlug, seasonSlug, { locale, teamSlug });
-  const subscriptionCopyUrl = getSeasonFeedUrl(sportSlug, leagueSlug, seasonSlug, { locale, teamSlug });
+  // Season-less on purpose, so the subscription survives season rollovers.
+  const subscriptionUrl = getLeagueSubscriptionUrl(sportSlug, leagueSlug, { locale, teamSlug });
+  const subscriptionCopyUrl = getLeagueFeedUrl(sportSlug, leagueSlug, { locale, teamSlug });
   const leaguePath = toPath(locale, sportSlug, leagueSlug, seasonSlug);
   const nextMatch = findNextMatch(data.season.matches);
   const structuredData = buildTeamStructuredData({

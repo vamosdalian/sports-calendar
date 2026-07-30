@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { buildTeamOptions, formatMatchLocation, getLeagueSeasons, getLeagues, getSeasonFeedUrl, getSeasonPageData, getSeasonSubscriptionUrl, matchLabel, type Match, type Team } from "../lib/catalog";
+import { buildTeamOptions, formatMatchLocation, getLeagueFeedUrl, getLeagueSeasons, getLeagues, getLeagueSubscriptionUrl, getSeasonPageData, matchLabel, type Match, type Team } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
 import { locales, siteUrl, type Locale, toPath, toTutorialPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
@@ -62,8 +62,8 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
   const seasonLabel = formatSeasonDisplay(data.season.slug, data.season.label);
   const pageTitle = t("seasonTitle", { leagueName, seasonLabel });
   const weekLabels = t.raw("weekDays") as string[];
-  const subscriptionUrl = getSeasonSubscriptionUrl(sportSlug, leagueSlug, seasonSlug, { locale });
-  const subscriptionCopyUrl = getSeasonFeedUrl(sportSlug, leagueSlug, seasonSlug, { locale });
+  const subscriptionUrl = getLeagueSubscriptionUrl(sportSlug, leagueSlug, { locale });
+  const subscriptionCopyUrl = getLeagueFeedUrl(sportSlug, leagueSlug, { locale });
   const teamOptions = buildTeamOptions(data.season.matches, locale);
   const notes = data.season.notes.trim();
   const canonicalUrl = `${siteUrl}${toPath(locale, sportSlug, leagueSlug, seasonSlug)}`;
