@@ -10,8 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
-import { createEmptyLocalizedEntry, entriesFromText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
-import type { ExternalLeagueOption, ExternalLeagueLookup } from '@/types'
+import { createEmptyLocalizedEntry, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
 
 type AddLeagueDialogProps = {
 	sportSlug: string
@@ -24,6 +23,8 @@ type LeagueFormState = {
 	id: string
 	slug: string
 	show: boolean
+	provider: string
+	externalRef: string
 	syncInterval: string
 	nameEntries: LocalizedFieldEntry[]
 	calendarDescriptionEntries: LocalizedFieldEntry[]
@@ -35,6 +36,8 @@ const emptyLeagueForm: LeagueFormState = {
 	id: '',
 	slug: '',
 	show: false,
+	provider: 'spider',
+	externalRef: '',
 	syncInterval: '@daily',
 	nameEntries: [{ locale: 'en', value: '' }],
 	calendarDescriptionEntries: [],
@@ -44,93 +47,18 @@ const emptyLeagueForm: LeagueFormState = {
 
 export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: AddLeagueDialogProps) {
 	const { token } = useAuth()
-	const { locales, loading: localesLoading, error: localesError, preferredLocaleCode } = useAdminLocales()
-	const [options, setOptions] = useState<ExternalLeagueOption[]>([])
-	const [selectedID, setSelectedID] = useState('')
-	const [lookup, setLookup] = useState<ExternalLeagueLookup | null>(null)
+	const { locales, loading: localesLoading, error: localesError } = useAdminLocales()
 	const [form, setForm] = useState<LeagueFormState>(emptyLeagueForm)
-	const [loadingOptions, setLoadingOptions] = useState(false)
-	const [loadingLookup, setLoadingLookup] = useState(false)
 	const [pending, setPending] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
 	useEffect(() => {
-		if (!open || !token) {
+		if (!open) {
 			return
 		}
-		let active = true
-		setLoadingOptions(true)
 		setError(null)
-		void api.listTheSportsDBLeagues(token, sportSlug)
-			.then((response) => {
-				if (!active) {
-					return
-				}
-				setOptions(response.items)
-				const firstItem = response.items[0]
-				if (firstItem) {
-					setSelectedID(String(firstItem.id))
-				}
-			})
-			.catch((caught) => {
-				if (!active) {
-					return
-				}
-				setOptions([])
-				setForm({ ...emptyLeagueForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
-				setError(caught instanceof Error ? caught.message : 'load failed')
-			})
-			.finally(() => {
-				if (active) {
-					setLoadingOptions(false)
-				}
-			})
-		return () => {
-			active = false
-		}
-	}, [locales, open, sportSlug, token])
-
-	useEffect(() => {
-		if (!open || !token || !selectedID) {
-			return
-		}
-		let active = true
-		setLoadingLookup(true)
-		setError(null)
-		void api.lookupTheSportsDBLeague(token, Number(selectedID))
-			.then((response) => {
-				if (!active) {
-					return
-				}
-				setLookup(response)
-				setForm({
-					id: String(response.id),
-					slug: response.suggestedSlug,
-					show: false,
-					syncInterval: response.syncInterval || '@daily',
-					nameEntries: entriesFromText(response.name, preferredLocaleCode),
-					calendarDescriptionEntries: entriesFromText(response.calendarDescription, preferredLocaleCode),
-					dataSourceNoteEntries: entriesFromText(response.dataSourceNote, preferredLocaleCode),
-					notesEntries: [],
-				})
-			})
-			.catch((caught) => {
-				if (!active) {
-					return
-				}
-				setLookup(null)
-				setForm({ ...emptyLeagueForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
-				setError(caught instanceof Error ? caught.message : 'lookup failed')
-			})
-			.finally(() => {
-				if (active) {
-					setLoadingLookup(false)
-				}
-			})
-		return () => {
-			active = false
-		}
-	}, [locales, open, preferredLocaleCode, selectedID, token])
+		setForm({ ...emptyLeagueForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
+	}, [locales, open])
 
 	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -146,6 +74,8 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 				slug: form.slug,
 				name: entriesToLocalizedText(form.nameEntries),
 				show: form.show,
+				provider: form.provider,
+				externalRef: form.externalRef,
 				syncInterval: form.syncInterval,
 				calendarDescription: entriesToLocalizedText(form.calendarDescriptionEntries),
 				dataSourceNote: entriesToLocalizedText(form.dataSourceNoteEntries),
@@ -153,8 +83,6 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 			})
 			await onCreated()
 			onOpenChange(false)
-			setLookup(null)
-			setSelectedID('')
 			setForm({ ...emptyLeagueForm, nameEntries: [createEmptyLocalizedEntry(locales)] })
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : 'create failed')
@@ -164,35 +92,33 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange} title="Create league" description="Choose a league from TheSportsDB, run lookup automatically, then adjust the local fields before saving.">
+		<Dialog open={open} onOpenChange={onOpenChange} title="Create league" description="Enter the league id, slug, sync source, and localized fields, then save it into the local catalog.">
 			<form className="space-y-5" onSubmit={handleSubmit}>
+				<div className="grid gap-4 md:grid-cols-3">
+					<div><Label htmlFor="league-id-dialog">League id</Label><Input id="league-id-dialog" required value={form.id} onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))} /></div>
+					<div><Label htmlFor="league-slug-dialog">Slug</Label><Input id="league-slug-dialog" required value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} /></div>
+					<div><Label htmlFor="league-sync-dialog">Sync interval</Label><Input id="league-sync-dialog" required value={form.syncInterval} onChange={(event) => setForm((current) => ({ ...current, syncInterval: event.target.value }))} /></div>
+				</div>
 				<div className="grid gap-4 md:grid-cols-2">
 					<div>
-						<Label htmlFor="external-league">TheSportsDB league</Label>
-						<Select
-							disabled={loadingOptions || options.length === 0}
-							value={selectedID}
-							onValueChange={setSelectedID}
-						>
-							<SelectTrigger id="external-league">
-								<SelectValue placeholder={loadingOptions ? 'Loading leagues...' : 'Select a league'} />
+						<Label htmlFor="league-provider-dialog">Data source</Label>
+						<Select value={form.provider} onValueChange={(provider) => setForm((current) => ({ ...current, provider }))}>
+							<SelectTrigger id="league-provider-dialog">
+								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
 								<SelectGroup>
-									{options.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
+									<SelectItem value="spider">spider (Transfermarkt crawler)</SelectItem>
+									<SelectItem value="thesportsdb">thesportsdb (retired, not synced)</SelectItem>
 								</SelectGroup>
 							</SelectContent>
 						</Select>
 					</div>
-					<div className="rounded-2xl border border-line/70 bg-shell/55 px-4 py-3 text-sm text-muted">
-						<p className="font-medium text-ink">Remote summary</p>
-						<p className="mt-1">{lookup ? `${lookup.sport}${lookup.country ? ` · ${lookup.country}` : ''}${lookup.currentSeason ? ` · current season ${lookup.currentSeason}` : ''}` : 'Choose a league to load lookup details.'}</p>
+					<div>
+						<Label htmlFor="league-external-ref-dialog">External ref</Label>
+						<Input id="league-external-ref-dialog" value={form.externalRef} required={form.provider === 'spider'} onChange={(event) => setForm((current) => ({ ...current, externalRef: event.target.value }))} />
+						<p className="mt-1 text-sm text-muted">Transfermarkt competition code, e.g. <code>CSL</code>. Single-calendar-year leagues file year N under saison N-1, so use an offset like <code>CSL@-1</code>. Required for spider.</p>
 					</div>
-				</div>
-				<div className="grid gap-4 md:grid-cols-3">
-					<div><Label htmlFor="league-id-dialog">TheSportsDB id</Label><Input id="league-id-dialog" required value={form.id} onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))} /></div>
-					<div><Label htmlFor="league-slug-dialog">Slug</Label><Input id="league-slug-dialog" required value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} /></div>
-					<div><Label htmlFor="league-sync-dialog">Sync interval</Label><Input id="league-sync-dialog" required value={form.syncInterval} onChange={(event) => setForm((current) => ({ ...current, syncInterval: event.target.value }))} /></div>
 				</div>
 				<div className="flex items-start gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-3">
 					<Checkbox id="league-show-dialog" checked={form.show} onCheckedChange={(checked) => setForm((current) => ({ ...current, show: checked === true }))} />
@@ -204,7 +130,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 				<LocalizedFieldsEditor
 					idPrefix="dialog-league-name"
 					label="Localized name"
-					description="The lookup fills an english value. You can add more locales if needed."
+					description="Add or edit locales before saving."
 					entries={form.nameEntries}
 					localeOptions={locales}
 					onChange={(nameEntries) => setForm((current) => ({ ...current, nameEntries }))}
@@ -215,7 +141,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 				<LocalizedFieldsEditor
 					idPrefix="dialog-league-calendar-description"
 					label="Calendar description"
-					description="Suggested from TheSportsDB league lookup."
+					description="Optional description shown on the public season detail view."
 					entries={form.calendarDescriptionEntries}
 					localeOptions={locales}
 					onChange={(calendarDescriptionEntries) => setForm((current) => ({ ...current, calendarDescriptionEntries }))}
@@ -225,7 +151,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 				<LocalizedFieldsEditor
 					idPrefix="dialog-league-data-source"
 					label="Data source note"
-					description="Suggested source note used by the public season detail view."
+					description="Optional source note used by the public season detail view."
 					entries={form.dataSourceNoteEntries}
 					localeOptions={locales}
 					onChange={(dataSourceNoteEntries) => setForm((current) => ({ ...current, dataSourceNoteEntries }))}
@@ -235,7 +161,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 				<LocalizedFieldsEditor
 					idPrefix="dialog-league-notes"
 					label="Notes"
-					description="Optional internal notes. This remains fully manual."
+					description="Optional internal notes."
 					entries={form.notesEntries}
 					localeOptions={locales}
 					onChange={(notesEntries) => setForm((current) => ({ ...current, notesEntries }))}
@@ -245,7 +171,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 				{error ? <p className="text-sm text-danger">{error}</p> : null}
 				<div className="flex justify-end gap-3">
 					<Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>
-					<Button disabled={pending || loadingOptions || loadingLookup || !selectedID || localesLoading || !!localesError || locales.length === 0} type="submit">{pending ? 'Creating...' : 'Create league'}</Button>
+					<Button disabled={pending || localesLoading || !!localesError || locales.length === 0} type="submit">{pending ? 'Creating...' : 'Create league'}</Button>
 				</div>
 			</form>
 		</Dialog>

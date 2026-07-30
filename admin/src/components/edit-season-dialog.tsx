@@ -75,7 +75,7 @@ export function EditSeasonDialog({ season, open, onOpenChange, onSaved }: EditSe
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange} title="Edit season" description="Season slug follows TheSportsDB season value and cannot be changed after creation.">
+		<Dialog open={open} onOpenChange={onOpenChange} title="Edit season" description="The season slug is fixed at creation and cannot be changed.">
 			<form className="space-y-5" onSubmit={handleSubmit}>
 				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 					<div><Label htmlFor="edit-season-slug">Slug</Label><Input id="edit-season-slug" readOnly value={form.slug} /></div>

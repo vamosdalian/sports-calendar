@@ -69,7 +69,7 @@ export function EditSportDialog({ sport, open, onOpenChange, onSaved }: EditSpor
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange} title="Edit sport" description="Update the local sport metadata. External source selection is only used during creation.">
+		<Dialog open={open} onOpenChange={onOpenChange} title="Edit sport" description="Update the local sport metadata.">
 			<form className="space-y-5" onSubmit={handleSubmit}>
 				<div className="grid gap-4 md:grid-cols-2">
 					<div><Label htmlFor="edit-sport-id">Sport id</Label><Input disabled id="edit-sport-id" value={form.id} /></div>

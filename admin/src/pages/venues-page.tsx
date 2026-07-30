@@ -107,7 +107,7 @@ export function VenuesPage() {
 			<Card className="demo-panel">
 				<CardHeader>
 					<CardTitle>Venue catalog</CardTitle>
-					<CardDescription>Review and edit venue metadata synced from TheSportsDB or created manually.</CardDescription>
+					<CardDescription>Review and edit manually maintained venue metadata.</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<CatalogDataTable

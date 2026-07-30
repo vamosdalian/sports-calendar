@@ -16,14 +16,16 @@ import (
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 )
 
-// ProviderSpider is the leagues.provider value that routes a league's sync to
-// the local Transfermarkt crawler instead of TheSportsDB.
+// ProviderSpider is the leagues.provider value for a league synced from the
+// local Transfermarkt crawler. It is the only provider ListSyncTargets returns
+// now that TheSportsDB has been retired as a data source.
 const ProviderSpider = "spider"
 
-// spiderTeamIDOffset namespaces Transfermarkt entity ids away from TheSportsDB
-// ids. Both providers key teams by small integers in the shared `teams` table;
-// adding this offset to every spider-origin id guarantees the two id spaces
-// never collide (and it is reversible with a modulo).
+// spiderTeamIDOffset namespaces Transfermarkt entity ids away from the legacy
+// TheSportsDB ids still stored for retired leagues. Both keyed teams by small
+// integers in the shared `teams` table; adding this offset to every spider-origin
+// id guarantees the two id spaces never collide (and it is reversible with a
+// modulo).
 const spiderTeamIDOffset int64 = 100_000_000_000
 
 // spiderSourceTimeZone is the timezone Transfermarkt.com renders kickoff times
@@ -420,32 +422,4 @@ func derefInt64(value *int64) int64 {
 		return 0
 	}
 	return *value
-}
-
-// RoutingFetcher dispatches a snapshot fetch to the provider a league is
-// configured to use, falling back to a default fetcher (TheSportsDB).
-type RoutingFetcher struct {
-	defaultFetcher SnapshotFetcher
-	byProvider     map[string]SnapshotFetcher
-}
-
-func NewRoutingFetcher(defaultFetcher SnapshotFetcher, byProvider map[string]SnapshotFetcher) (*RoutingFetcher, error) {
-	if defaultFetcher == nil {
-		return nil, fmt.Errorf("default fetcher is required")
-	}
-	routed := map[string]SnapshotFetcher{}
-	for provider, fetcher := range byProvider {
-		if fetcher == nil {
-			continue
-		}
-		routed[provider] = fetcher
-	}
-	return &RoutingFetcher{defaultFetcher: defaultFetcher, byProvider: routed}, nil
-}
-
-func (r *RoutingFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.LeagueSyncTarget) (domain.LeagueSnapshot, error) {
-	if fetcher, ok := r.byProvider[strings.TrimSpace(target.Provider)]; ok {
-		return fetcher.FetchLeagueSnapshot(ctx, target)
-	}
-	return r.defaultFetcher.FetchLeagueSnapshot(ctx, target)
 }

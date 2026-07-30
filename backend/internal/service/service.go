@@ -53,14 +53,6 @@ type repository interface {
 	DeleteMatch(ctx context.Context, input domain.DeleteMatchInput) error
 }
 
-type sportsDataProvider interface {
-	ListSports(ctx context.Context) ([]domain.AdminExternalSportOption, error)
-	ListLeaguesBySport(ctx context.Context, sportName string) ([]domain.AdminExternalLeagueOption, error)
-	LookupLeague(ctx context.Context, leagueID int64) (domain.AdminExternalLeagueLookup, error)
-	ListSeasons(ctx context.Context, leagueID int64) ([]domain.AdminExternalSeasonOption, error)
-	LookupVenue(ctx context.Context, venueID int64) (domain.VenueSyncRecord, error)
-}
-
 type syncScheduleRefresher interface {
 	Refresh(ctx context.Context) error
 }
@@ -73,7 +65,6 @@ type refreshExecutor interface {
 type Service struct {
 	repo         repository
 	tokenManager tokenManager
-	provider     sportsDataProvider
 	refresher    syncScheduleRefresher
 	executor     refreshExecutor
 	analytics    analyticsStore
@@ -163,17 +154,48 @@ func (s *Service) CreateSport(ctx context.Context, input domain.CreateSportInput
 	return s.repo.CreateSport(ctx, input)
 }
 
+// leagueProviders are the accepted leagues.provider values. "spider" (the local
+// Transfermarkt crawler) is the only source that still syncs; "thesportsdb" is
+// retained so retired leagues kept for their finished fixtures can still be
+// represented and edited without being polled.
+var leagueProviders = map[string]bool{"spider": true, "thesportsdb": true}
+
+// normalizeLeagueProvider lowercases and trims the provider, defaulting blank to
+// "spider" since that is the only live sync source.
+func normalizeLeagueProvider(provider string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" {
+		return "spider"
+	}
+	return provider
+}
+
+// validateLeagueProviderRef checks the provider is known and that a spider
+// league carries the Transfermarkt competition code it needs to sync (e.g.
+// "CSL" or "CSL@-1"); without it the sync fetcher has nothing to crawl.
+func validateLeagueProviderRef(provider, externalRef string) error {
+	if !leagueProviders[provider] {
+		return invalidArgument(fmt.Sprintf("provider must be one of spider, thesportsdb (got %q)", provider))
+	}
+	if provider == "spider" && strings.TrimSpace(externalRef) == "" {
+		return invalidArgument("externalRef (Transfermarkt competition code) is required for a spider league")
+	}
+	return nil
+}
+
 func (s *Service) CreateLeague(ctx context.Context, input domain.CreateLeagueInput) (LeagueRecord, error) {
 	input.SportSlug = normalizeSlug(input.SportSlug)
 	input.Slug = normalizeSlug(input.Slug)
 	input.Name = trimLocalizedText(input.Name)
+	input.Provider = normalizeLeagueProvider(input.Provider)
+	input.ExternalRef = strings.TrimSpace(input.ExternalRef)
 	input.SyncInterval = strings.TrimSpace(input.SyncInterval)
 	input.CalendarDescription = trimLocalizedText(input.CalendarDescription)
 	input.DataSourceNote = trimLocalizedText(input.DataSourceNote)
 	input.Notes = trimLocalizedText(input.Notes)
 
 	if input.ID <= 0 {
-		return LeagueRecord{}, invalidArgument("league id must be a valid TheSportsDB league id")
+		return LeagueRecord{}, invalidArgument("league id must be a positive integer")
 	}
 	if input.SportSlug == "" {
 		return LeagueRecord{}, invalidArgument("sportSlug is required")
@@ -182,6 +204,9 @@ func (s *Service) CreateLeague(ctx context.Context, input domain.CreateLeagueInp
 		return LeagueRecord{}, invalidArgument("league slug is required")
 	}
 	if err := validateLocalizedText(input.Name, "league name"); err != nil {
+		return LeagueRecord{}, err
+	}
+	if err := validateLeagueProviderRef(input.Provider, input.ExternalRef); err != nil {
 		return LeagueRecord{}, err
 	}
 	if input.SyncInterval == "" {

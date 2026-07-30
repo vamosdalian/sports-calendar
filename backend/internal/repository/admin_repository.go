@@ -51,7 +51,7 @@ func (r *PostgresRepository) ListAdminSports(ctx context.Context) (domain.AdminS
 
 func (r *PostgresRepository) ListAdminLeagues(ctx context.Context, sportSlug string) (domain.AdminLeaguesResponse, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT l.id, l.slug, l.name, l.show, l.sync_interval, l.calendar_description, l.data_source_note, l.notes, l.created_at, l.updated_at
+		SELECT l.id, l.slug, l.name, l.show, l.provider, l.external_ref, l.sync_interval, l.calendar_description, l.data_source_note, l.notes, l.created_at, l.updated_at
 		FROM leagues l
 		JOIN sports s ON s.id = l.sport_id
 		WHERE s.slug = $1
@@ -74,7 +74,7 @@ func (r *PostgresRepository) ListAdminLeagues(ctx context.Context, sportSlug str
 			createdAt              time.Time
 			updatedAt              time.Time
 		)
-		if scanErr := rows.Scan(&item.ID, &item.Slug, &nameRaw, &item.Show, &item.SyncInterval, &calendarDescriptionRaw, &dataSourceNoteRaw, &notesRaw, &createdAt, &updatedAt); scanErr != nil {
+		if scanErr := rows.Scan(&item.ID, &item.Slug, &nameRaw, &item.Show, &item.Provider, &item.ExternalRef, &item.SyncInterval, &calendarDescriptionRaw, &dataSourceNoteRaw, &notesRaw, &createdAt, &updatedAt); scanErr != nil {
 			return domain.AdminLeaguesResponse{}, fmt.Errorf("scan admin league: %w", scanErr)
 		}
 		item.SportSlug = sportSlug

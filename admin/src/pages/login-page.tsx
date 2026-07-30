@@ -65,7 +65,7 @@ export function LoginPage() {
 					</div>
 					<p className="mt-6 text-sm uppercase tracking-[0.24em] text-white/60">Sports Calendar</p>
 					<h1 className="mt-5 font-display text-5xl font-bold leading-tight">Operations console for leagues, seasons, and fixture oversight.</h1>
-					<p className="mt-6 max-w-xl text-base text-white/78">Use this admin console to bootstrap sports catalogs, connect TheSportsDB-backed leagues, and inspect season fixtures before publishing.</p>
+					<p className="mt-6 max-w-xl text-base text-white/78">Use this admin console to bootstrap sports catalogs, wire leagues to their data source, and inspect season fixtures before publishing.</p>
 					<div className="mt-10 grid gap-4 md:grid-cols-2">
 						<div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
 							<p className="text-xs uppercase tracking-[0.18em] text-white/58">Catalog flow</p>

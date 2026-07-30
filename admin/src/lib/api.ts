@@ -7,10 +7,6 @@ import type {
 	AdminTeamsResponse,
 	AdminVenuesResponse,
 	AuthTokenResponse,
-	ExternalLeagueLookup,
-	ExternalLeaguesResponse,
-	ExternalSeasonsResponse,
-	ExternalSportsResponse,
 	ICSAnalyticsOverview,
 	LeagueSeasonsResponse,
 	RefreshQueueSnapshot,
@@ -85,9 +81,6 @@ export const api = {
 	deleteVenue(token: string, venueID: number) {
 		return request(`/api/admin/venues/${venueID}`, { method: 'DELETE', token })
 	},
-	listTheSportsDBSports(token: string) {
-		return request<ExternalSportsResponse>('/api/admin/thesportsdb/sports', { token })
-	},
 	createSport(token: string, payload: { id: number; slug: string; name: Record<string, string> }) {
 		return request('/api/admin/sports', { method: 'POST', token, body: JSON.stringify(payload) })
 	},
@@ -99,12 +92,6 @@ export const api = {
 	},
 	listLeagues(token: string, sportSlug: string) {
 		return request<AdminLeaguesResponse>(`/api/admin/${sportSlug}/leagues`, { token })
-	},
-	listTheSportsDBLeagues(token: string, sportSlug: string) {
-		return request<ExternalLeaguesResponse>(`/api/admin/${sportSlug}/thesportsdb/leagues`, { token })
-	},
-	lookupTheSportsDBLeague(token: string, leagueID: number) {
-		return request<ExternalLeagueLookup>(`/api/admin/thesportsdb/leagues/${leagueID}`, { token })
 	},
 	createLeague(token: string, payload: Record<string, unknown>) {
 		return request('/api/admin/leagues', { method: 'POST', token, body: JSON.stringify(payload) })
@@ -126,9 +113,6 @@ export const api = {
 	},
 	listSeasons(sportSlug: string, leagueSlug: string) {
 		return request<LeagueSeasonsResponse>(`/api/${sportSlug}/${leagueSlug}/seasons`)
-	},
-	listTheSportsDBSeasons(token: string, sportSlug: string, leagueSlug: string) {
-		return request<ExternalSeasonsResponse>(`/api/admin/${sportSlug}/${leagueSlug}/thesportsdb/seasons`, { token })
 	},
 	createSeason(token: string, payload: Record<string, unknown>) {
 		return request('/api/admin/seasons', { method: 'POST', token, body: JSON.stringify(payload) })

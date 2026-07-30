@@ -70,39 +70,25 @@ func main() {
 		logger.WithError(err).Fatal("create auth token manager")
 	}
 	svc.SetTokenManager(tokenManager)
-	client, err := syncer.NewTheSportsDBClient(
-		cfg.TheSportsDB.BaseURL,
-		cfg.TheSportsDB.APIKey,
-		time.Duration(cfg.TheSportsDB.TimeoutSeconds)*time.Second,
-		cfg.RefreshExecutor.QPS,
+
+	// The local Transfermarkt spider is the only sync data source; TheSportsDB
+	// has been retired. Its upstream is therefore required -- without it there
+	// is nothing to sync from -- and ListSyncTargets only returns spider-backed
+	// leagues, so every fetch routes here.
+	if cfg.Spider.UpstreamURL == "" {
+		logger.Fatal("spider upstreamURL is required: it is the only sync data source")
+	}
+	spiderFetcher, err := syncer.NewSpiderFetcher(
+		cfg.Spider.UpstreamURL,
+		time.Duration(cfg.Spider.TimeoutSeconds)*time.Second,
+		logger,
 	)
 	if err != nil {
-		logger.WithError(err).Fatal("create TheSportsDB client")
+		logger.WithError(err).Fatal("create spider fetcher")
 	}
-	svc.SetSportsDataProvider(client)
+	logger.WithField("upstream", cfg.Spider.UpstreamURL).Info("spider snapshot fetcher enabled")
 
-	// The admin catalog/browse dropdowns stay on TheSportsDB; only per-league
-	// sync is routed. Leagues with provider='spider' fetch from the local
-	// Transfermarkt crawler, everything else keeps using TheSportsDB.
-	routedFetchers := map[string]syncer.SnapshotFetcher{}
-	if cfg.Spider.UpstreamURL != "" {
-		spiderFetcher, spiderErr := syncer.NewSpiderFetcher(
-			cfg.Spider.UpstreamURL,
-			time.Duration(cfg.TheSportsDB.TimeoutSeconds)*time.Second,
-			logger,
-		)
-		if spiderErr != nil {
-			logger.WithError(spiderErr).Fatal("create spider fetcher")
-		}
-		routedFetchers[syncer.ProviderSpider] = spiderFetcher
-		logger.WithField("upstream", cfg.Spider.UpstreamURL).Info("spider snapshot fetcher enabled")
-	}
-	routingFetcher, err := syncer.NewRoutingFetcher(client, routedFetchers)
-	if err != nil {
-		logger.WithError(err).Fatal("create routing fetcher")
-	}
-
-	leagueSyncer, err := syncer.NewLeagueSyncer(logger, repo, routingFetcher)
+	leagueSyncer, err := syncer.NewLeagueSyncer(logger, repo, spiderFetcher)
 	if err != nil {
 		logger.WithError(err).Fatal("create league syncer")
 	}

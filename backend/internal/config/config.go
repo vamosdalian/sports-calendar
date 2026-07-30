@@ -10,15 +10,13 @@ import (
 )
 
 type Config struct {
-	Server          ServerConfig          `yaml:"server"`
-	RateLimit       RateLimitConfig       `yaml:"rateLimit"`
-	Database        DatabaseConfig        `yaml:"database"`
-	TheSportsDB     TheSportsDBConfig     `yaml:"theSportsDB"`
-	RefreshExecutor RefreshExecutorConfig `yaml:"refreshExecutor"`
-	AdminAuth       AdminAuthConfig       `yaml:"adminAuth"`
-	Spider          SpiderConfig          `yaml:"spider"`
-	Site            SiteConfig            `yaml:"site"`
-	Analytics       AnalyticsConfig       `yaml:"analytics"`
+	Server    ServerConfig    `yaml:"server"`
+	RateLimit RateLimitConfig `yaml:"rateLimit"`
+	Database  DatabaseConfig  `yaml:"database"`
+	AdminAuth AdminAuthConfig `yaml:"adminAuth"`
+	Spider    SpiderConfig    `yaml:"spider"`
+	Site      SiteConfig      `yaml:"site"`
+	Analytics AnalyticsConfig `yaml:"analytics"`
 }
 
 // AnalyticsConfig controls ICS fetch analytics. SubscriberSalt is mixed into
@@ -62,27 +60,21 @@ type DatabaseConfig struct {
 	SSLMode  string `yaml:"sslmode"`
 }
 
-type TheSportsDBConfig struct {
-	BaseURL        string `yaml:"baseURL"`
-	APIKey         string `yaml:"apiKey"`
-	TimeoutSeconds int    `yaml:"timeoutSeconds"`
-}
-
-type RefreshExecutorConfig struct {
-	QPS int `yaml:"qps"`
-}
-
 type AdminAuthConfig struct {
 	Secret         string `yaml:"secret"`
 	TokenTTLMinute int    `yaml:"tokenTTLMinutes"`
 }
 
-// SpiderConfig points the admin-only reverse proxy at the sports-spider
-// (Transfermarkt crawler) backend. When UpstreamURL is empty the /api/spider/*
-// proxy is disabled and returns 503. The crawler is never exposed publicly; the
-// admin console reaches it only through this authenticated proxy.
+// SpiderConfig points at the sports-spider (Transfermarkt crawler) backend.
+// Since TheSportsDB was retired it plays two roles: the only sync data source,
+// and the target of the admin-only reverse proxy. UpstreamURL is required --
+// main() refuses to start without it, because there would be nothing to sync
+// from. The crawler is never exposed publicly; the admin console reaches it only
+// through the authenticated /api/spider/* proxy. TimeoutSeconds bounds each HTTP
+// call the sync fetcher makes to it.
 type SpiderConfig struct {
-	UpstreamURL string `yaml:"upstreamURL"`
+	UpstreamURL    string `yaml:"upstreamURL"`
+	TimeoutSeconds int    `yaml:"timeoutSeconds"`
 }
 
 func Load(path string) (Config, error) {
@@ -116,17 +108,8 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("database host, dbname, and user are required")
 	}
 
-	if cfg.TheSportsDB.BaseURL == "" {
-		cfg.TheSportsDB.BaseURL = "https://www.thesportsdb.com"
-	}
-	if cfg.TheSportsDB.TimeoutSeconds <= 0 {
-		cfg.TheSportsDB.TimeoutSeconds = 15
-	}
-	if cfg.TheSportsDB.APIKey == "" {
-		return Config{}, fmt.Errorf("theSportsDB apiKey is required")
-	}
-	if cfg.RefreshExecutor.QPS <= 0 {
-		cfg.RefreshExecutor.QPS = 1
+	if cfg.Spider.TimeoutSeconds <= 0 {
+		cfg.Spider.TimeoutSeconds = 30
 	}
 	if cfg.AdminAuth.Secret == "" {
 		return Config{}, fmt.Errorf("adminAuth secret is required")

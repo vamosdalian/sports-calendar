@@ -32,10 +32,11 @@ type LeagueSyncTarget struct {
 	SeasonID     int64
 	SeasonSlug   string
 	SeasonLabel  string
-	// Provider selects the upstream fetcher ("thesportsdb" or "spider").
+	// Provider is the sync source. Only "spider" is fetched now; the legacy
+	// "thesportsdb" value survives on retired leagues but is never polled.
 	Provider string
 	// ExternalRef is the provider-native league key. For the spider it is the
-	// Transfermarkt competition code (e.g. "CSL"); unused by TheSportsDB.
+	// Transfermarkt competition code (e.g. "CSL", "CSL@-1").
 	ExternalRef string
 	// SeasonStartYear is the Transfermarkt saison_id the spider expects.
 	SeasonStartYear int
