@@ -326,7 +326,39 @@ func (s *Service) GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, se
 	return detail, nil
 }
 
-func (s *Service) BuildSeasonICS(ctx context.Context, sportSlug, leagueSlug, seasonSlug, locale, teamSlug string) ([]byte, error) {
+// CurrentSeasonSlug resolves the season a league's feed should serve right now.
+//
+// It reads the same ordered, show-filtered season list the public directory
+// derives defaultSeason from, so the feed and the site can never disagree about
+// which season is current: both are "the visible season with the highest start
+// year". Adding next season's row with show=false therefore keeps it invisible
+// here until it is ready.
+func (s *Service) CurrentSeasonSlug(ctx context.Context, sportSlug, leagueSlug string) (string, error) {
+	payload, err := s.ListLeagueSeasons(ctx, sportSlug, leagueSlug)
+	if err != nil {
+		return "", err
+	}
+	if len(payload.Seasons) == 0 {
+		// The repository already treats an empty list as not-found, so this is
+		// only a guard against that contract changing underneath us.
+		return "", ErrNotFound
+	}
+	return payload.Seasons[0].Slug, nil
+}
+
+// BuildLeagueICS renders the feed for a league's *current* season.
+//
+// Deliberately takes no season argument. Subscriptions live in a calendar
+// client for years and are never revisited by the user, so a feed pinned to one
+// season silently stops delivering fixtures the day that season ends -- the
+// subscriber keeps polling, keeps getting 200s, and never sees a new match
+// again. Resolving the season per request instead means one subscription
+// survives every season rollover.
+func (s *Service) BuildLeagueICS(ctx context.Context, sportSlug, leagueSlug, locale, teamSlug string) ([]byte, error) {
+	seasonSlug, err := s.CurrentSeasonSlug(ctx, sportSlug, leagueSlug)
+	if err != nil {
+		return nil, err
+	}
 	detail, err := s.GetLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug)
 	if err != nil {
 		return nil, err

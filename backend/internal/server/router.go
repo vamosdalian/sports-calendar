@@ -97,7 +97,12 @@ func NewRouter(logger *logrus.Logger, svc *service.Service, limiter *rate.Limite
 	spider.Use(adminAuthMiddleware(svc))
 	spider.Any("/*path", handler.proxySpider)
 
-	router.GET("/ics/:sport/:league/:season/matches.ics", handler.getSeasonICS)
+	// The evergreen feed is the only shape the site hands out now. The
+	// season-scoped route is kept solely so subscriptions saved before the
+	// change keep working -- it serves the current season too, and is meant to
+	// be deleted once analytics show the legacy shape has drained.
+	router.GET("/ics/:sport/:league/matches.ics", handler.getLeagueICS)
+	router.GET("/ics/:sport/:league/:season/matches.ics", handler.getLeagueICS)
 
 	return router
 }
@@ -150,16 +155,23 @@ func (h *Handler) getLeagueSeason(c *gin.Context) {
 	c.JSON(http.StatusOK, localizeSeasonDetail(payload, normalizeLocale(c.Query("lang"))))
 }
 
-func (h *Handler) getSeasonICS(c *gin.Context) {
+// getLeagueICS serves a league's current-season feed. It backs both the
+// evergreen route and the legacy season-scoped one, and the season segment of
+// the legacy URL is deliberately ignored rather than honoured: a client that
+// subscribed to last season must start receiving this season's fixtures without
+// touching anything, which is the whole point of the change. The segment is
+// still read for analytics, to measure how much traffic the legacy shape has
+// left before it is removed.
+func (h *Handler) getLeagueICS(c *gin.Context) {
 	locale := normalizeLocale(c.Query("lang"))
 	teamSlug := c.Query("team")
-	content, err := h.service.BuildSeasonICS(c.Request.Context(), c.Param("sport"), c.Param("league"), c.Param("season"), locale, teamSlug)
+	content, err := h.service.BuildLeagueICS(c.Request.Context(), c.Param("sport"), c.Param("league"), locale, teamSlug)
 	if err != nil {
 		if err == service.ErrNotFound {
 			// Recorded too: a rising 404 count on a feed means subscribers are
 			// still polling a URL that no longer resolves.
 			h.recordICSFetch(c, teamSlug, locale, http.StatusNotFound)
-			httputil.JSONError(c, http.StatusNotFound, "not_found", "season feed not found")
+			httputil.JSONError(c, http.StatusNotFound, "not_found", "league feed not found")
 			return
 		}
 		h.recordICSFetch(c, teamSlug, locale, http.StatusInternalServerError)
@@ -170,9 +182,11 @@ func (h *Handler) getSeasonICS(c *gin.Context) {
 
 	c.Header("Content-Type", ical.MIMEType+"; charset=utf-8")
 	c.Header("Cache-Control", "public, s-maxage=900, stale-while-revalidate=3600")
-	filename := fmt.Sprintf("%s-%s.ics", c.Param("league"), c.Param("season"))
+	// No season in the filename: it would go stale in the subscriber's client
+	// the moment the feed rolls over to the next season.
+	filename := fmt.Sprintf("%s.ics", c.Param("league"))
 	if teamSlug != "" {
-		filename = fmt.Sprintf("%s-%s-%s.ics", c.Param("league"), c.Param("season"), teamSlug)
+		filename = fmt.Sprintf("%s-%s.ics", c.Param("league"), teamSlug)
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", filename))
 	c.Data(http.StatusOK, ical.MIMEType+"; charset=utf-8", content)
@@ -204,6 +218,12 @@ func (h *Handler) getICSAnalytics(c *gin.Context) {
 
 // recordICSFetch queues one feed pull for analytics. It never blocks and never
 // fails the response.
+//
+// SeasonSlug records the season segment the *client asked for*, not the season
+// that was served -- the served one is always the current season and can be
+// derived. Empty therefore means the caller is on the evergreen URL, and any
+// non-empty value means it is still replaying a legacy season-scoped one, which
+// is how the migration is tracked to the point where that route can be dropped.
 func (h *Handler) recordICSFetch(c *gin.Context, teamSlug, locale string, status int) {
 	if h.recorder == nil {
 		return

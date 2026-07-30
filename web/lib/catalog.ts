@@ -442,18 +442,22 @@ export function formatMatchLocation(match: Match) {
   return [match.venue, match.city, match.country].filter(Boolean).join(", ");
 }
 
-type SeasonSubscriptionUrlOptions = {
+type LeagueSubscriptionUrlOptions = {
   locale?: Locale;
   teamSlug?: string;
 };
 
-export function getSeasonFeedUrl(
+// Feed URLs carry no season on purpose. A subscription is added to a calendar
+// client once and then never revisited, so a season-pinned URL quietly stops
+// delivering fixtures the day that season ends. The backend resolves the
+// current season per request instead, which makes one subscription last across
+// season rollovers.
+export function getLeagueFeedUrl(
   sportSlug: string,
   leagueSlug: string,
-  seasonSlug: string,
-  options: SeasonSubscriptionUrlOptions = {},
+  options: LeagueSubscriptionUrlOptions = {},
 ) {
-  const icsUrl = `${publicApiBaseUrl}/ics/${encodeURIComponent(sportSlug)}/${encodeURIComponent(leagueSlug)}/${encodeURIComponent(seasonSlug)}/matches.ics`;
+  const icsUrl = `${publicApiBaseUrl}/ics/${encodeURIComponent(sportSlug)}/${encodeURIComponent(leagueSlug)}/matches.ics`;
   const query = new URLSearchParams();
   if (options.locale) {
     query.set("lang", options.locale);
@@ -466,13 +470,12 @@ export function getSeasonFeedUrl(
   return queryString ? `${icsUrl}?${queryString}` : icsUrl;
 }
 
-export function getSeasonSubscriptionUrl(
+export function getLeagueSubscriptionUrl(
   sportSlug: string,
   leagueSlug: string,
-  seasonSlug: string,
-  options: SeasonSubscriptionUrlOptions = {},
+  options: LeagueSubscriptionUrlOptions = {},
 ) {
-  return getSeasonFeedUrl(sportSlug, leagueSlug, seasonSlug, options).replace(/^https?:\/\//, "webcal://");
+  return getLeagueFeedUrl(sportSlug, leagueSlug, options).replace(/^https?:\/\//, "webcal://");
 }
 
 function resolveDefaultSeason(

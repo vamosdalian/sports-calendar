@@ -1209,7 +1209,7 @@ func TestICSFeedByTeam(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	if got := recorder.Header().Get("Content-Disposition"); !strings.Contains(got, "csl-2026-beijing-guoan.ics") {
+	if got := recorder.Header().Get("Content-Disposition"); !strings.Contains(got, "csl-beijing-guoan.ics") {
 		t.Fatalf("expected team-specific filename, got %q", got)
 	}
 	if body := recorder.Body.String(); !strings.Contains(body, "csl-2026-r1-guoan-shenhua@sports-calendar.com") || strings.Contains(body, "csl-2026-r1-three-towns-haifa@sports-calendar.com") {
@@ -1252,7 +1252,7 @@ func TestICSFeedByLocaleAndTeam(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	if got := recorder.Header().Get("Content-Disposition"); !strings.Contains(got, "csl-2026-beijing-guoan.ics") {
+	if got := recorder.Header().Get("Content-Disposition"); !strings.Contains(got, "csl-beijing-guoan.ics") {
 		t.Fatalf("expected team-specific filename, got %q", got)
 	}
 	body := recorder.Body.String()
@@ -2134,5 +2134,55 @@ func TestAuthRegisterOptionsPreflight(t *testing.T) {
 	}
 	if got := recorder.Header().Get("Access-Control-Allow-Headers"); got == "" {
 		t.Fatalf("expected allow headers header")
+	}
+}
+
+func TestICSFeedEvergreenURLServesCurrentSeason(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/matches.ics", nil)
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "csl-2026-r1-guoan-shenhua@sports-calendar.com") {
+		t.Fatalf("expected the current season's fixtures body=%s", body)
+	}
+	// A season in the filename would go stale in the client at rollover.
+	if got := recorder.Header().Get("Content-Disposition"); !strings.Contains(got, "filename=csl.ics") {
+		t.Fatalf("expected season-less filename, got %q", got)
+	}
+}
+
+// The migration guarantee: a client that subscribed to a season-scoped URL must
+// start receiving the current season without re-subscribing. The fake
+// repository only knows season 2026, so honouring the requested "2025" segment
+// would surface here as a 404 rather than as silently stale content.
+func TestICSFeedLegacySeasonURLServesCurrentSeason(t *testing.T) {
+	router, _, _ := testRouter(t)
+
+	legacy := httptest.NewRecorder()
+	router.ServeHTTP(legacy, httptest.NewRequest(http.MethodGet, "/ics/football/csl/2025/matches.ics", nil))
+	if legacy.Code != http.StatusOK {
+		t.Fatalf("legacy season URL should serve the current season, got %d body=%s", legacy.Code, legacy.Body.String())
+	}
+
+	evergreen := httptest.NewRecorder()
+	router.ServeHTTP(evergreen, httptest.NewRequest(http.MethodGet, "/ics/football/csl/matches.ics", nil))
+
+	if legacy.Body.String() != evergreen.Body.String() {
+		t.Fatalf("legacy and evergreen feeds must be byte-identical\nlegacy=%s\nevergreen=%s", legacy.Body.String(), evergreen.Body.String())
+	}
+}
+
+func TestICSFeedUnknownLeagueStill404s(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ics/football/no-such-league/matches.ics", nil))
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for an unknown league, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
