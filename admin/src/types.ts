@@ -62,22 +62,14 @@ export type SportsResponse = {
 	updatedAt: string
 }
 
-export type ExternalSportOption = {
-	id: number
-	name: string
-	suggestedSlug: string
-}
-
-export type ExternalSportsResponse = {
-	items: ExternalSportOption[]
-}
-
 export type LeagueItem = {
 	id: number
 	sportSlug: string
 	slug: string
 	name: LocalizedText
 	show: boolean
+	provider: string
+	externalRef: string
 	syncInterval: string
 	calendarDescription: LocalizedText
 	dataSourceNote: LocalizedText
@@ -113,30 +105,6 @@ export type AdminSeasonsResponse = {
 	updatedAt: string
 }
 
-export type ExternalLeagueOption = {
-	id: number
-	name: string
-	sport: string
-	suggestedSlug: string
-}
-
-export type ExternalLeaguesResponse = {
-	sportSlug: string
-	items: ExternalLeagueOption[]
-}
-
-export type ExternalLeagueLookup = {
-	id: number
-	name: string
-	sport: string
-	country: string
-	currentSeason: string
-	suggestedSlug: string
-	calendarDescription: string
-	dataSourceNote: string
-	syncInterval: string
-}
-
 export type SeasonReference = {
 	slug: string
 	label: string
@@ -147,20 +115,6 @@ export type LeagueSeasonsResponse = {
 	leagueSlug: string
 	seasons: SeasonReference[]
 	updatedAt: string
-}
-
-export type ExternalSeasonOption = {
-	seasonValue: string
-	label: string
-	suggestedSlug: string
-	startYear: number
-	endYear: number
-}
-
-export type ExternalSeasonsResponse = {
-	sportSlug: string
-	leagueSlug: string
-	items: ExternalSeasonOption[]
 }
 
 export type TeamRef = {

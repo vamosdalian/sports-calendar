@@ -55,6 +55,8 @@ type AdminLeagueItem struct {
 	Slug                string        `json:"slug"`
 	Name                LocalizedText `json:"name"`
 	Show                bool          `json:"show"`
+	Provider            string        `json:"provider"`
+	ExternalRef         string        `json:"externalRef"`
 	SyncInterval        string        `json:"syncInterval"`
 	CalendarDescription LocalizedText `json:"calendarDescription"`
 	DataSourceNote      LocalizedText `json:"dataSourceNote"`

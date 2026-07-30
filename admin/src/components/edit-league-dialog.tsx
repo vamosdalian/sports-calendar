@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { entriesFromLocalizedText, entriesToLocalizedText, type LocalizedFieldEntry } from '@/lib/localized-fields'
 import type { LeagueItem } from '@/types'
@@ -23,6 +24,8 @@ type LeagueFormState = {
 	id: string
 	slug: string
 	show: boolean
+	provider: string
+	externalRef: string
 	syncInterval: string
 	nameEntries: LocalizedFieldEntry[]
 	calendarDescriptionEntries: LocalizedFieldEntry[]
@@ -35,6 +38,8 @@ function mapLeagueToForm(league: LeagueItem, locales: Parameters<typeof entriesF
 		id: String(league.id),
 		slug: league.slug,
 		show: league.show,
+		provider: league.provider || 'spider',
+		externalRef: league.externalRef,
 		syncInterval: league.syncInterval,
 		nameEntries: entriesFromLocalizedText(league.name, locales),
 		calendarDescriptionEntries: entriesFromLocalizedText(league.calendarDescription, locales),
@@ -50,6 +55,8 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 		id: '',
 		slug: '',
 		show: false,
+		provider: 'spider',
+		externalRef: '',
 		syncInterval: '@daily',
 		nameEntries: [{ locale: 'en', value: '' }],
 		calendarDescriptionEntries: [],
@@ -79,6 +86,8 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 				slug: form.slug,
 				name: entriesToLocalizedText(form.nameEntries),
 				show: form.show,
+				provider: form.provider,
+				externalRef: form.externalRef,
 				syncInterval: form.syncInterval,
 				calendarDescription: entriesToLocalizedText(form.calendarDescriptionEntries),
 				dataSourceNote: entriesToLocalizedText(form.dataSourceNoteEntries),
@@ -97,9 +106,30 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 		<Dialog open={open} onOpenChange={onOpenChange} title="Edit league" description="Update the local league fields that drive sync and calendar presentation.">
 			<form className="space-y-5" onSubmit={handleSubmit}>
 				<div className="grid gap-4 md:grid-cols-3">
-					<div><Label htmlFor="edit-league-id">TheSportsDB id</Label><Input disabled id="edit-league-id" value={form.id} /></div>
+					<div><Label htmlFor="edit-league-id">League id</Label><Input disabled id="edit-league-id" value={form.id} /></div>
 					<div><Label htmlFor="edit-league-slug">Slug</Label><Input id="edit-league-slug" required value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} /></div>
 					<div><Label htmlFor="edit-league-sync">Sync interval</Label><Input id="edit-league-sync" required value={form.syncInterval} onChange={(event) => setForm((current) => ({ ...current, syncInterval: event.target.value }))} /></div>
+				</div>
+				<div className="grid gap-4 md:grid-cols-2">
+					<div>
+						<Label htmlFor="edit-league-provider">Data source</Label>
+						<Select value={form.provider} onValueChange={(provider) => setForm((current) => ({ ...current, provider }))}>
+							<SelectTrigger id="edit-league-provider">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									<SelectItem value="spider">spider (Transfermarkt crawler)</SelectItem>
+									<SelectItem value="thesportsdb">thesportsdb (retired, not synced)</SelectItem>
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</div>
+					<div>
+						<Label htmlFor="edit-league-external-ref">External ref</Label>
+						<Input id="edit-league-external-ref" value={form.externalRef} required={form.provider === 'spider'} onChange={(event) => setForm((current) => ({ ...current, externalRef: event.target.value }))} />
+						<p className="mt-1 text-sm text-muted">Transfermarkt competition code, e.g. <code>CSL</code> or <code>CSL@-1</code>. Required for spider.</p>
+					</div>
 				</div>
 				<div className="flex items-start gap-3 rounded-2xl border border-line/70 bg-shell/55 px-4 py-3">
 					<Checkbox id="edit-league-show" checked={form.show} onCheckedChange={(checked) => setForm((current) => ({ ...current, show: checked === true }))} />

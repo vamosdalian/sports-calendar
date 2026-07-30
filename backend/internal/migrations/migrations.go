@@ -211,6 +211,19 @@ var allMigrations = []migration{
 			`CREATE INDEX IF NOT EXISTS ics_daily_stats_day_idx ON ics_daily_stats (day)`,
 		},
 	},
+	{
+		version: 9,
+		name:    "league_provider_default_spider",
+		statements: []string{
+			// TheSportsDB has been retired as a data source: the local spider is
+			// the only provider that still syncs. Flip the column default so a
+			// fresh database (or any future insert that omits provider) lands on
+			// 'spider' rather than the retired source. Existing rows are left
+			// untouched -- leagues kept only for their finished fixtures (e.g. the
+			// World Cup) stay 'thesportsdb' and are simply never polled.
+			`ALTER TABLE leagues ALTER COLUMN provider SET DEFAULT 'spider'`,
+		},
+	},
 }
 
 func Run(ctx context.Context, pool *pgxpool.Pool, logger *logrus.Logger) error {

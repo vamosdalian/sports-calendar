@@ -13,26 +13,21 @@ database:
   password: CHANGE_ME_DB_PASSWORD
   sslmode: disable
 
-theSportsDB:
-  baseURL: https://www.thesportsdb.com
-  apiKey: CHANGE_ME_THESPORTSDB_KEY
-  timeoutSeconds: 15
-
-refreshExecutor:
-  qps: 1
-
 adminAuth:
   secret: CHANGE_ME_LONG_RANDOM_SECRET
   tokenTTLMinutes: 30
 
-# Admin-only reverse proxy to the sports-spider (Transfermarkt crawler) backend.
-# The crawler is not exposed publicly; the admin "Crawler" page reaches it through
-# /api/spider/* which reuses admin auth. Leave upstreamURL empty to disable.
+# The sports-spider (Transfermarkt crawler) backend. Since TheSportsDB was
+# retired this is the only sync data source, so upstreamURL is REQUIRED -- the
+# API refuses to start without it. It is also the target of the admin-only
+# reverse proxy: the crawler is not exposed publicly; the admin "Crawler" page
+# reaches it through /api/spider/* which reuses admin auth.
 # On the server the spider app container is reachable on the shared docker network
 # (sports-calendar-net) as http://tm_app:8000. For local dev use the host port,
-# e.g. http://localhost:8001.
+# e.g. http://localhost:8001. timeoutSeconds bounds each sync HTTP call (default 30).
 spider:
-  upstreamURL: ""
+  upstreamURL: http://tm_app:8000
+  timeoutSeconds: 30
 
 # Public web app address, used when a calendar has to send a subscriber back to
 # the site — e.g. a team feed whose slug went stale links here to re-subscribe.

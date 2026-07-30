@@ -1487,7 +1487,7 @@ func TestDeleteAdminLocale(t *testing.T) {
 func TestCreateLeagueRequiresExistingSport(t *testing.T) {
 	router, _, manager := testRouter(t)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/admin/leagues", bytes.NewBufferString(`{"id":4328,"sportSlug":"basketball","slug":"nba","name":{"en":"NBA"}}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/leagues", bytes.NewBufferString(`{"id":4328,"sportSlug":"basketball","slug":"nba","name":{"en":"NBA"},"externalRef":"NBA"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", adminAuthorization(t, manager, "admin@example.com"))
 

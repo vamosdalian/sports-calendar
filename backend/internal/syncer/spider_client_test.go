@@ -338,36 +338,3 @@ func TestSpiderFetcherRequiresExternalRef(t *testing.T) {
 	}
 }
 
-type stubFetcher struct {
-	name   string
-	called bool
-}
-
-func (s *stubFetcher) FetchLeagueSnapshot(context.Context, domain.LeagueSyncTarget) (domain.LeagueSnapshot, error) {
-	s.called = true
-	return domain.LeagueSnapshot{DataSourceNote: domain.LocalizedText{"en": s.name}}, nil
-}
-
-func TestRoutingFetcherDispatch(t *testing.T) {
-	def := &stubFetcher{name: "default"}
-	spider := &stubFetcher{name: "spider"}
-	router, err := NewRoutingFetcher(def, map[string]SnapshotFetcher{ProviderSpider: spider})
-	if err != nil {
-		t.Fatalf("new routing fetcher: %v", err)
-	}
-
-	if _, err := router.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{Provider: ProviderSpider}); err != nil {
-		t.Fatalf("route spider: %v", err)
-	}
-	if !spider.called || def.called {
-		t.Fatalf("expected spider fetcher to be used")
-	}
-
-	def.called, spider.called = false, false
-	if _, err := router.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{Provider: "thesportsdb"}); err != nil {
-		t.Fatalf("route default: %v", err)
-	}
-	if !def.called || spider.called {
-		t.Fatalf("expected default fetcher to be used")
-	}
-}

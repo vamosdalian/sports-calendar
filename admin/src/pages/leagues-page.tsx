@@ -97,11 +97,17 @@ export function LeaguesPage() {
 							{ id: 'slug', header: 'Slug', cell: (league) => <span className="font-mono text-xs">{league.slug}</span> },
 							{ id: 'name', header: 'Name', cell: (league) => pickLocalizedPreview(league.name, previewLocale) },
 							{ id: 'show', header: 'Public', cell: (league) => <Badge variant={league.show ? 'secondary' : 'outline'}>{league.show ? 'Shown' : 'Hidden'}</Badge> },
+							{ id: 'source', header: 'Source', cell: (league) => (
+								<span className="flex items-center gap-2">
+									<Badge variant={league.provider === 'spider' ? 'secondary' : 'outline'}>{league.provider || 'spider'}</Badge>
+									{league.externalRef ? <span className="font-mono text-xs text-muted-foreground">{league.externalRef}</span> : null}
+								</span>
+							) },
 							{ id: 'syncInterval', header: 'Sync', cell: (league) => league.syncInterval, cellClassName: 'text-muted-foreground' },
 						]}
 						rows={leagues}
 						getRowId={(league) => league.slug}
-						getSearchText={(league) => `${league.slug} ${pickLocalizedPreview(league.name, previewLocale)} ${league.syncInterval} ${league.show ? 'shown visible' : 'hidden draft'}`}
+						getSearchText={(league) => `${league.slug} ${pickLocalizedPreview(league.name, previewLocale)} ${league.provider} ${league.externalRef} ${league.syncInterval} ${league.show ? 'shown visible' : 'hidden draft'}`}
 						searchPlaceholder="Filter leagues..."
 						emptyMessage="No leagues found."
 						onRowClick={(league) => {

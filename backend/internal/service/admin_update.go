@@ -59,6 +59,8 @@ func (s *Service) UpdateLeague(ctx context.Context, input domain.UpdateLeagueInp
 	input.CurrentSlug = normalizeSlug(input.CurrentSlug)
 	input.Slug = normalizeSlug(input.Slug)
 	input.Name = trimLocalizedText(input.Name)
+	input.Provider = normalizeLeagueProvider(input.Provider)
+	input.ExternalRef = strings.TrimSpace(input.ExternalRef)
 	input.SyncInterval = strings.TrimSpace(input.SyncInterval)
 	input.CalendarDescription = trimLocalizedText(input.CalendarDescription)
 	input.DataSourceNote = trimLocalizedText(input.DataSourceNote)
@@ -73,6 +75,9 @@ func (s *Service) UpdateLeague(ctx context.Context, input domain.UpdateLeagueInp
 		return LeagueRecord{}, invalidArgument("league slug is required")
 	}
 	if err := validateLocalizedText(input.Name, "league name"); err != nil {
+		return LeagueRecord{}, err
+	}
+	if err := validateLeagueProviderRef(input.Provider, input.ExternalRef); err != nil {
 		return LeagueRecord{}, err
 	}
 	if input.SyncInterval == "" {

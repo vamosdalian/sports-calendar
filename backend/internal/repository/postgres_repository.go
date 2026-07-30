@@ -161,18 +161,22 @@ func (r *PostgresRepository) CreateLeague(ctx context.Context, input domain.Crea
 			slug,
 			name,
 			show,
+			provider,
+			external_ref,
 			sync_interval,
 			calendar_description,
 			data_source_note,
 			notes
 		)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb)
-		RETURNING id, slug, name, show, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
-	`, input.ID, sportID, input.Slug, encodeLocalizedText(input.Name), input.Show, input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
+		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb)
+		RETURNING id, slug, name, show, provider, external_ref, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
+	`, input.ID, sportID, input.Slug, encodeLocalizedText(input.Name), input.Show, input.Provider, input.ExternalRef, input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
 		&record.ID,
 		&record.Slug,
 		&nameRaw,
 		&record.Show,
+		&record.Provider,
+		&record.ExternalRef,
 		&record.SyncInterval,
 		&calendarDescriptionRaw,
 		&dataSourceNoteRaw,
@@ -213,18 +217,22 @@ func (r *PostgresRepository) UpdateLeague(ctx context.Context, input domain.Upda
 		SET slug = $3,
 			name = $4::jsonb,
 			show = $5,
-			sync_interval = $6,
-			calendar_description = $7::jsonb,
-			data_source_note = $8::jsonb,
-			notes = $9::jsonb,
+			provider = $6,
+			external_ref = $7,
+			sync_interval = $8,
+			calendar_description = $9::jsonb,
+			data_source_note = $10::jsonb,
+			notes = $11::jsonb,
 			updated_at = NOW()
 		WHERE sport_id = $1 AND slug = $2
-		RETURNING id, slug, name, show, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
-	`, sportID, input.CurrentSlug, input.Slug, encodeLocalizedText(input.Name), input.Show, input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
+		RETURNING id, slug, name, show, provider, external_ref, sync_interval, calendar_description, data_source_note, notes, created_at, updated_at
+	`, sportID, input.CurrentSlug, input.Slug, encodeLocalizedText(input.Name), input.Show, input.Provider, input.ExternalRef, input.SyncInterval, encodeLocalizedText(input.CalendarDescription), encodeLocalizedText(input.DataSourceNote), encodeLocalizedText(input.Notes)).Scan(
 		&record.ID,
 		&record.Slug,
 		&nameRaw,
 		&record.Show,
+		&record.Provider,
+		&record.ExternalRef,
 		&record.SyncInterval,
 		&calendarDescriptionRaw,
 		&dataSourceNoteRaw,
@@ -918,6 +926,13 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 }
 
 func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.LeagueSyncTarget, error) {
+	// Only spider-backed leagues are synced. TheSportsDB has been retired as a
+	// data source, so a league still marked provider='thesportsdb' (the World
+	// Cup, kept for its finished fixtures) must not be polled -- doing so only
+	// produces hourly upstream errors for data that will never change again.
+	// This is deliberately a provider filter rather than a show filter: a next
+	// season staged with show=false is still spider-backed and must keep syncing
+	// so its fixtures are ready before it goes live.
 	rows, err := r.pool.Query(ctx, `
 		SELECT l.id, l.slug, l.sync_interval, l.provider, l.external_ref, se.id, se.slug, se.label, se.start_year
 		FROM leagues l
@@ -928,6 +943,7 @@ func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.Leag
 			ORDER BY start_year DESC, end_year DESC, slug DESC
 			LIMIT 1
 		) se ON TRUE
+		WHERE l.provider = 'spider'
 		ORDER BY l.slug ASC
 	`)
 	if err != nil {
