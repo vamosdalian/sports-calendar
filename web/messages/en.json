@@ -59,6 +59,7 @@
   "homeMatchesLabel": "Home",
   "awayMatchesLabel": "Away",
   "otherTeamsLabel": "Other teams in {leagueName}",
+  "teamsIndexLabel": "Fixtures by team",
   "backToLeagueLabel": "All {leagueName} fixtures",
   "teamMatchCountLabel": "{count} matches",
   "nextMatchLabel": "Next match"

@@ -6,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 
 import { buildTeamOptions, formatMatchLocation, getCurrentSeasonSlug, getLeagueFeedUrl, getLeagueSeasons, getLeagues, getLeagueSubscriptionUrl, getSeasonPageData, matchLabel, type Match, type Team } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
-import { locales, siteUrl, type Locale, toPath, toTutorialPath } from "../lib/site";
+import { locales, siteUrl, type Locale, toPath, toTeamPath, toTutorialPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
 import { SeasonCalendarContent } from "./season-calendar-content";
@@ -134,6 +134,31 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
             teamOptions={teamOptions}
             weekLabels={weekLabels}
           />
+
+          {/*
+            Real anchors to every team page, which the team picker above cannot
+            replace: that is a <select> that navigates on change, so a crawler
+            sees no links and the team pages end up reachable only through the
+            sitemap. Being in the sitemap gets them discovered, not ranked —
+            without an internal link they receive nothing from the pages above
+            them. The team name doubling as anchor text is the point.
+          */}
+          {teamOptions.length > 0 ? (
+            <InfoSection title={t("teamsIndexLabel")}>
+              <ul className="flex flex-wrap gap-2 text-sm">
+                {teamOptions.map((team) => (
+                  <li key={team.slug}>
+                    <Link
+                      className="inline-flex rounded-full bg-white/45 px-3 py-1.5 text-ink/80 transition hover:bg-white/70"
+                      href={toTeamPath(locale, sportSlug, leagueSlug, data.season.slug, team.slug)}
+                    >
+                      {team.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </InfoSection>
+          ) : null}
 
           <InfoSection title={t("leagueDescriptionLabel")}>
             <p className="text-base leading-7 text-ink/75">{data.season.calendarDescription}</p>
