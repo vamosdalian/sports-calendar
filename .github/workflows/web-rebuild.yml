@@ -1,10 +1,20 @@
-name: Rebuild Web (data refresh)
+name: Deploy Web
 
-# The site is a static export: fixtures, team names and venues are baked into
-# the HTML at build time. Cloudflare's Git integration only builds when master
-# moves, so a database-only change (a new translation, a rescheduled match)
-# would never reach the site without this job.
+# The one and only way the public site ships. Cloudflare's own Git integration
+# is switched off deliberately: its build and deploy commands lived in the
+# dashboard where the repo could not see them, and twice a rename in
+# web/package.json broke the deploy silently — a failed build produces no
+# deployment, so "nothing shipped" and "nothing was triggered" looked identical
+# and only a human reading dashboard logs caught it. Everything is here now.
+#
+# Two triggers, because the site is a static export — fixtures and team names
+# are baked into the HTML at build time — so it goes stale two different ways:
+#   * code changes, handled by the push trigger;
+#   * database changes (a backfilled translation, a rescheduled match), which
+#     move no commits at all and would otherwise never reach the site.
 on:
+  push:
+    branches: [master]
   schedule:
     # 02:23 UTC. Two things have to have happened before a rebuild is worth
     # doing, and both are why this is not an earlier or rounder time:
@@ -23,7 +33,9 @@ permissions:
 
 concurrency:
   # Never let two deploys push assets to the same Worker at once. Queue instead
-  # of cancelling — a half-uploaded deploy is worse than a late one.
+  # of cancelling — a half-uploaded deploy is worse than a late one. This is
+  # airtight only because Cloudflare's Git builds are off; while both paths were
+  # live nothing could stop them deploying on top of each other.
   group: web-deploy
   cancel-in-progress: false
 

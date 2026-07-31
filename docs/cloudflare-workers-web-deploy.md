@@ -174,29 +174,29 @@ npm run deploy
 
 如果只保留一个主域名，建议把另一个做 301 跳转。
 
-## 在 Cloudflare Dashboard / Workers Builds 上部署
+## 线上部署走 GitHub Actions（唯一路径）
 
-如果你不想本地手工部署，也可以在 Cloudflare Dashboard 里把 GitHub 仓库接进去。
+生产部署由 [`.github/workflows/web-rebuild.yml`](../.github/workflows/web-rebuild.yml)
+负责，三个触发点：
 
-推荐配置：
+1. `push` 到 `master`——代码改动合并即上线；
+2. 每天 `23 2 * * *`（UTC）——站点是静态导出，赛程和队名在构建时固化，
+   补译名、改期这类**只动数据库、不产生 commit** 的变更靠这趟车上线；
+3. `workflow_dispatch`——等不及每天那趟车时手动打一炮：
+   `gh workflow run web-rebuild.yml`。
 
-1. Root directory: `web`
-2. Build command: `npm run deploy`
-3. Production branch: 你的主分支
+时间点不能随便挪：后端各联赛 `sync_interval` 是 `@daily`、容器时区为 UTC
+（即 00:00 UTC 同步），公开 API 又压着 30 分钟边缘缓存，早于 02:23 构建会把
+前一天的数据烤进 HTML。
 
-更稳妥的做法是把构建和部署拆开：
+**Cloudflare 自带的 Git 集成（Workers Builds）已刻意关闭，不要重新打开。**
+它的 build / deploy 命令存在 Dashboard 里、仓库看不见也改不了，`web/package.json`
+改个 script 名就会让部署静默失败——而失败的构建不产生 deployment，所以
+「没上线」和「没触发」长得一模一样，只能靠人翻控制台日志发现。这个坑踩过两次。
 
-1. Build command: `npm run build:worker`
-2. Deploy command: `npx opennextjs-cloudflare deploy`
-
-注意：
-
-1. `npm run build` 只会执行 Next.js 自己的构建，不会生成 OpenNext 需要的 `.open-next/` 产物。
-2. `opennextjs-cloudflare deploy` 依赖前一步已经存在 `.open-next` 编译结果，否则就会报 `Could not find compiled Open Next config, did you run the build command?`。
-
-但如果直接使用 Workers 的 Next.js 自动识别能力，通常也可以按当前 `package.json` 脚本执行。
-
-无论用哪种方式，Dashboard 里都必须配置上面的两个环境变量。
+Actions 需要仓库 secrets `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`。
+注意本文开头提到的 `NEXT_PUBLIC_*` 变量走的是 `web/.env.production`（随仓库提交，
+构建时内联），**不是** Dashboard 里的 Worker 环境变量。
 
 ## 部署时的一个关键点
 
