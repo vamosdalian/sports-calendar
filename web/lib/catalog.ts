@@ -235,6 +235,23 @@ export async function getLeagueSeasons(
   };
 }
 
+/**
+ * The season a league's URLs should fall back to, or null when the league
+ * itself is unknown or has no visible season.
+ *
+ * The seasons endpoint lists only `show=true` seasons, newest first, and is the
+ * same query the backend resolves the evergreen ICS feed against — so this
+ * cannot disagree with what a feed serves.
+ */
+export async function getCurrentSeasonSlug(
+  sportSlug: string,
+  leagueSlug: string,
+  locale: Locale,
+): Promise<string | null> {
+  const payload = await getLeagueSeasons(sportSlug, leagueSlug, locale);
+  return payload?.seasons[0]?.slug ?? null;
+}
+
 export async function getSeasonPageData(
   sportSlug: string,
   leagueSlug: string,
@@ -363,33 +380,59 @@ function matchIncludesTeam(match: Match, teamSlug: string) {
   return match.homeTeam?.slug === teamSlug || match.awayTeam?.slug === teamSlug;
 }
 
+export type SitemapSeasonRoute = {
+  sport: string;
+  league: string;
+  season: string;
+  /** The season payload's `updatedAt`, absent when the payload could not be read. */
+  updatedAt?: string;
+  /** Team slugs appearing in this season's fixtures. */
+  teams: string[];
+};
+
 /**
- * Every team page route, for the sitemap.
+ * Every season and team page route, for the sitemap.
+ *
+ * Season payloads are fetched once and in parallel here on purpose. The
+ * sitemap needs two things out of each payload — a `lastModified` date and the
+ * season's teams — and fetching it separately for each, sequentially, is what
+ * made this exceed the Worker's budget: the team pass alone took ~11s and the
+ * whole route silently degraded to seasons only, leaving a few hundred team
+ * pages undiscoverable.
  *
  * Deliberately not used by generateStaticParams: prerendering a few hundred
  * team pages at build time would fetch every season payload again and risks
  * blowing the Cloudflare build budget. The pages are generated on demand and
  * then held in the ISR cache; the sitemap is what gets them discovered.
  */
-export async function getAllTeamRoutes() {
-  try {
-    const seasonRoutes = await getAllSeasonRoutes();
-    const routes: Array<{ sport: string; league: string; season: string; team: string }> = [];
+export async function getSitemapRoutes(): Promise<SitemapSeasonRoute[]> {
+  const seasonRoutes = await getAllSeasonRoutes();
 
-    for (const route of seasonRoutes) {
-      const season = await getSeasonPageData(route.sport, route.league, route.season, "en");
-      if (!season) {
-        continue;
-      }
-      for (const team of buildTeamOptions(season.season.matches, "en")) {
-        routes.push({ ...route, team: team.slug });
-      }
-    }
+  return Promise.all(
+    seasonRoutes.map(async (route) => {
+      try {
+        const season = await getSeasonPageData(route.sport, route.league, route.season, "en");
+        if (!season) {
+          return { ...route, teams: [] };
+        }
 
-    return routes;
-  } catch {
-    return [];
-  }
+        return {
+          ...route,
+          updatedAt: season.updatedAt,
+          teams: buildTeamOptions(season.season.matches, "en").map((team) => team.slug),
+        };
+      } catch (error) {
+        // Degrade per season rather than for the whole sitemap: one unreadable
+        // payload should cost that league's team pages, not every URL on the
+        // site. Logged because the previous silent catch hid exactly this.
+        console.error(
+          `sitemap: could not read season ${route.sport}/${route.league}/${route.season}`,
+          error,
+        );
+        return { ...route, teams: [] };
+      }
+    }),
+  );
 }
 
 export async function getAllSeasonRoutes() {
@@ -416,7 +459,8 @@ export async function getAllSeasonRoutes() {
     }
 
     return routes;
-  } catch {
+  } catch (error) {
+    console.error("catalog: could not list season routes", error);
     return [];
   }
 }

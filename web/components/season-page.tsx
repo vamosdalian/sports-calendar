@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { buildTeamOptions, formatMatchLocation, getLeagueFeedUrl, getLeagueSeasons, getLeagues, getLeagueSubscriptionUrl, getSeasonPageData, matchLabel, type Match, type Team } from "../lib/catalog";
+import { buildTeamOptions, formatMatchLocation, getCurrentSeasonSlug, getLeagueFeedUrl, getLeagueSeasons, getLeagues, getLeagueSubscriptionUrl, getSeasonPageData, matchLabel, type Match, type Team } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
 import { locales, siteUrl, type Locale, toPath, toTutorialPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
@@ -22,6 +22,16 @@ type SeasonPageProps = {
 export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: SeasonPageProps) {
   const data = await getSeasonPageData(sportSlug, leagueSlug, seasonSlug, locale);
   if (!data) {
+    // A season that stops resolving is usually one that was hidden once the
+    // next one opened, not a bad URL — and those pages are already indexed and
+    // linked. 404-ing them throws that away, so send them to the league's
+    // current season instead and let the redirect carry the ranking over.
+    // A league we do not know at all is a genuine 404.
+    const currentSeason = await getCurrentSeasonSlug(sportSlug, leagueSlug, locale);
+    if (currentSeason && currentSeason !== seasonSlug) {
+      permanentRedirect(toPath(locale, sportSlug, leagueSlug, currentSeason));
+    }
+
     notFound();
   }
 

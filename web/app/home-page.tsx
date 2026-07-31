@@ -3,14 +3,11 @@ import { getTranslations } from "next-intl/server";
 
 import { HomeDirectory } from "../components/home-directory";
 import { getLeagues } from "../lib/catalog";
-import { locales, siteUrl, type Locale, toPath } from "../lib/site";
+import { siteUrl, toAlternates, type Locale, toPath } from "../lib/site";
 
 export async function generateHomeMetadata(locale: Locale, canonicalPath: string): Promise<Metadata> {
   const t = await getTranslations({ locale });
   const directory = await getLeagues(locale);
-  const localePaths = Object.fromEntries(
-    locales.map((entry) => [entry, toPath(entry)]),
-  ) as Record<Locale, string>;
   const title = t("metaTitleHome");
   const description = t("metaDescriptionHome");
 
@@ -18,11 +15,10 @@ export async function generateHomeMetadata(locale: Locale, canonicalPath: string
     title,
     description,
     alternates: {
+      // The home page is the one place a locale-less URL answers without a
+      // redirect, so it keeps `/` as x-default instead of the `en` default.
+      ...toAlternates(locale, (entry) => toPath(entry), "/"),
       canonical: canonicalPath,
-      languages: {
-        "x-default": "/",
-        ...localePaths,
-      },
     },
     openGraph: {
       title,

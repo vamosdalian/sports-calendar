@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { TeamPage } from "../../../../../../../components/team-page";
 import { getTeamPageData } from "../../../../../../../lib/catalog";
 import { formatSeasonDisplay } from "../../../../../../../lib/season";
-import { isLocale, locales, type Locale, toTeamPath } from "../../../../../../../lib/site";
+import { isLocale, toAlternates, toTeamPath } from "../../../../../../../lib/site";
 
 export const revalidate = 3600;
 
@@ -50,21 +50,16 @@ export async function generateMetadata({
   // team, not as a filtered copy of the season page.
   const title = t("metaTitleTeam", { teamName, seasonLabel });
   const description = t("metaDescriptionTeam", { teamName, leagueName, seasonLabel });
-  const localePaths = Object.fromEntries(
-    locales.map((entry) => [entry, toTeamPath(entry, sport, league, season, team)]),
-  ) as Record<Locale, string>;
+  const alternates = toAlternates(lang, (entry) => toTeamPath(entry, sport, league, season, team));
 
   return {
     title,
     description,
-    alternates: {
-      canonical: localePaths[lang],
-      languages: localePaths,
-    },
+    alternates,
     openGraph: {
       title,
       description,
-      url: localePaths[lang],
+      url: alternates.canonical,
       siteName: "sports-calendar.com",
       type: "website",
       locale: lang,
