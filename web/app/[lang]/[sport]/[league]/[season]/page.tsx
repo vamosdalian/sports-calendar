@@ -7,8 +7,6 @@ import { getAllSeasonRoutes, getSeasonPageData } from "../../../../../lib/catalo
 import { formatSeasonDisplay } from "../../../../../lib/season";
 import { isLocale, locales, toAlternates, toPath } from "../../../../../lib/site";
 
-export const revalidate = 3600;
-
 export async function generateStaticParams() {
   const routes = await getAllSeasonRoutes();
   return routes.flatMap((route) => locales.map((lang) => ({ lang, ...route })));

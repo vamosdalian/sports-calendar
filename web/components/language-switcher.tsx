@@ -1,6 +1,6 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
-import { localeOptions, type Locale } from "../lib/site";
+import { localeCookieName, localeOptions, type Locale } from "../lib/site";
 
 type LanguageSwitcherProps = {
   localePaths?: Partial<Record<Locale, string>>;
@@ -28,8 +28,13 @@ export function LanguageSwitcher({ localePaths }: LanguageSwitcherProps) {
         className="h-9 appearance-none rounded-full border border-white/20 bg-white/10 px-4 pr-10 text-sm font-medium leading-5 text-white outline-none"
         value={selectedLocale}
         onChange={(event) => {
-          const target = safeLocalePaths[event.target.value as Locale];
+          const locale = event.target.value as Locale;
+          const target = safeLocalePaths[locale];
           if (target) {
+            // Remembers the choice for visitors who later land on `/`. The old
+            // middleware wrote this cookie server-side; a static export has no
+            // server, so the switcher writes it and `/` reads it on the client.
+            document.cookie = `${localeCookieName}=${locale};path=/;max-age=31536000;samesite=lax`;
             router.replace(target);
           }
         }}

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AnalyticsEvent, track } from "../lib/analytics";
 import { formatMatchLocation, matchLabel, type Match } from "../lib/catalog";
 import { toTeamPath, type Locale } from "../lib/site";
+import { useLiveMatchStatus } from "../lib/use-live-match-status";
 import { LocalizedMatchTime } from "./localized-match-time";
 import { LocalizedMonthCalendars } from "./localized-month-calendars";
 
@@ -23,6 +24,7 @@ type MatchGroup = {
 
 type SeasonCalendarContentProps = {
   allTeamsLabel: string;
+  apiBaseUrl: string;
   copySubscriptionLinkLabel: string;
   leagueCalendarLabel: string;
   locale: Locale;
@@ -43,11 +45,12 @@ type SeasonCalendarContentProps = {
 
 export function SeasonCalendarContent({
   allTeamsLabel,
+  apiBaseUrl,
   copySubscriptionLinkLabel,
   leagueCalendarLabel,
   leagueSlug,
   locale,
-  matches,
+  matches: prerenderedMatches,
   noMatchesLabel,
   pageTitle,
   seasonSlug,
@@ -67,6 +70,15 @@ export function SeasonCalendarContent({
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [search, setSearch] = useState("");
   const [selectedTeamSlug, setSelectedTeamSlug] = useState("");
+  // Kickoff times and opponents come from the build; scores and statuses are
+  // refreshed against the API once this mounts.
+  const matches = useLiveMatchStatus(prerenderedMatches, {
+    apiBaseUrl,
+    leagueSlug,
+    locale,
+    seasonSlug,
+    sportSlug,
+  });
   const filteredMatches = selectedTeamSlug
     ? matches.filter((match) => matchIncludesTeam(match, selectedTeamSlug))
     : matches;

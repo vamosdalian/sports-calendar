@@ -101,11 +101,82 @@ const apiBaseUrl = process.env.SPORTS_CALENDAR_API_BASE_URL ?? defaultApiBaseUrl
 const publicApiBaseUrl = process.env.SPORTS_CALENDAR_PUBLIC_API_BASE_URL ?? apiBaseUrl;
 const REVALIDATE_SECONDS = 3600;
 
+// Prerendering the whole site means a few hundred pages ask for data at once,
+// against a backend that rate-limits to 8 req/s and answers from Beijing over a
+// Cloudflare Tunnel. Left unbounded, that buries the tunnel and connections
+// start timing out — and because a single failed fetch aborts the entire
+// export, one slow moment costs the whole build. So requests queue here, and
+// transient failures are retried rather than being allowed to fail the build.
+// Two at a time, per worker. Next prerenders with 9 workers, so the real
+// ceiling is ~18 connections; at 4 apiece the build was hitting
+// UND_ERR_CONNECT_TIMEOUT on connection setup, not on the origin being slow.
+const MAX_CONCURRENT_REQUESTS = 2;
+// Five attempts backing off 1s/2s/4s/8s — about 15 seconds of patience per
+// request. The first version gave up after 3.5s, and a single `TypeError:
+// terminated` (the tunnel dropping a 134KB response mid-flight) was enough to
+// lose a whole league's team pages from the build.
+const MAX_ATTEMPTS = 5;
+const RETRY_BASE_DELAY_MS = 1000;
+
+let activeRequests = 0;
+const pendingRequests: Array<() => void> = [];
+
+async function withRequestSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+    await new Promise<void>((resolve) => pendingRequests.push(resolve));
+  }
+
+  activeRequests += 1;
+  try {
+    return await run();
+  } finally {
+    activeRequests -= 1;
+    pendingRequests.shift()?.();
+  }
+}
+
+async function apiFetch(requestUrl: string): Promise<Response> {
+  return withRequestSlot(async () => {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetch(requestUrl, {
+          next: { revalidate: REVALIDATE_SECONDS },
+        });
+
+        // A 5xx here is the backend restarting or the tunnel flapping, not an
+        // answer. 4xx is an answer — including the 404s callers rely on.
+        if (response.status < 500) {
+          return response;
+        }
+
+        lastError = new Error(`API request failed: ${response.status} (${requestUrl})`);
+      } catch (error) {
+        lastError = error;
+      }
+
+      if (attempt < MAX_ATTEMPTS) {
+        // Logged so a build that only just scraped through is visible rather
+        // than looking identical to a clean one.
+        console.warn(
+          `api: attempt ${attempt}/${MAX_ATTEMPTS} failed for ${requestUrl}: ${
+            lastError instanceof Error ? lastError.message : String(lastError)
+          }`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)));
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`API request failed after ${MAX_ATTEMPTS} attempts (${requestUrl})`);
+  });
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
   const requestUrl = `${apiBaseUrl}${path}`;
-  const response = await fetch(requestUrl, {
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
+  const response = await apiFetch(requestUrl);
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, requestUrl));
@@ -116,9 +187,7 @@ async function fetchJson<T>(path: string): Promise<T> {
 
 async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | null> {
   const requestUrl = `${apiBaseUrl}${path}`;
-  const response = await fetch(requestUrl, {
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
+  const response = await apiFetch(requestUrl);
 
   if (response.status === 404) {
     return null;
@@ -133,9 +202,7 @@ async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | n
 
 async function fetchJsonOrNull<T>(path: string): Promise<T | null> {
   const requestUrl = `${apiBaseUrl}${path}`;
-  const response = await fetch(requestUrl, {
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
+  const response = await apiFetch(requestUrl);
 
   if (response.status === 404) {
     return null;
@@ -405,32 +472,35 @@ export type SitemapSeasonRoute = {
  * blowing the Cloudflare build budget. The pages are generated on demand and
  * then held in the ISR cache; the sitemap is what gets them discovered.
  */
+/**
+ * Every season route with its teams, used both by the sitemap and by the team
+ * pages' generateStaticParams.
+ *
+ * A season that cannot be read throws, failing the build. This used to degrade
+ * instead — returning no teams for that season and logging — on the reasoning
+ * that one bad payload should not cost the whole sitemap. Under a static export
+ * that reasoning inverts: these routes decide which pages are *written to disk*,
+ * so degrading does not cost a few sitemap lines, it silently ships a site with
+ * a few dozen missing pages that answer 404. A failed build keeps the previous,
+ * complete deployment; a degraded one replaces it with a broken deployment. So
+ * the transient failures get retried in apiFetch, and anything that survives
+ * that stops the build.
+ */
 export async function getSitemapRoutes(): Promise<SitemapSeasonRoute[]> {
   const seasonRoutes = await getAllSeasonRoutes();
 
   return Promise.all(
     seasonRoutes.map(async (route) => {
-      try {
-        const season = await getSeasonPageData(route.sport, route.league, route.season, "en");
-        if (!season) {
-          return { ...route, teams: [] };
-        }
-
-        return {
-          ...route,
-          updatedAt: season.updatedAt,
-          teams: buildTeamOptions(season.season.matches, "en").map((team) => team.slug),
-        };
-      } catch (error) {
-        // Degrade per season rather than for the whole sitemap: one unreadable
-        // payload should cost that league's team pages, not every URL on the
-        // site. Logged because the previous silent catch hid exactly this.
-        console.error(
-          `sitemap: could not read season ${route.sport}/${route.league}/${route.season}`,
-          error,
-        );
+      const season = await getSeasonPageData(route.sport, route.league, route.season, "en");
+      if (!season) {
         return { ...route, teams: [] };
       }
+
+      return {
+        ...route,
+        updatedAt: season.updatedAt,
+        teams: buildTeamOptions(season.season.matches, "en").map((team) => team.slug),
+      };
     }),
   );
 }
@@ -520,6 +590,16 @@ export function getLeagueSubscriptionUrl(
   options: LeagueSubscriptionUrlOptions = {},
 ) {
   return getLeagueFeedUrl(sportSlug, leagueSlug, options).replace(/^https?:\/\//, "webcal://");
+}
+
+/**
+ * The API origin browsers should talk to, for the client-side refresh of match
+ * status and results. Passed down as a prop rather than read from the
+ * environment in the browser: this is a static export, so anything the client
+ * needs has to be baked into the HTML at build time anyway.
+ */
+export function getPublicApiBaseUrl() {
+  return publicApiBaseUrl;
 }
 
 function resolveDefaultSeason(

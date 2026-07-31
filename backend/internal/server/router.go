@@ -395,11 +395,24 @@ var timeNow = func() time.Time {
 }
 
 // publicCacheMiddleware sets Cache-Control headers for public read-only API endpoints.
-// s-maxage=3600: CDN (Cloudflare) caches for 1 hour, matching Next.js ISR revalidate interval.
-// must-revalidate: CDN must revalidate with the origin after the TTL expires (no serving stale).
+//
+// s-maxage=1800: Cloudflare holds the response for 30 minutes; must-revalidate
+// stops it serving stale afterwards. max-age=0 keeps browsers revalidating, so
+// a visitor always reaches the edge and the edge decides.
+//
+// This matters more than it used to. The site is now a static export, and the
+// browser refreshes match status and results by calling this endpoint on every
+// page view — so without an edge cache, origin load would grow linearly with
+// traffic instead of being capped. With it, the origin sees at most one request
+// per season per 30 minutes no matter how much traffic arrives.
+//
+// NOTE: the header alone does nothing. Cloudflare does not cache JSON responses
+// by default regardless of s-maxage, so this depends on a Cache Rule marking
+// /api/* (excluding admin, auth and spider) as eligible for cache. If
+// cf-cache-status ever reads DYNAMIC here again, that rule is what to check.
 func publicCacheMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Cache-Control", "public, max-age=0, s-maxage=3600, must-revalidate")
+		c.Header("Cache-Control", "public, max-age=0, s-maxage=1800, must-revalidate")
 		c.Next()
 	}
 }

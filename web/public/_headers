@@ -1,2 +1,11 @@
+# Replaces the `headers()` block that used to live in next.config.ts. A static
+# export has no server to run it, so the rules are declared here instead.
+#
+# Rules apply in order and later matches win, so the catch-all comes first and
+# the immutable asset rule overrides it.
+
+/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable

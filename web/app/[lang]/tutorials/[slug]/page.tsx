@@ -9,8 +9,6 @@ import { TimeZoneSelector } from "../../../../components/time-zone-selector";
 import { getTutorial, getTutorialSlugs } from "../../../../lib/tutorials";
 import { isLocale, locales, toAlternates, type Locale, toPath, toTutorialPath } from "../../../../lib/site";
 
-export const revalidate = 3600;
-
 export function generateStaticParams() {
   return locales.flatMap((lang) => getTutorialSlugs().map((slug) => ({ lang, slug })));
 }
