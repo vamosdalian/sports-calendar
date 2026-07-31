@@ -7,7 +7,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { LanguageSwitcher } from "../../../../components/language-switcher";
 import { TimeZoneSelector } from "../../../../components/time-zone-selector";
 import { getTutorial, getTutorialSlugs } from "../../../../lib/tutorials";
-import { isLocale, locales, type Locale, toPath, toTutorialPath } from "../../../../lib/site";
+import { isLocale, locales, toAlternates, type Locale, toPath, toTutorialPath } from "../../../../lib/site";
 
 export const revalidate = 3600;
 
@@ -30,17 +30,10 @@ export async function generateMetadata({
     return {};
   }
 
-  const localePaths = Object.fromEntries(
-    locales.map((entry) => [entry, toTutorialPath(entry, tutorial.slug)]),
-  ) as Record<Locale, string>;
-
   return {
     title: `${tutorial.title} | sports-calendar.com`,
     description: tutorial.description,
-    alternates: {
-      canonical: localePaths[lang],
-      languages: localePaths,
-    },
+    alternates: toAlternates(lang, (entry) => toTutorialPath(entry, tutorial.slug)),
   };
 }
 

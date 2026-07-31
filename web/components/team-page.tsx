@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server";
 
 import {
   formatMatchLocation,
+  getCurrentSeasonSlug,
   getLeagueFeedUrl,
   getLeagueSubscriptionUrl,
   getTeamPageData,
@@ -30,6 +31,16 @@ type TeamPageProps = {
 export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, teamSlug }: TeamPageProps) {
   const result = await getTeamPageData(sportSlug, leagueSlug, seasonSlug, teamSlug, locale);
   if (result.kind === "season-not-found") {
+    // Same reasoning as the season page: a season that stopped resolving was
+    // most likely hidden when the next one opened. Aim at this team's page in
+    // the current season rather than the season index — a supporter following
+    // an old link wants their own fixtures. If the team is gone too (relegated,
+    // renamed), that page redirects on to the season page under team-not-found.
+    const currentSeason = await getCurrentSeasonSlug(sportSlug, leagueSlug, locale);
+    if (currentSeason && currentSeason !== seasonSlug) {
+      permanentRedirect(toTeamPath(locale, sportSlug, leagueSlug, currentSeason, teamSlug));
+    }
+
     notFound();
   }
   if (result.kind === "team-not-found") {
