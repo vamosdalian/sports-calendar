@@ -59,6 +59,7 @@
   "homeMatchesLabel": "主场",
   "awayMatchesLabel": "客场",
   "otherTeamsLabel": "{leagueName} 其他球队",
+  "teamsIndexLabel": "按球队查看赛程",
   "backToLeagueLabel": "查看 {leagueName} 全部赛程",
   "teamMatchCountLabel": "共 {count} 场",
   "nextMatchLabel": "下一场"
