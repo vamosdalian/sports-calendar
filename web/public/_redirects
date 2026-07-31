@@ -5,8 +5,29 @@
 # request here, by design.
 
 # Legacy explicit index.html URLs.
+#
+# A static export writes a real index.html for every route, and Cloudflare's
+# auto-trailing-slash handling already redirects those to the canonical
+# directory URL — but as a 307, which passes no ranking signal and leaves
+# crawlers revisiting the .html URL. These make it a 301 instead.
+#
+# One rule per depth rather than a single `/*/index.html`: a splat in the
+# middle of a source path matched the 4-segment tutorial URLs but silently
+# failed on the 5-segment season URLs, which left those on the 307. Named
+# placeholders stop at each `/`, so depth has to be spelled out — but the
+# behaviour is predictable, which matters more here.
+#
+# Depths in use: 1 locale, 3 tutorial, 4 season, 6 team. The next.config.ts
+# version this replaces enumerated only the season and tutorial routes and
+# never covered /teams/:team, so those 322 URLs were uncovered from the day
+# they shipped.
 /index.html / 301
-/:lang/index.html /:lang/ 301
+/:a/index.html /:a/ 301
+/:a/:b/index.html /:a/:b/ 301
+/:a/:b/:c/index.html /:a/:b/:c/ 301
+/:a/:b/:c/:d/index.html /:a/:b/:c/:d/ 301
+/:a/:b/:c/:d/:e/index.html /:a/:b/:c/:d/:e/ 301
+/:a/:b/:c/:d/:e/:f/index.html /:a/:b/:c/:d/:e/:f/ 301
 
 # Locale-less paths used to be prefixed by next-intl's middleware. Nothing
 # serves them now, so send them to the default locale rather than 404.
