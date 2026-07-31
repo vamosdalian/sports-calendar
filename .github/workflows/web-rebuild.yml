@@ -1,0 +1,63 @@
+name: Rebuild Web (data refresh)
+
+# The site is a static export: fixtures, team names and venues are baked into
+# the HTML at build time. Cloudflare's Git integration only builds when master
+# moves, so a database-only change (a new translation, a rescheduled match)
+# would never reach the site without this job.
+on:
+  schedule:
+    # 02:23 UTC. Two things have to have happened before a rebuild is worth
+    # doing, and both are why this is not an earlier or rounder time:
+    #   1. The backend's own league sync runs `@daily` in a UTC container, i.e.
+    #      00:00 UTC, and takes a while to walk every league.
+    #   2. The public API is fronted by Cloudflare with `s-maxage=1800`, so
+    #      fresh rows stay hidden behind the edge for up to 30 more minutes.
+    # Building before both settle silently bakes yesterday's data into the HTML.
+    # The odd minute is deliberate: scheduled runs queue behind everyone else's
+    # on the hour.
+    - cron: "23 2 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never let two deploys push assets to the same Worker at once. Queue instead
+  # of cancelling — a half-uploaded deploy is worse than a late one.
+  group: web-deploy
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Build and deploy the static site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      # No cache to clear here: a fresh runner has no .next/cache, so Next
+      # cannot replay stale API responses into the export the way a local
+      # rebuild can. Do not add a build cache to this job.
+      - name: Build static export
+        working-directory: web
+        run: npm run build
+
+      - name: Deploy to Cloudflare
+        working-directory: web
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
