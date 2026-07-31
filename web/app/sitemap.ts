@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { getLeagues, getSitemapRoutes } from "../lib/catalog";
 import { getTutorialSlugs } from "../lib/tutorials";
-import { locales, siteUrl, toPath, toTeamPath, toTutorialPath } from "../lib/site";
+import { locales, toPath, toSitemapUrl, toTeamPath, toTutorialPath } from "../lib/site";
 
 // Built once, at build time, alongside the pages it lists. It used to be held
 // for an hour and rebuilt on demand, but serving it from the Worker is what a
@@ -18,15 +18,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const tutorialLastModified = new Date("2026-03-10T00:00:00Z");
   const entries: MetadataRoute.Sitemap = [
     {
-      url: `${siteUrl}/`,
+      url: toSitemapUrl("/"),
       lastModified: homeLastModified,
     },
     {
-      url: `${siteUrl}${toPath("en")}`,
+      url: toSitemapUrl(toPath("en")),
       lastModified: homeLastModified,
     },
     {
-      url: `${siteUrl}${toPath("zh")}`,
+      url: toSitemapUrl(toPath("zh")),
       lastModified: homeLastModified,
     },
   ];
@@ -34,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (const locale of locales) {
     for (const slug of tutorialSlugs) {
       entries.push({
-        url: `${siteUrl}${toTutorialPath(locale, slug)}`,
+        url: toSitemapUrl(toTutorialPath(locale, slug)),
         lastModified: tutorialLastModified,
       });
     }
@@ -45,17 +45,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     for (const locale of locales) {
       entries.push({
-        url: `${siteUrl}${toPath(locale, route.sport, route.league, route.season)}`,
+        url: toSitemapUrl(toPath(locale, route.sport, route.league, route.season)),
         lastModified,
       });
     }
 
-    // Team pages are generated on demand rather than prerendered, so the
-    // sitemap is the only way crawlers find them.
     for (const team of route.teams) {
       for (const locale of locales) {
         entries.push({
-          url: `${siteUrl}${toTeamPath(locale, route.sport, route.league, route.season, team)}`,
+          url: toSitemapUrl(toTeamPath(locale, route.sport, route.league, route.season, team)),
           lastModified,
         });
       }

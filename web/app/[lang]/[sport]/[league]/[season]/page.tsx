@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { SeasonPage } from "../../../../../components/season-page";
 import { getAllSeasonRoutes, getSeasonPageData } from "../../../../../lib/catalog";
 import { formatSeasonDisplay } from "../../../../../lib/season";
-import { isLocale, locales, toAlternates, toPath } from "../../../../../lib/site";
+import { decodeRouteParams, isLocale, locales, toAlternates, toPath } from "../../../../../lib/site";
 
 export async function generateStaticParams() {
   const routes = await getAllSeasonRoutes();
@@ -17,7 +17,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ lang: string; sport: string; league: string; season: string }>;
 }): Promise<Metadata> {
-  const { lang, sport, league, season } = await params;
+  const { lang, sport, league, season } = decodeRouteParams(await params);
   if (!isLocale(lang)) {
     return {};
   }
@@ -57,7 +57,7 @@ export default async function SeasonRoutePage({
 }: {
   params: Promise<{ lang: string; sport: string; league: string; season: string }>;
 }) {
-  const { lang, sport, league, season } = await params;
+  const { lang, sport, league, season } = decodeRouteParams(await params);
   if (!isLocale(lang)) {
     notFound();
   }

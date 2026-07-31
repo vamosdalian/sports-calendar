@@ -58,15 +58,25 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
   const teamName = data.team.name;
   const leagueName = data.league.name;
   const pageTitle = t("teamTitle", { teamName, seasonLabel });
-  const canonicalUrl = `${siteUrl}${toTeamPath(locale, sportSlug, leagueSlug, seasonSlug, teamSlug)}`;
+  // Everything below names the team with the catalog's own spelling rather
+  // than the incoming param, so the canonical URL, the internal links and the
+  // feed URL agree no matter what form the request arrived in.
+  const canonicalTeamSlug = data.team.slug;
+  const canonicalUrl = `${siteUrl}${toTeamPath(locale, sportSlug, leagueSlug, seasonSlug, canonicalTeamSlug)}`;
   const localePaths = Object.fromEntries(
-    locales.map((entry) => [entry, toTeamPath(entry, sportSlug, leagueSlug, seasonSlug, teamSlug)]),
+    locales.map((entry) => [entry, toTeamPath(entry, sportSlug, leagueSlug, seasonSlug, canonicalTeamSlug)]),
   ) as Record<Locale, string>;
 
   // The team-scoped feed the backend already supports; no new endpoint needed.
   // Season-less on purpose, so the subscription survives season rollovers.
-  const subscriptionUrl = getLeagueSubscriptionUrl(sportSlug, leagueSlug, { locale, teamSlug });
-  const subscriptionCopyUrl = getLeagueFeedUrl(sportSlug, leagueSlug, { locale, teamSlug });
+  const subscriptionUrl = getLeagueSubscriptionUrl(sportSlug, leagueSlug, {
+    locale,
+    teamSlug: canonicalTeamSlug,
+  });
+  const subscriptionCopyUrl = getLeagueFeedUrl(sportSlug, leagueSlug, {
+    locale,
+    teamSlug: canonicalTeamSlug,
+  });
   const leaguePath = toPath(locale, sportSlug, leagueSlug, seasonSlug);
   const nextMatch = findNextMatch(data.season.matches);
   const structuredData = buildTeamStructuredData({
@@ -124,7 +134,7 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
               subscriptionCopyUrl={subscriptionCopyUrl}
               subscriptionLinkCopiedLabel={t("subscriptionLinkCopiedLabel")}
               subscriptionUrl={subscriptionUrl}
-              teamSlug={teamSlug}
+              teamSlug={canonicalTeamSlug}
             />
           </div>
 
@@ -152,7 +162,7 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
             matches={data.season.matches}
             seasonSlug={seasonSlug}
             sportSlug={sportSlug}
-            teamSlug={teamSlug}
+            teamSlug={canonicalTeamSlug}
             title={t("teamFixturesLabel")}
           />
 
