@@ -418,7 +418,7 @@ export async function getTeamPageData(
   // One chronological list rather than a home/away split: a supporter reads a
   // fixture list to find the next few matches, and splitting it buries them.
   const teamMatches = season.season.matches
-    .filter((match) => matchIncludesTeam(match, teamSlug))
+    .filter((match) => matchIncludesTeam(match, team.slug))
     .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
 
   const data: TeamPageData = {
@@ -432,7 +432,7 @@ export async function getTeamPageData(
       groups: season.season.groups
         .map((group) => ({
           ...group,
-          matches: group.matches.filter((match) => matchIncludesTeam(match, teamSlug)),
+          matches: group.matches.filter((match) => matchIncludesTeam(match, team.slug)),
         }))
         .filter((group) => group.matches.length > 0),
     },

@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { TeamPage } from "../../../../../../../components/team-page";
 import { getSitemapRoutes, getTeamPageData } from "../../../../../../../lib/catalog";
 import { formatSeasonDisplay } from "../../../../../../../lib/season";
-import { isLocale, locales, toAlternates, toTeamPath } from "../../../../../../../lib/site";
+import { decodeRouteParams, isLocale, locales, toAlternates, toTeamPath } from "../../../../../../../lib/site";
 
 // Every team page is prerendered at build time so that serving one is a static
 // file read rather than a Worker invocation. Rendering these per request is
@@ -37,7 +37,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ lang: string; sport: string; league: string; season: string; team: string }>;
 }): Promise<Metadata> {
-  const { lang, sport, league, season, team } = await params;
+  const { lang, sport, league, season, team } = decodeRouteParams(await params);
   if (!isLocale(lang)) {
     return {};
   }
@@ -58,7 +58,11 @@ export async function generateMetadata({
   // team, not as a filtered copy of the season page.
   const title = t("metaTitleTeam", { teamName, seasonLabel });
   const description = t("metaDescriptionTeam", { teamName, leagueName, seasonLabel });
-  const alternates = toAlternates(lang, (entry) => toTeamPath(entry, sport, league, season, team));
+  // The catalog's own spelling of the slug, not the incoming param: whatever
+  // form the request arrived in, the canonical URL has to name one page.
+  const alternates = toAlternates(lang, (entry) =>
+    toTeamPath(entry, sport, league, season, data.team.slug),
+  );
 
   return {
     title,
@@ -84,7 +88,7 @@ export default async function TeamRoutePage({
 }: {
   params: Promise<{ lang: string; sport: string; league: string; season: string; team: string }>;
 }) {
-  const { lang, sport, league, season, team } = await params;
+  const { lang, sport, league, season, team } = decodeRouteParams(await params);
   if (!isLocale(lang)) {
     notFound();
   }
