@@ -5,8 +5,6 @@ import { setRequestLocale } from "next-intl/server";
 import { generateHomeMetadata, renderHomePage } from "../home-page";
 import { isLocale, locales, type Locale } from "../../lib/site";
 
-export const revalidate = 3600;
-
 export function generateStaticParams() {
   return locales.map((lang) => ({ lang }));
 }

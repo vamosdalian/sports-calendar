@@ -9,6 +9,7 @@ import {
   getCurrentSeasonSlug,
   getLeagueFeedUrl,
   getLeagueSubscriptionUrl,
+  getPublicApiBaseUrl,
   getTeamPageData,
   matchLabel,
   type Match,
@@ -17,6 +18,7 @@ import { formatSeasonDisplay } from "../lib/season";
 import { locales, siteUrl, toPath, toTeamPath, toTutorialPath, type Locale } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LocalizedMatchTime } from "./localized-match-time";
+import { TeamMatchList } from "./team-match-list";
 import { TeamSubscribeBar } from "./team-subscribe-bar";
 import { TimeZoneSelector } from "./time-zone-selector";
 
@@ -139,13 +141,17 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
             </div>
           ) : null}
 
-          <MatchListSection
+          <TeamMatchList
+            apiBaseUrl={getPublicApiBaseUrl()}
             awayLabel={t("awayMatchesLabel")}
             countLabel={t("teamMatchCountLabel", { count: data.season.matches.length })}
             emptyLabel={t("noMatches")}
             homeLabel={t("homeMatchesLabel")}
+            leagueSlug={leagueSlug}
             locale={locale}
             matches={data.season.matches}
+            seasonSlug={seasonSlug}
+            sportSlug={sportSlug}
             teamSlug={teamSlug}
             title={t("teamFixturesLabel")}
           />
@@ -206,59 +212,6 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
         </div>
       </footer>
     </div>
-  );
-}
-
-function MatchListSection({
-  awayLabel,
-  countLabel,
-  emptyLabel,
-  homeLabel,
-  locale,
-  matches,
-  teamSlug,
-  title,
-}: {
-  awayLabel: string;
-  countLabel: string;
-  emptyLabel: string;
-  homeLabel: string;
-  locale: Locale;
-  matches: Match[];
-  teamSlug: string;
-  title: string;
-}) {
-  return (
-    <InfoSection title={`${title} · ${countLabel}`}>
-      {matches.length === 0 ? (
-        <p className="text-sm text-ink/75">{emptyLabel}</p>
-      ) : (
-        <ul className="space-y-2 text-sm text-ink/75">
-          {matches.map((match) => (
-            <li
-              key={match.id}
-              className="flex flex-col gap-1 rounded-2xl bg-white/35 px-4 py-3 sm:flex-row sm:items-center"
-            >
-              {match.round ? <span className="font-medium text-ink/72">{match.round}</span> : null}
-              {match.round ? <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span> : null}
-              <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
-              <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
-              <span>
-                {/* The list is chronological rather than split by venue, so each
-                    row still says which side of the fixture this team is on. */}
-                <span className="mr-2 rounded-full bg-white/60 px-2 py-0.5 text-xs text-ink/65">
-                  {match.homeTeam?.slug === teamSlug ? homeLabel : awayLabel}
-                </span>
-                {matchLabel(match)}
-                {formatMatchLocation(match) ? (
-                  <span className="text-ink/55"> · {formatMatchLocation(match)}</span>
-                ) : null}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </InfoSection>
   );
 }
 

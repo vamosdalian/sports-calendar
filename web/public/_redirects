@@ -1,0 +1,16 @@
+# Replaces the `redirects()` block from next.config.ts and the locale-prefixing
+# half of the old middleware. A static export has no server for either.
+#
+# Note these apply only to requests served from static assets — which is every
+# request here, by design.
+
+# Legacy explicit index.html URLs.
+/index.html / 301
+/:lang/index.html /:lang/ 301
+
+# Locale-less paths used to be prefixed by next-intl's middleware. Nothing
+# serves them now, so send them to the default locale rather than 404.
+/soccer/* /en/soccer/:splat 301
+/football/* /en/football/:splat 301
+/racing/* /en/racing/:splat 301
+/tutorials/* /en/tutorials/:splat 301

@@ -4,11 +4,12 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { buildTeamOptions, formatMatchLocation, getCurrentSeasonSlug, getLeagueFeedUrl, getLeagueSeasons, getLeagues, getLeagueSubscriptionUrl, getSeasonPageData, matchLabel, type Match, type Team } from "../lib/catalog";
+import { buildTeamOptions, formatMatchLocation, getCurrentSeasonSlug, getLeagueFeedUrl, getLeagueSeasons, getLeagues, getLeagueSubscriptionUrl, getPublicApiBaseUrl, getSeasonPageData, matchLabel, type Match, type Team } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
 import { locales, siteUrl, type Locale, toPath, toTeamPath, toTutorialPath } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
+import { LegacyTeamFilterRedirect } from "./legacy-team-filter-redirect";
 import { SeasonCalendarContent } from "./season-calendar-content";
 import { TimeZoneSelector } from "./time-zone-selector";
 
@@ -89,6 +90,12 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
 
   return (
     <div>
+      <LegacyTeamFilterRedirect
+        league={leagueSlug}
+        locale={locale}
+        season={seasonSlug}
+        sport={sportSlug}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
@@ -117,6 +124,7 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
         <section className="bg-panel px-5 py-6 text-ink sm:px-6 lg:rounded-r-panel lg:py-8">
           <SeasonCalendarContent
             allTeamsLabel={t("allTeamsLabel")}
+            apiBaseUrl={getPublicApiBaseUrl()}
             leagueCalendarLabel={t("leagueCalendarLabel")}
             leagueSlug={leagueSlug}
             locale={locale}

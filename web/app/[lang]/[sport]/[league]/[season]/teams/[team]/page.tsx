@@ -3,26 +3,34 @@ import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { TeamPage } from "../../../../../../../components/team-page";
-import { getTeamPageData } from "../../../../../../../lib/catalog";
+import { getSitemapRoutes, getTeamPageData } from "../../../../../../../lib/catalog";
 import { formatSeasonDisplay } from "../../../../../../../lib/season";
-import { isLocale, toAlternates, toTeamPath } from "../../../../../../../lib/site";
+import { isLocale, locales, toAlternates, toTeamPath } from "../../../../../../../lib/site";
 
-export const revalidate = 3600;
+// Every team page is prerendered at build time so that serving one is a static
+// file read rather than a Worker invocation. Rendering these per request is
+// what pushed the Worker past Cloudflare's 10ms CPU limit and returned 503s.
+//
+// This route used to skip prerendering on purpose, for two reasons that no
+// longer hold: the build cost of refetching every season payload (now paid
+// once at build time instead of on every cold request), and a collision with
+// the cookie-based locale lookup in the root layout (that lookup is gone, see
+// app/layout.tsx).
+export async function generateStaticParams() {
+  const routes = await getSitemapRoutes();
 
-// No generateStaticParams here, deliberately, which keeps this route rendered
-// per request like the season page it sits under.
-//
-// Two reasons. Prerendering would mean building a few hundred pages (every
-// team, in every locale) and refetching each season payload to do it, risking
-// the Cloudflare build budget. And an empty generateStaticParams is not a
-// substitute: it marks the route as static, which then collides with the
-// cookie-based locale lookup in the root layout and fails the render outright
-// with DYNAMIC_SERVER_USAGE.
-//
-// Cost is bounded because the season payload is served from the fetch cache
-// (revalidate above) and a single team's page is a few dozen matches rather
-// than the several hundred a league season renders. The sitemap is what gets
-// these URLs discovered by crawlers.
+  return routes.flatMap((route) =>
+    route.teams.flatMap((team) =>
+      locales.map((lang) => ({
+        lang,
+        sport: route.sport,
+        league: route.league,
+        season: route.season,
+        team,
+      })),
+    ),
+  );
+}
 
 export async function generateMetadata({
   params,

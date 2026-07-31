@@ -101,11 +101,68 @@ const apiBaseUrl = process.env.SPORTS_CALENDAR_API_BASE_URL ?? defaultApiBaseUrl
 const publicApiBaseUrl = process.env.SPORTS_CALENDAR_PUBLIC_API_BASE_URL ?? apiBaseUrl;
 const REVALIDATE_SECONDS = 3600;
 
+// Prerendering the whole site means a few hundred pages ask for data at once,
+// against a backend that rate-limits to 8 req/s and answers from Beijing over a
+// Cloudflare Tunnel. Left unbounded, that buries the tunnel and connections
+// start timing out — and because a single failed fetch aborts the entire
+// export, one slow moment costs the whole build. So requests queue here, and
+// transient failures are retried rather than being allowed to fail the build.
+const MAX_CONCURRENT_REQUESTS = 4;
+const MAX_ATTEMPTS = 4;
+const RETRY_BASE_DELAY_MS = 500;
+
+let activeRequests = 0;
+const pendingRequests: Array<() => void> = [];
+
+async function withRequestSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+    await new Promise<void>((resolve) => pendingRequests.push(resolve));
+  }
+
+  activeRequests += 1;
+  try {
+    return await run();
+  } finally {
+    activeRequests -= 1;
+    pendingRequests.shift()?.();
+  }
+}
+
+async function apiFetch(requestUrl: string): Promise<Response> {
+  return withRequestSlot(async () => {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetch(requestUrl, {
+          next: { revalidate: REVALIDATE_SECONDS },
+        });
+
+        // A 5xx here is the backend restarting or the tunnel flapping, not an
+        // answer. 4xx is an answer — including the 404s callers rely on.
+        if (response.status < 500) {
+          return response;
+        }
+
+        lastError = new Error(`API request failed: ${response.status} (${requestUrl})`);
+      } catch (error) {
+        lastError = error;
+      }
+
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)));
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`API request failed after ${MAX_ATTEMPTS} attempts (${requestUrl})`);
+  });
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
   const requestUrl = `${apiBaseUrl}${path}`;
-  const response = await fetch(requestUrl, {
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
+  const response = await apiFetch(requestUrl);
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, requestUrl));
@@ -116,9 +173,7 @@ async function fetchJson<T>(path: string): Promise<T> {
 
 async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | null> {
   const requestUrl = `${apiBaseUrl}${path}`;
-  const response = await fetch(requestUrl, {
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
+  const response = await apiFetch(requestUrl);
 
   if (response.status === 404) {
     return null;
@@ -133,9 +188,7 @@ async function fetchSeasonDetail(path: string): Promise<SeasonDetailResponse | n
 
 async function fetchJsonOrNull<T>(path: string): Promise<T | null> {
   const requestUrl = `${apiBaseUrl}${path}`;
-  const response = await fetch(requestUrl, {
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
+  const response = await apiFetch(requestUrl);
 
   if (response.status === 404) {
     return null;
@@ -520,6 +573,16 @@ export function getLeagueSubscriptionUrl(
   options: LeagueSubscriptionUrlOptions = {},
 ) {
   return getLeagueFeedUrl(sportSlug, leagueSlug, options).replace(/^https?:\/\//, "webcal://");
+}
+
+/**
+ * The API origin browsers should talk to, for the client-side refresh of match
+ * status and results. Passed down as a prop rather than read from the
+ * environment in the browser: this is a static export, so anything the client
+ * needs has to be baked into the HTML at build time anyway.
+ */
+export function getPublicApiBaseUrl() {
+  return publicApiBaseUrl;
 }
 
 function resolveDefaultSeason(

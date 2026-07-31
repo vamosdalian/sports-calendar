@@ -4,10 +4,11 @@ import { getLeagues, getSitemapRoutes } from "../lib/catalog";
 import { getTutorialSlugs } from "../lib/tutorials";
 import { locales, siteUrl, toPath, toTeamPath, toTutorialPath } from "../lib/site";
 
-// Building this route reads every season payload, so it is held for an hour
-// rather than rebuilt per crawl. Crawlers refetch a sitemap far more often
-// than fixtures change.
-export const revalidate = 3600;
+// Built once, at build time, alongside the pages it lists. It used to be held
+// for an hour and rebuilt on demand, but serving it from the Worker is what a
+// static site is trying to avoid — and a sitemap that lists prerendered URLs
+// has nothing to say that the build did not already know.
+export const dynamic = "force-static";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const directory = await getLeagues("en");

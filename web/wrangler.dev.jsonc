@@ -1,0 +1,20 @@
+{
+  // Throwaway target for validating the static-export migration. Deploys to
+  // sports-calendar-web-dev.workers.dev, bound to no custom domain, so
+  // production keeps running the old OpenNext worker untouched.
+  //
+  // Note the absence of `main`: with only an `assets` block this is an
+  // assets-only Worker. There is no script to boot, which is the entire point —
+  // a request that never starts a Worker cannot exceed a CPU limit.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sports-calendar-web-dev",
+  "compatibility_date": "2026-04-11",
+  "assets": {
+    "directory": "out",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
