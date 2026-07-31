@@ -1,5 +1,5 @@
 ---
-description: 发布 sports-calendar（前端 web/admin 走 PR 自动部署 / 后端服务器 / 全部），完成后给验收清单
+description: 发布 sports-calendar（web 走 GitHub Actions / admin 走 CF 自动构建 / 后端服务器 / 全部），完成后给验收清单
 argument-hint: web | admin | backend <tag> | all <tag>
 ---
 
@@ -17,17 +17,38 @@ argument-hint: web | admin | backend <tag> | all <tag>
 - GitHub：本机 `gh` 已登录，含 repo+workflow 权限
 - 开始前先 `git -C <repo> status` 确认工作区状态；有未提交改动要先跟用户确认。
 
-## 前端发布（web / admin）——提 PR，合并后 CF 自动部署
-前端已接 Cloudflare 的 Git 自动构建：**master 一旦合并，CF 会自动拉取 master 并部署，本地不再跑 `wrangler deploy` / `npm run deploy`。** 你的职责是把改动开成 PR、合并，然后用 CF API 盯到新部署上线。
+## 前端发布——⚠️ web 和 admin 走两条不同的链路
 
-Worker 名映射：`web` → `sports-calendar-web`；`admin` → `sports-calendar-admin`。
+两边都不在本地跑 `wrangler deploy`，但**触发方式和盯的地方不一样**，别搞混：
 
+| | 谁在构建部署 | 盯哪里 |
+|---|---|---|
+| `web` → `sports-calendar-web` | **GitHub Actions**（`.github/workflows/web-rebuild.yml`，名为 `Deploy Web`） | `gh run watch` |
+| `admin` → `sports-calendar-admin` | **CF Git 自动构建** | CF deployments API |
+
+`sports-calendar-web` 的 CF Git 集成已于 2026-07-31 关闭（构建命令藏在 Dashboard 里、仓库看不见也改不了，静默挂过两次）。**不要建议重新打开它，也不要顺手去动 admin 的。**
+
+共同的前两步：
 1. 确认改动在独立分支上（不要直接在 master 上改）：需要时 `git switch -c <branch>`，然后 `git push -u origin <branch>`。
 2. 开 PR：`gh pr create --fill`（标题/正文不够清楚就补充）。
-3. **合并前先记录基线部署时间**（用来判断随后是否真的出现了新部署）：
+
+### web：合并后盯 Actions
+3. `gh pr merge <n> --squash --delete-branch`——这一步触发 workflow 的 `push` 触发器。
+4. 拿到 run id 并阻塞等待（整个 job 正常约 1 分半）：
+   ```bash
+   sleep 10
+   RUN=$(gh run list --workflow=web-rebuild.yml -L 1 --json databaseId -q '.[0].databaseId')
+   gh run watch "$RUN" --exit-status
+   ```
+   失败就把日志给用户，不要重试掩盖。
+
+**只改了数据库、没有代码改动时不要造假 commit**——直接 `gh workflow run web-rebuild.yml` 手动触发，然后同样 `gh run watch`。（不手动触发也行，每天 02:23 UTC 那趟车会带上，见文档。）
+
+### admin：合并后轮询 CF
+3. **合并前先记录基线部署时间**：
    ```bash
    set -a; . ~/.sports-calender-deploy.env; set +a
-   W=sports-calendar-web   # 或 sports-calendar-admin
+   W=sports-calendar-admin
    API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$W/deployments"
    latest() { curl -sS "$API" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
      | python3 -c 'import sys,json;r=json.load(sys.stdin)["result"];d=r["deployments"] if isinstance(r,dict) else r;print((d[0]["id"] if d else "")+" "+(d[0]["created_on"] if d else ""))'; }
@@ -42,7 +63,7 @@ Worker 名映射：`web` → `sports-calendar-web`；`admin` → `sports-calenda
      sleep 15
    done
    ```
-   出现新的 deployment id 即表示上线成功；把新的 id / created_on 记录进验收清单。超时（一直没变）就停下报告，让用户去 CF 后台看构建日志，不要谎报成功。
+   ⚠️ **超时不等于"没触发"**：CF 构建失败同样不产生 deployment，两者从 API 上完全无法区分。所以超时就停下如实报告、让用户去 CF 后台看构建日志，**不要断言"自动构建没启用"，更不要谎报成功**。
 - 失败就停下报错，不要重试掩盖。
 
 ## 后端发布（backend <tag>）
@@ -63,11 +84,11 @@ Worker 名映射：`web` → `sports-calendar-web`；`admin` → `sports-calenda
    再探活：`ssh sports-calendar 'curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:5959/health || true'`（若无 /health 换个已知路由）。
 
 ## 全部（all <tag>）
-先跑后端流程（构建耗时长，先起头），成功后再跑前端流程（提 PR → 合并 → 盯 CF 自动部署）。
+先跑后端流程（构建耗时长，先起头），成功后再跑前端流程（提 PR → 合并 → 按上面 web/admin 各自的方式盯上线）。
 
 ## 完成后必须输出「验收清单」给用户
 用中文列出，包含：
-- 本次发布了什么（前端：PR 链接 + 上线的 deployment id/时间；后端：tag）
+- 本次发布了什么（web：PR 链接 + Actions run 链接 + deployment id/时间；admin：PR 链接 + deployment id/时间；后端：tag）
 - 线上待验收 URL：前端 https://sports-calendar.com，后端经 api.sports-calendar.com（服务器本地 5959）
 - 建议人工检查点（页面能打开、关键数据正确、ICS 订阅可用等）
 - 如需回滚：后端 `ssh sports-calendar '/root/script/update-sports-calendar.sh <上一个 tag>'`；前端在 CF 后台把对应 Worker 回滚到上一个 deployment（或 revert PR 后再次自动部署）。
