@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, time
 
-from sqlalchemy import delete, func
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -167,6 +167,19 @@ async def upsert_player_team_season(
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+async def count_fixtures(
+    session: AsyncSession, competition_id: str, season_id: int
+) -> int:
+    return await session.scalar(
+        select(func.count())
+        .select_from(models.Fixture)
+        .where(
+            models.Fixture.competition_id == competition_id,
+            models.Fixture.season_id == season_id,
+        )
+    ) or 0
+
+
 async def delete_fixtures(
     session: AsyncSession, competition_id: str, season_id: int
 ) -> None:
