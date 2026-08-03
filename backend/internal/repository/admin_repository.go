@@ -166,7 +166,8 @@ func (r *PostgresRepository) ListAdminTeams(ctx context.Context, sportSlug, leag
 	rows, err := r.pool.Query(ctx, `
 		SELECT t.id, t.slug, t.name, t.updated_at
 		FROM teams t
-		JOIN leagues l ON l.id = t.league_id
+		JOIN team_leagues tl ON tl.team_id = t.id
+		JOIN leagues l ON l.id = tl.league_id
 		JOIN sports s ON s.id = l.sport_id
 		WHERE s.slug = $1 AND l.slug = $2
 		ORDER BY t.slug ASC

@@ -112,7 +112,18 @@ func (r *PostgresRepository) DeleteSport(ctx context.Context, input domain.Delet
 		return fmt.Errorf("delete sport matches: %w", err)
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM teams WHERE league_id IN (SELECT id FROM leagues WHERE sport_id = $1)`, sportID); err != nil {
+	// Drop this sport's memberships first, then only those teams no other
+	// league still claims -- a club shared with a league outside this sport
+	// (or an unrelated one) must survive.
+	if _, err := tx.Exec(ctx, `DELETE FROM team_leagues WHERE league_id IN (SELECT id FROM leagues WHERE sport_id = $1)`, sportID); err != nil {
+		return fmt.Errorf("delete sport team memberships: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM teams t
+		WHERE t.league_id IN (SELECT id FROM leagues WHERE sport_id = $1)
+		  AND NOT EXISTS (SELECT 1 FROM team_leagues tl WHERE tl.team_id = t.id)
+	`, sportID); err != nil {
 		return fmt.Errorf("delete sport teams: %w", err)
 	}
 
@@ -267,11 +278,15 @@ func (r *PostgresRepository) UpdateTeam(ctx context.Context, input domain.Update
 		nameRaw []byte
 	)
 	err = r.pool.QueryRow(ctx, `
-		UPDATE teams
+		UPDATE teams t
 		SET name = $3::jsonb,
 		    updated_at = NOW()
-		WHERE league_id = $1 AND id = $2
-		RETURNING id, slug, name
+		WHERE t.id = $2
+		  AND EXISTS (
+		    SELECT 1 FROM team_leagues tl
+		    WHERE tl.team_id = t.id AND tl.league_id = $1
+		  )
+		RETURNING t.id, t.slug, t.name
 	`, leagueID, input.TeamID, encodeLocalizedText(input.Name)).Scan(&item.ID, &item.Slug, &nameRaw)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -303,7 +318,17 @@ func (r *PostgresRepository) DeleteLeague(ctx context.Context, input domain.Dele
 		return fmt.Errorf("delete league matches: %w", err)
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM teams WHERE league_id = $1`, leagueID); err != nil {
+	// Same as deleting a sport: give up this league's claim on its teams, and
+	// only remove the ones no other league still plays.
+	if _, err := tx.Exec(ctx, `DELETE FROM team_leagues WHERE league_id = $1`, leagueID); err != nil {
+		return fmt.Errorf("delete league team memberships: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM teams t
+		WHERE t.league_id = $1
+		  AND NOT EXISTS (SELECT 1 FROM team_leagues tl WHERE tl.team_id = t.id)
+	`, leagueID); err != nil {
 		return fmt.Errorf("delete league teams: %w", err)
 	}
 
@@ -810,9 +835,10 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 	}
 
 	teamRows, err := r.pool.Query(ctx, `
-		SELECT id, slug, name
-		FROM teams
-		WHERE league_id = $1
+		SELECT t.id, t.slug, t.name
+		FROM teams t
+		JOIN team_leagues tl ON tl.team_id = t.id
+		WHERE tl.league_id = $1
 	`, leagueID)
 	if err != nil {
 		return domain.SeasonDetail{}, fmt.Errorf("list teams: %w", err)
@@ -1003,7 +1029,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 		return fmt.Errorf("update league metadata: %w", err)
 	}
 
-	// Prune teams that are no longer part of this league's roster before
+	// Drop memberships that are no longer part of this league's roster before
 	// upserting the new one. On a routine sync this only clears genuinely
 	// departed teams; on a provider switch the whole roster changes id/slug, so
 	// this removes the old provider's teams that would otherwise collide with the
@@ -1011,22 +1037,40 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 	// the id conflict). Teams still referenced by an admin-created manual match
 	// are kept. Skipped when the snapshot is empty to avoid wiping a league on a
 	// transient upstream hiccup.
+	//
+	// Only the membership is removed here. A club dropping out of the Champions
+	// League still plays in its domestic league, so the teams row itself is
+	// deleted further down and only once no league claims it any more.
 	keepTeamIDs := collectSnapshotTeamIDs(snapshot)
 	if len(keepTeamIDs) > 0 {
 		if _, err := tx.Exec(ctx, `
-			DELETE FROM teams t
-			WHERE t.league_id = $1
-			  AND NOT (t.id = ANY($2))
+			DELETE FROM team_leagues tl
+			WHERE tl.league_id = $1
+			  AND NOT (tl.team_id = ANY($2))
 			  AND NOT EXISTS (
 			    SELECT 1
 			    FROM matches m
 			    JOIN seasons s ON s.id = m.season_id
 			    WHERE s.league_id = $1
 			      AND m.external_id LIKE 'manual:%'
-			      AND t.id = ANY(m.teams)
+			      AND tl.team_id = ANY(m.teams)
 			  )
 		`, snapshot.Target.LeagueID, keepTeamIDs); err != nil {
-			return fmt.Errorf("prune stale teams: %w", err)
+			return fmt.Errorf("prune stale team memberships: %w", err)
+		}
+		// A team no league claims any more is gone for good, unless a match
+		// still points at it (its fixtures would lose their name otherwise).
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM teams t
+			WHERE t.league_id = $1
+			  AND NOT EXISTS (
+			    SELECT 1 FROM team_leagues tl WHERE tl.team_id = t.id
+			  )
+			  AND NOT EXISTS (
+			    SELECT 1 FROM matches m WHERE t.id = ANY(m.teams)
+			  )
+		`, snapshot.Target.LeagueID); err != nil {
+			return fmt.Errorf("prune orphaned teams: %w", err)
 		}
 	}
 
@@ -1159,20 +1203,23 @@ func normalizeStringSlice(value []string) []string {
 	return value
 }
 
+// upsertSnapshotTeam stores the team and records that it plays in this league.
+//
+// league_id is only written when the row is created: it is the namespace the
+// (league_id, slug) unique constraint is checked against, and a club that plays
+// in both a domestic league and a continental one must keep whichever it was
+// first filed under. Membership lives in team_leagues, so a Champions League
+// sync no longer takes Arsenal away from the Premier League.
 func upsertSnapshotTeam(ctx context.Context, tx pgx.Tx, leagueID int64, team domain.TeamSyncRecord) (int64, error) {
 	var storedTeamID int64
 	err := tx.QueryRow(ctx, `
 		INSERT INTO teams (id, league_id, slug, name, short_name)
 		VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
 		ON CONFLICT (id) DO UPDATE
-		SET league_id = EXCLUDED.league_id,
-		    slug = EXCLUDED.slug,
-		    name = teams.name || EXCLUDED.name,
+		SET name = teams.name || EXCLUDED.name,
 		    short_name = teams.short_name || EXCLUDED.short_name,
 		    updated_at = NOW()
-		WHERE teams.league_id IS DISTINCT FROM EXCLUDED.league_id
-		   OR teams.slug IS DISTINCT FROM EXCLUDED.slug
-		   OR teams.name IS DISTINCT FROM teams.name || EXCLUDED.name
+		WHERE teams.name IS DISTINCT FROM teams.name || EXCLUDED.name
 		   OR teams.short_name IS DISTINCT FROM teams.short_name || EXCLUDED.short_name
 		RETURNING id
 	`, team.ID, leagueID, team.Slug, encodeLocalizedText(team.Names), encodeLocalizedText(team.ShortName)).Scan(&storedTeamID)
@@ -1185,9 +1232,16 @@ func upsertSnapshotTeam(ctx context.Context, tx pgx.Tx, leagueID int64, team dom
 			`, team.ID).Scan(&storedTeamID); lookupErr != nil {
 				return 0, fmt.Errorf("load unchanged team id %d: %w", team.ID, lookupErr)
 			}
-			return storedTeamID, nil
+		} else {
+			return 0, fmt.Errorf("upsert team %d: %w", team.ID, err)
 		}
-		return 0, fmt.Errorf("upsert team %d: %w", team.ID, err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO team_leagues (team_id, league_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, storedTeamID, leagueID); err != nil {
+		return 0, fmt.Errorf("record team %d in league %d: %w", team.ID, leagueID, err)
 	}
 	return storedTeamID, nil
 }
@@ -1369,7 +1423,7 @@ func validateMatchTeamIDTx(ctx context.Context, tx pgx.Tx, leagueID, teamID int6
 		return nil
 	}
 	var exists bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM teams WHERE league_id = $1 AND id = $2)`, leagueID, teamID).Scan(&exists); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM team_leagues WHERE league_id = $1 AND team_id = $2)`, leagueID, teamID).Scan(&exists); err != nil {
 		return fmt.Errorf("validate team %d: %w", teamID, err)
 	}
 	if !exists {

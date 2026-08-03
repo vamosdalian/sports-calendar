@@ -236,6 +236,20 @@ async def _do_competition_fixtures(comp_id: str, season: int) -> str:
         country_id = comp.country_id if comp else None
     data = await tm.scrape_fixtures(comp_id, season, "x", _segment(comp))
     fixtures = data["fixtures"]
+    if not fixtures:
+        # A season that parsed to nothing is only believable if we never had
+        # anything for it (an unplayed season, or a first crawl). Wiping a
+        # populated season on an empty parse is how a misconfigured competition
+        # -- e.g. a cup missing its `competitions` row, whose league-shaped URL
+        # redirects to a page with no fixture table -- silently empties a live
+        # calendar.
+        async with SessionLocal() as s:
+            existing = await repository.count_fixtures(s, comp_id, season)
+        if existing:
+            raise RuntimeError(
+                f"{comp_id} saison {season} 解析出 0 场,但库里已有 {existing} 场;"
+                "拒绝清空(检查赛事类型/URL 段是否正确)"
+            )
     async with SessionLocal() as s:
         seen: set[int] = set()
         for f in fixtures:

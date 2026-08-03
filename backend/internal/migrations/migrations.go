@@ -224,6 +224,33 @@ var allMigrations = []migration{
 			`ALTER TABLE leagues ALTER COLUMN provider SET DEFAULT 'spider'`,
 		},
 	},
+	{
+		version: 10,
+		name:    "team_leagues",
+		statements: []string{
+			// teams.league_id can only name one league, which was fine while
+			// every competition had a disjoint roster. Continental competitions
+			// break that: the Champions League's 36 clubs all also play in a
+			// domestic league, and syncing one would steal the other's teams
+			// (and hide them from its season pages) on every run.
+			//
+			// Membership moves to this join table. teams.league_id stays as the
+			// league whose namespace owns the team's slug -- it is what the
+			// (league_id, slug) unique constraint is checked against -- and is
+			// no longer overwritten once set.
+			`CREATE TABLE IF NOT EXISTS team_leagues (
+			    team_id BIGINT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+			    league_id BIGINT NOT NULL,
+			    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			    PRIMARY KEY (team_id, league_id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS team_leagues_league_idx ON team_leagues (league_id)`,
+			// Backfill every existing membership from the column it replaces.
+			`INSERT INTO team_leagues (team_id, league_id)
+			 SELECT id, league_id FROM teams
+			 ON CONFLICT DO NOTHING`,
+		},
+	},
 }
 
 func Run(ctx context.Context, pool *pgxpool.Pool, logger *logrus.Logger) error {

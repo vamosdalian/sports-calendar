@@ -302,7 +302,62 @@ def parse_fixtures(tree: HTMLParser, code: str, season: int) -> dict:
                 continue
             seen_ids.add(mid)
         out.append(f)
+    _split_undivided_matchdays(out)
     return {"competition_id": code, "season_id": season, "fixtures": out}
+
+
+# Two matchdays are always weeks apart, while one matchday's own fixtures are
+# spread over consecutive evenings. Anything longer than this gap starts a new
+# round.
+_MATCHDAY_GAP_DAYS = 4
+# Below this many rounds the shape is more likely a coincidence than a schedule,
+# so the fixtures keep the label the site gave them.
+_MIN_INFERRED_MATCHDAYS = 3
+
+
+def _split_undivided_matchdays(fixtures: list[dict]) -> None:
+    """Number the rounds of a competition that lists them under one label.
+
+    The Champions League league phase prints all 144 fixtures under a single
+    "Group GP" heading with no round markers, so every match would otherwise
+    read as the same round. The rounds are still there in the calendar — each is
+    played over a couple of evenings, weeks apart from the next — so they can be
+    recovered by grouping on those gaps.
+
+    Only applied when the split looks like a real schedule: at least
+    ``_MIN_INFERRED_MATCHDAYS`` groups, all of the same size. A league that
+    already labels its rounds has one date cluster per label and is left alone,
+    and anything irregular (a postponed fixture moved weeks out) fails the
+    equal-size check and keeps the original label rather than being mislabelled.
+    """
+    by_label: dict[str, list[dict]] = {}
+    for fixture in fixtures:
+        if fixture.get("date") is None:
+            return  # incomplete dates -> can't trust the grouping
+        by_label.setdefault(fixture.get("matchday") or "", []).append(fixture)
+
+    for label, group in by_label.items():
+        dates = sorted({f["date"] for f in group})
+        clusters: list[list] = [[dates[0]]]
+        for previous, current in zip(dates, dates[1:]):
+            if (current - previous).days > _MATCHDAY_GAP_DAYS:
+                clusters.append([])
+            clusters[-1].append(current)
+        if len(clusters) < _MIN_INFERRED_MATCHDAYS:
+            continue
+        sizes = [
+            sum(1 for f in group if f["date"] in set(cluster))
+            for cluster in clusters
+        ]
+        if len(set(sizes)) != 1:
+            continue
+        # Match the site's own wording for numbered rounds ("1.Matchday"), so a
+        # competition reads the same whether the label was scraped or inferred.
+        for index, cluster in enumerate(clusters, start=1):
+            days = set(cluster)
+            for fixture in group:
+                if fixture["date"] in days:
+                    fixture["matchday"] = f"{index}.Matchday"
 
 
 # ── A team's own fixtures across all competitions (for a season) ─────────────
