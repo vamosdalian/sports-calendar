@@ -55,6 +55,20 @@ func newSnapshotTestPool(t *testing.T) (*PostgresRepository, *pgxpool.Pool) {
 	return repo, pool
 }
 
+// seedSeason adds another season to an existing league.
+func seedSeason(t *testing.T, pool *pgxpool.Pool, leagueID int64, slug string, startYear int) int64 {
+	t.Helper()
+	var seasonID int64
+	if err := pool.QueryRow(context.Background(), `
+		INSERT INTO seasons (league_id, slug, label, start_year, end_year, show)
+		VALUES ($1, $2, $2, $3, $4, TRUE)
+		RETURNING id
+	`, leagueID, slug, startYear, startYear+1).Scan(&seasonID); err != nil {
+		t.Fatalf("seed season %s: %v", slug, err)
+	}
+	return seasonID
+}
+
 // seedLeague creates one league with one season and returns their ids.
 func seedLeague(t *testing.T, pool *pgxpool.Pool, leagueID int64, slug string) int64 {
 	t.Helper()
@@ -229,6 +243,86 @@ func TestDepartedTeamLosesOnlyThatLeague(t *testing.T) {
 	}
 	if got, want := leagueTeamSlugs(t, repo, "english-premier-league"), []string{"arsenal-fc", "chelsea-fc"}; !equalStrings(got, want) {
 		t.Fatalf("domestic league lost a team that only left the continental one: got %v, want %v", got, want)
+	}
+}
+
+// leagueTeamSlugsForSeason is leagueTeamSlugs for a season other than the
+// default one the other tests use.
+func leagueTeamSlugsForSeason(t *testing.T, repo *PostgresRepository, leagueSlug, seasonSlug string) []string {
+	t.Helper()
+	detail, err := repo.GetLeagueSeason(context.Background(), "soccer", leagueSlug, seasonSlug)
+	if err != nil {
+		t.Fatalf("read season %s/%s: %v", leagueSlug, seasonSlug, err)
+	}
+	seen := map[string]bool{}
+	var slugs []string
+	for _, match := range detail.Matches {
+		for _, team := range []*domain.Team{match.HomeTeam, match.AwayTeam} {
+			if team == nil {
+				t.Fatalf("%s %s: match %s lost a team -- it would render without a title",
+					leagueSlug, seasonSlug, match.ID)
+			}
+			if !seen[team.Slug] {
+				seen[team.Slug] = true
+				slugs = append(slugs, team.Slug)
+			}
+		}
+	}
+	sort.Strings(slugs)
+	return slugs
+}
+
+// A snapshot covers one season, but the roster prune runs against the whole
+// league. A club relegated after last season is absent from this season's
+// roster while last season's fixtures still reference it, so pruning on the
+// current roster alone strips those matches of their team names.
+func TestRelegatedTeamKeepsItsOldSeason(t *testing.T) {
+	repo, pool := newSnapshotTestPool(t)
+	ctx := context.Background()
+	kickoff := time.Date(2026, 2, 17, 20, 0, 0, 0, time.UTC)
+
+	lastSeason := seedLeague(t, pool, 100, "english-premier-league")
+	thisSeason := seedSeason(t, pool, 100, "2026-2027", 2026)
+
+	arsenal := teamRecord(11, "arsenal-fc", "Arsenal FC")
+	westHam := teamRecord(379, "west-ham-united", "West Ham United")
+	sunderland := teamRecord(289, "sunderland-afc", "Sunderland AFC")
+
+	// Last season: Arsenal vs West Ham.
+	if err := repo.ReplaceLeagueSnapshot(ctx, snapshotFor(100, lastSeason,
+		[]domain.TeamSyncRecord{arsenal, westHam},
+		[]domain.MatchSyncRecord{matchRecord("tm:1", 11, 379, kickoff)},
+	)); err != nil {
+		t.Fatalf("last season sync: %v", err)
+	}
+
+	// This season West Ham is relegated and Sunderland promoted.
+	if err := repo.ReplaceLeagueSnapshot(ctx, snapshotFor(100, thisSeason,
+		[]domain.TeamSyncRecord{arsenal, sunderland},
+		[]domain.MatchSyncRecord{matchRecord("tm:2", 11, 289, kickoff)},
+	)); err != nil {
+		t.Fatalf("this season sync: %v", err)
+	}
+
+	if got, want := leagueTeamSlugsForSeason(t, repo, "english-premier-league", "2025-2026"),
+		[]string{"arsenal-fc", "west-ham-united"}; !equalStrings(got, want) {
+		t.Fatalf("last season lost the relegated team: got %v, want %v", got, want)
+	}
+	if got, want := leagueTeamSlugsForSeason(t, repo, "english-premier-league", "2026-2027"),
+		[]string{"arsenal-fc", "sunderland-afc"}; !equalStrings(got, want) {
+		t.Fatalf("this season roster wrong: got %v, want %v", got, want)
+	}
+
+	// Re-syncing the older season must not evict the promoted club either.
+	if err := repo.ReplaceLeagueSnapshot(ctx, snapshotFor(100, lastSeason,
+		[]domain.TeamSyncRecord{arsenal, westHam},
+		[]domain.MatchSyncRecord{matchRecord("tm:1", 11, 379, kickoff)},
+	)); err != nil {
+		t.Fatalf("last season re-sync: %v", err)
+	}
+	if got, want := leagueTeamSlugsForSeason(t, repo, "english-premier-league", "2026-2027"),
+		[]string{"arsenal-fc", "sunderland-afc"}; !equalStrings(got, want) {
+		t.Fatalf("current season lost a team to the older season's re-sync: got %v, want %v", got, want)
 	}
 }
 
