@@ -536,16 +536,30 @@ export async function getAllSeasonRoutes() {
 }
 
 export function matchLabel(match: Match) {
-  if (match.homeTeam && match.awayTeam) {
-    if (hasMatchResult(match)) {
-      return `${match.homeTeam.name} ${match.result[0]}:${match.result[1]} ${match.awayTeam.name}`;
-    }
-    return `${match.homeTeam.name} vs ${match.awayTeam.name}`;
+  const parts = matchLabelParts(match);
+  if (parts) {
+    return `${parts.homeTeam.name} ${parts.separator} ${parts.awayTeam.name}`;
   }
   if (match.title) {
     return match.title;
   }
   return match.id;
+}
+
+/**
+ * The same text matchLabel produces, split at the two team names so a caller
+ * can style one side of the fixture. Null when the match carries no team pair
+ * and the label falls back to the title.
+ */
+export function matchLabelParts(match: Match) {
+  if (!match.homeTeam || !match.awayTeam) {
+    return null;
+  }
+  return {
+    homeTeam: match.homeTeam,
+    awayTeam: match.awayTeam,
+    separator: hasMatchResult(match) ? `${match.result[0]}:${match.result[1]}` : "vs",
+  };
 }
 
 function hasMatchResult(match: Match): match is Match & { result: [string, string] } {

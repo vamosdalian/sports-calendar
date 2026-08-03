@@ -56,8 +56,6 @@
   "teamTitle": "{teamName} {seasonLabel} 赛程",
   "teamSubscribeLead": "订阅 {teamName} 赛程,此后每场比赛的开赛时间、改期和场地变更都会自动进入你的日历。",
   "teamFixturesLabel": "全部赛程",
-  "homeMatchesLabel": "主场",
-  "awayMatchesLabel": "客场",
   "otherTeamsLabel": "{leagueName} 其他球队",
   "teamsIndexLabel": "按球队查看赛程",
   "backToLeagueLabel": "查看 {leagueName} 全部赛程",

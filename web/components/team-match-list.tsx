@@ -1,16 +1,15 @@
 "use client";
 
-import { formatMatchLocation, matchLabel, type Match } from "../lib/catalog";
+import { formatMatchLocation, type Match } from "../lib/catalog";
 import type { Locale } from "../lib/site";
 import { useLiveMatchStatus } from "../lib/use-live-match-status";
 import { LocalizedMatchTime } from "./localized-match-time";
+import { MatchFixtureLabel } from "./match-fixture-label";
 
 type TeamMatchListProps = {
   apiBaseUrl: string;
-  awayLabel: string;
   countLabel: string;
   emptyLabel: string;
-  homeLabel: string;
   leagueSlug: string;
   locale: Locale;
   matches: Match[];
@@ -27,10 +26,8 @@ type TeamMatchListProps = {
  */
 export function TeamMatchList({
   apiBaseUrl,
-  awayLabel,
   countLabel,
   emptyLabel,
-  homeLabel,
   leagueSlug,
   locale,
   matches: prerenderedMatches,
@@ -65,12 +62,10 @@ export function TeamMatchList({
                 <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
                 <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
                 <span>
-                  {/* The list is chronological rather than split by venue, so each
-                      row still says which side of the fixture this team is on. */}
-                  <span className="mr-2 rounded-full bg-white/60 px-2 py-0.5 text-xs text-ink/65">
-                    {match.homeTeam?.slug === teamSlug ? homeLabel : awayLabel}
-                  </span>
-                  {matchLabel(match)}
+                  {/* The list is chronological rather than split by venue; the
+                      bolded name is this team, and its side of the fixture says
+                      whether the match is at home. */}
+                  <MatchFixtureLabel match={match} teamSlug={teamSlug} />
                   {formatMatchLocation(match) ? (
                     <span className="text-ink/55"> · {formatMatchLocation(match)}</span>
                   ) : null}

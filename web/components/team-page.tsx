@@ -18,6 +18,7 @@ import { formatSeasonDisplay } from "../lib/season";
 import { locales, siteUrl, toPath, toTeamPath, toTutorialPath, type Locale } from "../lib/site";
 import { LanguageSwitcher } from "./language-switcher";
 import { LocalizedMatchTime } from "./localized-match-time";
+import { MatchFixtureLabel } from "./match-fixture-label";
 import { TeamMatchList } from "./team-match-list";
 import { TeamSubscribeBar } from "./team-subscribe-bar";
 import { TimeZoneSelector } from "./time-zone-selector";
@@ -146,17 +147,17 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
               <div className="mt-1 flex flex-col gap-1 text-sm sm:flex-row sm:items-center">
                 <LocalizedMatchTime className="font-medium text-ink" startsAt={nextMatch.startsAt} locale={locale} />
                 <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
-                <span className="text-ink/75">{matchLabel(nextMatch)}</span>
+                <span className="text-ink/75">
+                  <MatchFixtureLabel match={nextMatch} teamSlug={canonicalTeamSlug} />
+                </span>
               </div>
             </div>
           ) : null}
 
           <TeamMatchList
             apiBaseUrl={getPublicApiBaseUrl()}
-            awayLabel={t("awayMatchesLabel")}
             countLabel={t("teamMatchCountLabel", { count: data.season.matches.length })}
             emptyLabel={t("noMatches")}
-            homeLabel={t("homeMatchesLabel")}
             leagueSlug={leagueSlug}
             locale={locale}
             matches={data.season.matches}
