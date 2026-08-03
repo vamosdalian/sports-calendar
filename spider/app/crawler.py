@@ -360,13 +360,40 @@ async def _do_player_profile(player_id: str, season: int) -> str:
     return profile.get("name") or player_id
 
 
+def discovered_competition_row(comp: dict) -> dict:
+    """Map a discovered competition onto the model's own columns.
+
+    The scraped dict carries a display-only ``country`` key that has no column.
+    Passing the dict through unfiltered made ``upsert_competition`` build an
+    insert against a non-existent column, so every discovery run died on
+    ``AttributeError: country`` and no continental competition ever reached the
+    catalogue.
+    """
+    return {
+        "id": comp["id"],
+        "name": comp["name"],
+        "type": comp["type"],
+        # Continental "Cups" are club competitions (Champions League,
+        # Libertadores); "International cups" are played by national teams
+        # (Euro, World Cup). This decides which crawl edges apply.
+        "kind_of_teams": (
+            TeamKind.national
+            if comp["type"] == CompetitionType.international
+            else TeamKind.club
+        ),
+        "tier": comp.get("tier"),
+    }
+
+
 async def _do_fallback_discovery(target: str, season: int) -> str:
     found = 0
     for src in discovery.INTERNATIONAL_SOURCES:
         comps = await discovery.scrape_international(src)
         async with SessionLocal() as s:
             for comp in comps:
-                await repository.upsert_competition(s, comp)
+                await repository.upsert_competition(
+                    s, discovered_competition_row(comp)
+                )
             await s.commit()
         found += len(comps)
     return f"补齐 {found} 国际/洲际赛事"
