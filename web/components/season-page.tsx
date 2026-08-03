@@ -304,7 +304,10 @@ function buildSportsEventStructuredData(match: Match, sportName: string) {
   return {
     "@type": "SportsEvent",
     name: matchLabel(match),
-    startDate: match.startsAt,
+    // schema.org accepts a bare date, which is exactly what we know when the
+    // kickoff time is still pending. Publishing the placeholder timestamp
+    // instead would tell search engines a time the source never announced.
+    startDate: match.kickoffTimeTBD && match.matchDate ? match.matchDate : match.startsAt,
     eventStatus: toEventStatus(match.status),
     sport: sportName,
     location: location

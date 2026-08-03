@@ -907,6 +907,9 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 
 		match.Round = decodeLocalizedText(roundRaw)
 		match.StartsAt = startsAt.UTC().Format(time.RFC3339)
+		if match.KickoffTimeTBD {
+			match.MatchDate = publishedMatchDate(startsAt)
+		}
 		match.Result = result
 		match.VenueID = venueID
 		match.Venue = decodeLocalizedText(venueRaw)
@@ -1253,6 +1256,27 @@ func upsertSnapshotTeam(ctx context.Context, tx pgx.Tx, leagueID int64, team dom
 		return 0, fmt.Errorf("record team %d in league %d: %w", team.ID, leagueID, err)
 	}
 	return storedTeamID, nil
+}
+
+// sourceLocation is the zone the crawler's kickoff times were published in.
+// Resolved once: LoadLocation reads tzdata off disk, and this runs per match.
+var sourceLocation = func() *time.Location {
+	loc, err := time.LoadLocation(domain.SourceTimeZone)
+	if err != nil {
+		// tzdata missing from the image. UTC keeps the date within an hour or
+		// two of the published one rather than failing the whole request.
+		return time.UTC
+	}
+	return loc
+}()
+
+// publishedMatchDate recovers the calendar day a match was published for, from
+// the placeholder timestamp stored for a fixture whose kickoff time is still
+// pending. That timestamp is local midnight in the source zone, so every zone
+// east of it reads the *next* day off the raw instant -- which is why the day
+// has to be resolved here, in the source's own zone, instead of by the viewer.
+func publishedMatchDate(startsAt time.Time) string {
+	return startsAt.In(sourceLocation).Format("2006-01-02")
 }
 
 func resolveMatchTeam(teamID int64, teamMap map[int64]domain.Team) *domain.Team {

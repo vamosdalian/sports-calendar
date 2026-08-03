@@ -18,6 +18,7 @@
   "languageLabel": "Language",
   "finished": "Finished",
   "scheduled": "Scheduled",
+  "kickoffTimeTBD": "Time TBD",
   "venueLabel": "Venue",
   "cityLabel": "City",
   "ticketOpenLabel": "Ticket opens",

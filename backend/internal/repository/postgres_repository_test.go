@@ -2,6 +2,7 @@ package repository
 
 import (
 	"testing"
+	"time"
 
 	"github.com/vamosdalian/sports-calendar/backend/internal/domain"
 )
@@ -190,5 +191,33 @@ func TestDeduplicateMatchesKeepsNilAndSetVenueSeparate(t *testing.T) {
 	}
 	if got[0].ID != "match-a" || got[1].ID != "match-b" {
 		t.Fatalf("expected original order to remain for nil/set venue mismatch, got %q then %q", got[0].ID, got[1].ID)
+	}
+}
+
+// A fixture whose kickoff time is still pending is stored at midnight in the
+// source's zone. Read as a raw instant that midnight belongs to the previous
+// day, so the published date has to be recovered in the source zone -- getting
+// this wrong silently files a Saturday match under Sunday for every viewer east
+// of Berlin, which is most of the audience.
+func TestPublishedMatchDateRecoversTheSourceDay(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		startsAt string
+		want     string
+	}{
+		// CEST (UTC+2): local midnight on 5 Sep is 22:00Z on 4 Sep.
+		{"summer", "2026-09-04T22:00:00Z", "2026-09-05"},
+		// CET (UTC+1): local midnight on 12 Dec is 23:00Z on 11 Dec.
+		{"winter", "2026-12-11T23:00:00Z", "2026-12-12"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			startsAt, err := time.Parse(time.RFC3339, tc.startsAt)
+			if err != nil {
+				t.Fatalf("parse %s: %v", tc.startsAt, err)
+			}
+			if got := publishedMatchDate(startsAt); got != tc.want {
+				t.Fatalf("publishedMatchDate(%s) = %s, want %s", tc.startsAt, got, tc.want)
+			}
+		})
 	}
 }

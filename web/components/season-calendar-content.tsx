@@ -275,7 +275,13 @@ export function SeasonCalendarContent({
                 <li key={`team-match-${match.id}`} className="flex flex-col gap-1 rounded-2xl bg-white/35 px-4 py-3 sm:flex-row sm:items-center">
                   {match.round ? <span className="font-medium text-ink/72">{match.round}</span> : null}
                   {match.round ? <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span> : null}
-                  <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
+                  <LocalizedMatchTime
+                    className="font-medium text-ink"
+                    startsAt={match.startsAt}
+                    kickoffTimeTBD={match.kickoffTimeTBD}
+                    matchDate={match.matchDate}
+                    locale={locale}
+                  />
                   <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
                   <MatchSummary match={match} />
                 </li>
@@ -312,7 +318,13 @@ export function SeasonCalendarContent({
                 <ul className="mt-3 w-full space-y-2">
                   {group.matches.map((match) => (
                     <li key={`summary-${match.id}`} className="flex flex-col gap-1 rounded-2xl bg-white/35 px-4 py-3 sm:flex-row sm:items-center">
-                      <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
+                      <LocalizedMatchTime
+                    className="font-medium text-ink"
+                    startsAt={match.startsAt}
+                    kickoffTimeTBD={match.kickoffTimeTBD}
+                    matchDate={match.matchDate}
+                    locale={locale}
+                  />
                       <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
                       <MatchSummary match={match} />
                     </li>

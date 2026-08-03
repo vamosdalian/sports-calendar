@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { matchLabel, type Match } from "../lib/catalog";
 import { localizedDateLocale, type Locale } from "../lib/site";
 import { useTimeZone } from "./time-zone-provider";
@@ -50,6 +52,7 @@ function MonthCalendar({
   timeZone: string;
   weekLabels: string[];
 }) {
+  const t = useTranslations();
   const monthLabel = new Intl.DateTimeFormat(localizedDateLocale(locale), {
     timeZone,
     month: "long",
@@ -58,7 +61,7 @@ function MonthCalendar({
   const days = buildCalendarCells(month.year, month.monthIndex);
   const matchesByDay = new Map<string, Match[]>();
   for (const match of matches) {
-    const parts = getDateParts(match.startsAt, timeZone);
+    const parts = getMatchDateParts(match, timeZone);
     if (parts.year === month.year && parts.monthIndex === month.monthIndex) {
       const key = `${parts.year}-${parts.monthIndex}-${parts.day}`;
       const existing = matchesByDay.get(key) ?? [];
@@ -99,7 +102,11 @@ function MonthCalendar({
                   <ul className="space-y-1.5">
                     {dayMatches.map((match) => (
                       <li key={`tooltip-${match.id}`} className="truncate whitespace-nowrap leading-5">
-                        <span className="font-medium">{formatTooltipTime(match.startsAt, locale, timeZone)}</span>
+                        <span className="font-medium">
+                          {match.kickoffTimeTBD
+                            ? t("kickoffTimeTBD")
+                            : formatTooltipTime(match.startsAt, locale, timeZone)}
+                        </span>
                         <span className="text-white/75"> · </span>
                         <span>{matchLabel(match)}</span>
                       </li>
@@ -131,7 +138,7 @@ function buildMonthSpecs(seasonSlug: string, matches: Match[], timeZone: string)
     });
   }
 
-  const firstMatch = matches[0] ? getDateParts(matches[0].startsAt, timeZone) : null;
+  const firstMatch = matches[0] ? getMatchDateParts(matches[0], timeZone) : null;
   const fallbackStartYear = firstMatch?.year ?? new Date().getUTCFullYear();
   const fallbackStartMonth = firstMatch?.monthIndex ?? 6;
 
@@ -169,6 +176,23 @@ function getDateParts(iso: string, timeZone: string) {
   const monthIndex = Number(parts.find((part) => part.type === "month")?.value ?? 1) - 1;
   const day = Number(parts.find((part) => part.type === "day")?.value ?? 1);
   return { year, monthIndex, day };
+}
+
+/**
+ * Which day cell a match belongs in.
+ *
+ * A match with a confirmed kickoff belongs to whatever day that instant falls
+ * on for the viewer — a 20:45 CEST Saturday match really is Sunday in UTC+8.
+ * But when the kickoff time is still pending, `startsAt` is a placeholder
+ * midnight, and converting it would file the match a day late for everyone east
+ * of the source. The published day is authoritative there.
+ */
+function getMatchDateParts(match: Match, timeZone: string) {
+  if (match.kickoffTimeTBD && match.matchDate) {
+    const [year, month, day] = match.matchDate.split("-").map(Number);
+    return { year, monthIndex: month - 1, day };
+  }
+  return getDateParts(match.startsAt, timeZone);
 }
 
 function formatTooltipTime(startsAt: string, locale: Locale, timeZone: string) {

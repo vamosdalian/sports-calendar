@@ -72,18 +72,24 @@ type Match struct {
 	// time is not yet. StartsAt then holds local midnight as a placeholder --
 	// it is not a time the source ever gave, so consumers must not present it
 	// as a confirmed kickoff.
-	KickoffTimeTBD bool          `json:"kickoffTimeTBD,omitempty"`
-	Status         string        `json:"status"`
-	Result         []string      `json:"result"`
-	VenueID        *int64        `json:"venueId,omitempty"`
-	Venue          LocalizedText `json:"venue"`
-	City           LocalizedText `json:"city"`
-	Country        LocalizedText `json:"country"`
-	HomeTeamID     int64         `json:"homeTeamID,omitempty"`
-	AwayTeamID     int64         `json:"awayTeamID,omitempty"`
-	HomeTeam       *Team         `json:"homeTeam,omitempty"`
-	AwayTeam       *Team         `json:"awayTeam,omitempty"`
-	UpdatedAt      string        `json:"updatedAt,omitempty"`
+	KickoffTimeTBD bool `json:"kickoffTimeTBD,omitempty"`
+	// MatchDate is the day the match is played on, as published (YYYY-MM-DD),
+	// and is set only when KickoffTimeTBD. Rendering StartsAt in the viewer's
+	// zone would move a placeholder midnight across the date line -- a 21:00Z
+	// Saturday fixture shows up on Sunday in UTC+8 -- so the day itself has to
+	// travel separately from the timestamp that stands in for its time.
+	MatchDate  string        `json:"matchDate,omitempty"`
+	Status     string        `json:"status"`
+	Result     []string      `json:"result"`
+	VenueID    *int64        `json:"venueId,omitempty"`
+	Venue      LocalizedText `json:"venue"`
+	City       LocalizedText `json:"city"`
+	Country    LocalizedText `json:"country"`
+	HomeTeamID int64         `json:"homeTeamID,omitempty"`
+	AwayTeamID int64         `json:"awayTeamID,omitempty"`
+	HomeTeam   *Team         `json:"homeTeam,omitempty"`
+	AwayTeam   *Team         `json:"awayTeam,omitempty"`
+	UpdatedAt  string        `json:"updatedAt,omitempty"`
 }
 
 type Team struct {

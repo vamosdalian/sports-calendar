@@ -33,7 +33,9 @@ const spiderTeamIDOffset int64 = 100_000_000_000
 // displayed wall-clock time as a naive datetime, so we reinterpret it in this
 // zone before converting to UTC. Verify against a known fixture when onboarding
 // a new competition and adjust if the source ever localizes differently.
-const spiderSourceTimeZone = "Europe/Berlin"
+// Shared with the read path, which needs the same zone to recover the published
+// date of a fixture whose kickoff time is still pending.
+const spiderSourceTimeZone = domain.SourceTimeZone
 
 // How long to wait for a triggered crawl to reach a terminal state, and how
 // often to check. A warm crawl takes ~10s; the headroom covers queue wait when
