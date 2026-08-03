@@ -191,18 +191,32 @@ async def delete_fixtures(
     )
 
 
+def resolve_kickoff(fx: dict) -> tuple[datetime | None, bool]:
+    """Return the fixture's kickoff and whether its time is still pending.
+
+    Transfermarkt publishes a match date long before the broadcaster picks a
+    kickoff time, printing only the date until then. We still store a datetime
+    (at local midnight) so the fixture can be ordered and put on a calendar,
+    but midnight is then indistinguishable from a real kickoff — hence the
+    flag, so consumers don't announce a time the source never gave.
+    """
+    if not fx.get("date"):
+        return None, False
+    published = fx.get("time")
+    return datetime.combine(fx["date"], published or time(0, 0)), published is None
+
+
 async def upsert_fixture(
     session: AsyncSession, *, competition_id: str, season_id: int, fx: dict,
 ) -> None:
-    kickoff = None
-    if fx.get("date"):
-        kickoff = datetime.combine(fx["date"], fx.get("time") or time(0, 0))
+    kickoff, kickoff_time_tbd = resolve_kickoff(fx)
     values = dict(
         match_id=fx.get("match_id"),
         competition_id=competition_id,
         season_id=season_id,
         matchday=fx.get("matchday"),
         kickoff=kickoff,
+        kickoff_time_tbd=kickoff_time_tbd,
         home_team_id=fx.get("home_team_id"),
         away_team_id=fx.get("away_team_id"),
         home_name=fx.get("home_name"),

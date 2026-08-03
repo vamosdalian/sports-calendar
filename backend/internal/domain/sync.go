@@ -104,8 +104,11 @@ type MatchSyncRecord struct {
 	Round      LocalizedText
 	VenueID    *int64
 	StartsAt   time.Time
-	Status     string
-	Result     []string
+	// KickoffTimeTBD marks a match whose kickoff time the source has not
+	// published yet; StartsAt is then local midnight, not a real kickoff.
+	KickoffTimeTBD bool
+	Status         string
+	Result         []string
 }
 
 type VenueSyncRecord struct {

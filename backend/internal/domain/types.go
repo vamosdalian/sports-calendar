@@ -65,20 +65,25 @@ type SeasonDetail struct {
 }
 
 type Match struct {
-	ID         string        `json:"id"`
-	Round      LocalizedText `json:"round"`
-	StartsAt   string        `json:"startsAt"`
-	Status     string        `json:"status"`
-	Result     []string      `json:"result"`
-	VenueID    *int64        `json:"venueId,omitempty"`
-	Venue      LocalizedText `json:"venue"`
-	City       LocalizedText `json:"city"`
-	Country    LocalizedText `json:"country"`
-	HomeTeamID int64         `json:"homeTeamID,omitempty"`
-	AwayTeamID int64         `json:"awayTeamID,omitempty"`
-	HomeTeam   *Team         `json:"homeTeam,omitempty"`
-	AwayTeam   *Team         `json:"awayTeam,omitempty"`
-	UpdatedAt  string        `json:"updatedAt,omitempty"`
+	ID       string        `json:"id"`
+	Round    LocalizedText `json:"round"`
+	StartsAt string        `json:"startsAt"`
+	// KickoffTimeTBD marks a match whose date is published but whose kickoff
+	// time is not yet. StartsAt then holds local midnight as a placeholder --
+	// it is not a time the source ever gave, so consumers must not present it
+	// as a confirmed kickoff.
+	KickoffTimeTBD bool          `json:"kickoffTimeTBD,omitempty"`
+	Status         string        `json:"status"`
+	Result         []string      `json:"result"`
+	VenueID        *int64        `json:"venueId,omitempty"`
+	Venue          LocalizedText `json:"venue"`
+	City           LocalizedText `json:"city"`
+	Country        LocalizedText `json:"country"`
+	HomeTeamID     int64         `json:"homeTeamID,omitempty"`
+	AwayTeamID     int64         `json:"awayTeamID,omitempty"`
+	HomeTeam       *Team         `json:"homeTeam,omitempty"`
+	AwayTeam       *Team         `json:"awayTeam,omitempty"`
+	UpdatedAt      string        `json:"updatedAt,omitempty"`
 }
 
 type Team struct {

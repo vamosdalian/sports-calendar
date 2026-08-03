@@ -75,12 +75,15 @@ type spiderFixture struct {
 	SeasonID      int     `json:"season_id"`
 	Matchday      *string `json:"matchday"`
 	Kickoff       *string `json:"kickoff"`
-	HomeTeamID    *int64  `json:"home_team_id"`
-	AwayTeamID    *int64  `json:"away_team_id"`
-	HomeName      *string `json:"home_name"`
-	AwayName      *string `json:"away_name"`
-	HomeScore     *int    `json:"home_score"`
-	AwayScore     *int    `json:"away_score"`
+	// KickoffTimeTBD is set by the crawler when the source published the date
+	// but not the time; Kickoff is then local midnight as a placeholder.
+	KickoffTimeTBD bool    `json:"kickoff_time_tbd"`
+	HomeTeamID     *int64  `json:"home_team_id"`
+	AwayTeamID     *int64  `json:"away_team_id"`
+	HomeName       *string `json:"home_name"`
+	AwayName       *string `json:"away_name"`
+	HomeScore      *int    `json:"home_score"`
+	AwayScore      *int    `json:"away_score"`
 }
 
 func NewSpiderFetcher(baseURL string, timeout time.Duration, logger *logrus.Logger) (*SpiderFetcher, error) {
@@ -162,11 +165,12 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 				englishText(homeName),
 				englishText(awayName),
 			},
-			Round:    spiderRound(fx.Matchday),
-			VenueID:  nil,
-			StartsAt: startsAt,
-			Status:   status,
-			Result:   spiderResult(status, fx.HomeScore, fx.AwayScore),
+			Round:          spiderRound(fx.Matchday),
+			VenueID:        nil,
+			StartsAt:       startsAt,
+			KickoffTimeTBD: fx.KickoffTimeTBD,
+			Status:         status,
+			Result:         spiderResult(status, fx.HomeScore, fx.AwayScore),
 		})
 	}
 

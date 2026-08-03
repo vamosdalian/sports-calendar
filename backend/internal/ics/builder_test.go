@@ -308,3 +308,58 @@ func TestBuildExpiredFeedCalendarDefaultsToEnglish(t *testing.T) {
 		t.Fatalf("expected slug fallback in calendar name body=%s", body)
 	}
 }
+
+// A match whose kickoff time the source has not published yet is stored at
+// local midnight as a placeholder. It still belongs on the calendar — the date
+// is real — but an alarm for that placeholder hour woke subscribers before a
+// match that was not kicking off, so the reminder is dropped while the timed
+// event itself (and its duration) stays exactly as it was.
+func TestBuildCalendarSkipsAlarmWhenKickoffTimeIsPending(t *testing.T) {
+	payload := backendics.CalendarPayload{
+		SportSlug:                   "soccer",
+		LeagueSlug:                  "spanish-la-liga",
+		LeagueNames:                 domain.LocalizedText{"en": "Spanish La Liga"},
+		Locale:                      "en",
+		SeasonLabel:                 "2026-2027",
+		UpdatedAt:                   "2026-08-03T00:00:00Z",
+		DefaultMatchDurationMinutes: 120,
+		Matches: []domain.Match{
+			{
+				ID:             "tm:4909496",
+				Round:          domain.LocalizedText{"en": "4.Matchday"},
+				StartsAt:       "2026-09-05T22:00:00Z",
+				KickoffTimeTBD: true,
+				Status:         "scheduled",
+				HomeTeam:       &domain.Team{Slug: "deportivo-alaves", Names: domain.LocalizedText{"en": "Deportivo Alavés"}},
+				AwayTeam:       &domain.Team{Slug: "ca-osasuna", Names: domain.LocalizedText{"en": "CA Osasuna"}},
+				UpdatedAt:      "2026-08-03T00:00:00Z",
+			},
+		},
+	}
+
+	content, err := backendics.BuildCalendar(payload, time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("build calendar: %v", err)
+	}
+	body := string(content)
+	if strings.Contains(body, "BEGIN:VALARM") {
+		t.Fatalf("expected no reminder for a pending kickoff time body=%s", body)
+	}
+	// The event keeps its placeholder start and its normal 2h duration.
+	if !strings.Contains(body, "DTSTART:20260905T220000Z") || !strings.Contains(body, "DTEND:20260906T000000Z") {
+		t.Fatalf("expected the timed event to be unchanged body=%s", body)
+	}
+	if !strings.Contains(body, "SUMMARY:Deportivo Alavés vs CA Osasuna") {
+		t.Fatalf("expected the summary to carry no extra marker body=%s", body)
+	}
+
+	// The same match with a confirmed time keeps its reminder.
+	payload.Matches[0].KickoffTimeTBD = false
+	content, err = backendics.BuildCalendar(payload, time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("build calendar with confirmed kickoff: %v", err)
+	}
+	if !strings.Contains(string(content), "TRIGGER:-PT1800S") {
+		t.Fatalf("expected a confirmed kickoff to keep its reminder body=%s", string(content))
+	}
+}
