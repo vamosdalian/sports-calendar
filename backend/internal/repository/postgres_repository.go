@@ -862,7 +862,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 	}
 
 	matchRows, err := r.pool.Query(ctx, `
-		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.result, m.venue_id, v.name, v.city, v.country, m.teams, m.updated_at
+		SELECT m.external_id, m.round_name, m.starts_at, m.status, m.result, m.venue_id, v.name, v.city, v.country, m.teams, m.updated_at, m.kickoff_time_tbd
 		FROM matches m
 		LEFT JOIN venues v ON v.id = m.venue_id
 		WHERE m.season_id = $1
@@ -900,6 +900,7 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 			&countryRaw,
 			&teamIDs,
 			&matchUpdatedAt,
+			&match.KickoffTimeTBD,
 		); scanErr != nil {
 			return domain.SeasonDetail{}, fmt.Errorf("scan match row: %w", scanErr)
 		}
@@ -1132,8 +1133,9 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 				venue_id,
 				starts_at,
 				status,
-				result
-			) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8)
+				result,
+				kickoff_time_tbd
+			) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9)
 			ON CONFLICT (external_id) DO UPDATE
 			SET season_id = EXCLUDED.season_id,
 			    teams = EXCLUDED.teams,
@@ -1142,6 +1144,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			    starts_at = EXCLUDED.starts_at,
 			    status = EXCLUDED.status,
 			    result = EXCLUDED.result,
+			    kickoff_time_tbd = EXCLUDED.kickoff_time_tbd,
 			    updated_at = NOW()
 			WHERE matches.season_id IS DISTINCT FROM EXCLUDED.season_id
 			   OR matches.teams IS DISTINCT FROM EXCLUDED.teams
@@ -1150,7 +1153,8 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			   OR matches.starts_at IS DISTINCT FROM EXCLUDED.starts_at
 			   OR matches.status IS DISTINCT FROM EXCLUDED.status
 			   OR matches.result IS DISTINCT FROM EXCLUDED.result
-		`, snapshot.Target.SeasonID, match.ExternalID, storedTeamIDs, encodeLocalizedText(match.Round), match.VenueID, match.StartsAt.UTC(), match.Status, matchResult); err != nil {
+			   OR matches.kickoff_time_tbd IS DISTINCT FROM EXCLUDED.kickoff_time_tbd
+		`, snapshot.Target.SeasonID, match.ExternalID, storedTeamIDs, encodeLocalizedText(match.Round), match.VenueID, match.StartsAt.UTC(), match.Status, matchResult, match.KickoffTimeTBD); err != nil {
 			return fmt.Errorf("upsert match %s: %w", match.ExternalID, err)
 		}
 		matchExternalIDs = append(matchExternalIDs, match.ExternalID)

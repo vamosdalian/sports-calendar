@@ -251,6 +251,19 @@ var allMigrations = []migration{
 			 ON CONFLICT DO NOTHING`,
 		},
 	},
+	{
+		version: 11,
+		name:    "match_kickoff_time_tbd",
+		statements: []string{
+			// The source publishes a match date long before the broadcaster
+			// picks a kickoff time, and prints only the date until then. Those
+			// matches are stored at local midnight, which starts_at alone can
+			// not distinguish from a confirmed midnight kickoff -- so the feed
+			// announced a time the source never gave, and rang an alarm for it.
+			// This flag carries "time still pending" through from the crawler.
+			`ALTER TABLE matches ADD COLUMN IF NOT EXISTS kickoff_time_tbd BOOLEAN NOT NULL DEFAULT FALSE`,
+		},
+	},
 }
 
 func Run(ctx context.Context, pool *pgxpool.Pool, logger *logrus.Logger) error {

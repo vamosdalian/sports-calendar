@@ -6,6 +6,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Date,
     DateTime,
     Enum,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -216,6 +218,14 @@ class Fixture(Base, TimestampMixin):
     matchday: Mapped[str | None] = mapped_column(String(64), nullable=True)
     kickoff: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=False), nullable=True
+    )
+    # Transfermarkt publishes the date long before the broadcaster picks a
+    # kickoff time, and prints only the date until then. `kickoff` stores local
+    # midnight in that case, which is indistinguishable from a real time — so
+    # record here that the time is still pending. Consumers use it to avoid
+    # presenting midnight as if it were the confirmed kickoff.
+    kickoff_time_tbd: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"), default=False
     )
     home_team_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     away_team_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

@@ -56,7 +56,13 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		}
 		categories.SetTextList(categoryValues)
 		event.Props.Set(categories)
-		event.Children = append(event.Children, buildReminderAlarm(summary))
+		// A match whose kickoff time the source has not published yet sits at
+		// local midnight as a placeholder. Keep it on the calendar so the date
+		// is visible, but don't ring an alarm for an hour nobody scheduled --
+		// that woke subscribers up before a match that wasn't kicking off.
+		if !match.KickoffTimeTBD {
+			event.Children = append(event.Children, buildReminderAlarm(summary))
+		}
 
 		calendar.Children = append(calendar.Children, event.Component)
 	}

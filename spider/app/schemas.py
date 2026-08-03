@@ -63,6 +63,7 @@ class FixtureOut(BaseModel):
     season_id: int
     matchday: str | None = None
     kickoff: datetime | None = None
+    kickoff_time_tbd: bool = False
     home_team_id: int | None = None
     away_team_id: int | None = None
     home_name: str | None = None
