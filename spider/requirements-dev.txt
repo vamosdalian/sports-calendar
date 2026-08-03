@@ -1,0 +1,3 @@
+# Test-only dependencies. Kept out of requirements.txt so they stay out of the
+# runtime image; install with `pip install -r requirements.txt -r requirements-dev.txt`.
+pytest==8.3.4

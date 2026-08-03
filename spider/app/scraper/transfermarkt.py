@@ -23,6 +23,11 @@ from app.scraper.client import fetcher
 _COMP_RE = re.compile(r"/(wettbewerb|pokalwettbewerb)/([A-Za-z0-9]+)")
 _POS_SUFFIX_RE = re.compile(r"\(\d+\.\)\s*$")  # trailing "(3.)" league position
 
+# Section headers that only introduce the match list rather than name a round
+# (the Champions League league phase prints "Schedule" above all 144 matches).
+# For those the box headline is the better label.
+_GENERIC_SECTIONS = {"Schedule", "Spielplan"}
+
 
 # ── Real season list from a competition's saison_id dropdown ────────────────
 async def scrape_competition_seasons(
@@ -192,34 +197,42 @@ def parse_fixtures(tree: HTMLParser, code: str, season: int) -> dict:
     fixtures: list[dict] = []
     for box in tree.css("div.box"):
         header = box.css_first("h2, .content-box-headline")
-        matchday = pu.text(header) or None
-        # Some competitions (e.g. World Cup) keep the kickoff time only in the
-        # mobile "show-for-small" date+time cell, in rows separate from the
-        # desktop team row. Collect those times per date (FIFO) so a match row
-        # lacking its own time can borrow one.
-        sfs_times: dict = {}
-        for cell in box.css("td.show-for-small"):
-            txt = pu.text(cell)
-            ct = pu.parse_time(txt)
-            cd = pu.date_from_text(txt) or pu.date_from_datum_href(
-                cell.css_first("a[href*='datum/']").attributes.get("href")
-                if cell.css_first("a[href*='datum/']") else None
-            )
-            if ct and cd:
-                sfs_times.setdefault(cd, []).append(ct)
+        box_label = pu.text(header) or None
         # Iterate every row in the box (cups put standings, match lists and
         # stats tables side by side). Non-match rows are filtered out below.
+        # Transfermarkt prints the kickoff slot **once**, in a header row above
+        # the matches that share it, so date and time are carried forward from
+        # the most recent header until the next one replaces them.
+        section = None
         last_date = None
+        last_time = None
         for row in box.css("tr"):
+            classes = row.attributes.get("class") or ""
+            if "bg_Sturm" in classes:
+                # Round header inside the box ("Last 16 1st Leg"). It opens a
+                # new section, so the carried kickoff slot no longer applies.
+                label = pu.text(row.css_first("td"))
+                section = label if label and label not in _GENERIC_SECTIONS else None
+                last_date = last_time = None
+                continue
+            matchday = section or box_label
             club_links = row.css("a[href*='/verein/']")
             if len(club_links) < 2:
-                # Possibly a date-header row (knockout rounds) -> carry its date.
+                # Kickoff-slot header. Only the mobile ("show-for-small") cell
+                # carries the time — e.g. "Tue16/09/20256:45 PM" — while the
+                # desktop match rows below repeat neither date nor time. Read
+                # both here so every match in the slot can inherit them.
+                cell = row.css_first("td.show-for-small") or row.css_first("td")
+                txt = pu.text(cell)
                 datum = row.css_first("a[href*='datum/']")
                 dd = pu.date_from_datum_href(
                     datum.attributes.get("href") if datum else None
-                )
+                ) or pu.date_from_text(txt)
                 if dd:
                     last_date = dd
+                    # None when the slot has no published time yet; better than
+                    # keeping the previous slot's time on a later kickoff.
+                    last_time = pu.parse_time(txt)
                 continue
             # A match row carries 4 club links: home name, home crest,
             # away crest, away name. Home is the first, away the last.
@@ -257,10 +270,12 @@ def parse_fixtures(tree: HTMLParser, code: str, season: int) -> dict:
                 t = pu.parse_time(pu.text(cell))
                 if t:
                     break
-            # Fallback: borrow the mobile (show-for-small) time for this date.
-            fx_date = d or last_date
-            if t is None and fx_date in sfs_times and sfs_times[fx_date]:
-                t = sfs_times[fx_date].pop(0)
+            if t is not None:
+                last_time = t
+            else:
+                # Row inside a kickoff slot whose time was printed on the
+                # header row above it.
+                t = last_time
             fixtures.append(
                 {
                     "match_id": pu.match_id_from_href(
