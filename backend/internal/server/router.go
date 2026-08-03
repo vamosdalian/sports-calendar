@@ -170,6 +170,16 @@ func (h *Handler) getLeagueICS(c *gin.Context) {
 			httputil.JSONError(c, http.StatusNotFound, "not_found", "league feed not found")
 			return
 		}
+		if errors.Is(err, service.ErrFeedEmpty) {
+			// 503 rather than an empty 200: a calendar client keeps the fixtures
+			// it already has when a fetch fails, and wipes them when it succeeds
+			// with nothing in it. Retry-After keeps it polling so the feed heals
+			// on its own once the data is back.
+			h.recordICSFetch(c, teamSlug, locale, http.StatusServiceUnavailable)
+			c.Header("Retry-After", "3600")
+			httputil.JSONError(c, http.StatusServiceUnavailable, "feed_empty", "league feed temporarily has no fixtures")
+			return
+		}
 		h.recordICSFetch(c, teamSlug, locale, http.StatusInternalServerError)
 		httputil.JSONError(c, http.StatusInternalServerError, "ics_failed", err.Error())
 		return

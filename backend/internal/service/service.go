@@ -17,6 +17,18 @@ var ErrConflict = domain.ErrConflict
 var ErrInvalidArgument = domain.ErrInvalidArgument
 var ErrUnauthorized = domain.ErrUnauthorized
 
+// ErrFeedEmpty means the current season resolved but carries no fixtures, so
+// rendering the feed would produce an empty calendar.
+//
+// This is never served as a 200. A subscribed calendar treats every fetch as an
+// authoritative full snapshot and deletes any event missing from it, so an
+// empty feed does not read as "nothing new" to a client -- it reads as "delete
+// every match this user had", across every subscriber at once, with no way to
+// undo it and no error the user would ever see. An upstream failure that
+// empties a season has already happened once on the ingest side; this is the
+// same guard on the serving side.
+var ErrFeedEmpty = errors.New("feed has no fixtures")
+
 type repository interface {
 	ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error)
 	ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error)
@@ -387,6 +399,13 @@ func (s *Service) BuildLeagueICS(ctx context.Context, sportSlug, leagueSlug, loc
 	detail, err := s.GetLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug)
 	if err != nil {
 		return nil, err
+	}
+	if len(detail.Matches) == 0 {
+		// Checked before the team filter on purpose. An empty season would
+		// otherwise reach filterMatchesByTeam, find nothing, and be reported to
+		// the subscriber as an expired team slug -- telling them to go
+		// re-subscribe when the real problem is a transient gap in our data.
+		return nil, ErrFeedEmpty
 	}
 	teamNames := domain.LocalizedText(nil)
 	filteredMatches := detail.Matches

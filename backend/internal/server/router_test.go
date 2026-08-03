@@ -36,6 +36,7 @@ type fakeRepository struct {
 	venuesByID      map[int64]domain.VenueRecord
 	manualMatches   map[string][]domain.Match
 	seasonMatches   map[string]int
+	emptySeasons    map[string]bool
 	usersByEmail    map[string]fakeUser
 	enqueuedTargets []domain.LeagueSyncTarget
 	queueSnapshot   domain.RefreshQueueSnapshot
@@ -123,6 +124,7 @@ func newFakeRepository() *fakeRepository {
 		seasonMatches: map[string]int{
 			"football/csl/2026": 2,
 		},
+		emptySeasons: map[string]bool{},
 		usersByEmail: map[string]fakeUser{},
 	}
 }
@@ -271,6 +273,20 @@ func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlu
 	season, exists := r.seasonsByKey[seasonKey(sportSlug, leagueSlug, seasonSlug)]
 	if !exists || !season.Show {
 		return domain.SeasonDetail{}, domain.ErrNotFound
+	}
+	// A season that resolves but carries no fixtures: what an upstream failure
+	// that wiped one looks like from here.
+	if r.emptySeasons[seasonKey(sportSlug, leagueSlug, seasonSlug)] {
+		return domain.SeasonDetail{
+			SportSlug:                   "football",
+			SportNames:                  domain.LocalizedText{"en": "Football", "zh": "足球"},
+			LeagueSlug:                  "csl",
+			LeagueNames:                 domain.LocalizedText{"en": "Chinese Super League", "zh": "中超"},
+			SeasonSlug:                  "2026",
+			SeasonLabel:                 "2026",
+			DefaultMatchDurationMinutes: 120,
+			UpdatedAt:                   "2026-03-10T00:00:00Z",
+		}, nil
 	}
 	matches := []domain.Match{
 		{
@@ -2184,5 +2200,63 @@ func TestICSFeedUnknownLeagueStill404s(t *testing.T) {
 
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for an unknown league, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// The reason this guard exists. A subscribed calendar treats each fetch as an
+// authoritative snapshot, so serving an empty calendar with a 200 tells every
+// client to delete every fixture the subscriber had -- irreversibly, and
+// without surfacing anything they could report. Failing the request instead
+// makes clients keep what they already have.
+func TestICSFeedEmptySeasonFailsRatherThanServingAnEmptyCalendar(t *testing.T) {
+	router, repo, _ := testRouter(t)
+	repo.emptySeasons[seasonKey("football", "csl", "2026")] = true
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ics/football/csl/matches.ics", nil))
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for an empty season, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if body := recorder.Body.String(); strings.Contains(body, "BEGIN:VCALENDAR") {
+		t.Fatalf("an empty season must not render a calendar body=%s", body)
+	}
+	// Without this the client has no reason to come back on its own.
+	if got := recorder.Header().Get("Retry-After"); got == "" {
+		t.Fatal("expected a Retry-After header so clients keep polling")
+	}
+}
+
+// The empty check runs before the team filter, so a wiped season is not
+// misreported to team subscribers as a slug that expired -- that notice tells
+// them to re-subscribe, which is the wrong instruction and costs a subscriber.
+func TestICSFeedEmptySeasonByTeamDoesNotClaimTheSlugExpired(t *testing.T) {
+	router, repo, _ := testRouter(t)
+	repo.emptySeasons[seasonKey("football", "csl", "2026")] = true
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ics/football/csl/matches.ics?team=beijing-guoan", nil))
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for an empty season, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if body := recorder.Body.String(); strings.Contains(body, "BEGIN:VCALENDAR") {
+		t.Fatalf("an empty season must not render the expiry notice body=%s", body)
+	}
+}
+
+// A genuinely stale team slug still gets the expiry notice: the guard above
+// must not swallow the case it was never meant to cover.
+func TestICSFeedUnknownTeamStillServesExpiryNoticeWhenSeasonHasFixtures(t *testing.T) {
+	router, _, _ := testRouter(t)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ics/football/csl/matches.ics?team=unknown-team", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 for a stale team slug, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "BEGIN:VCALENDAR") {
+		t.Fatalf("expected the expiry notice calendar body=%s", body)
 	}
 }
