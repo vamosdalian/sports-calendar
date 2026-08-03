@@ -10,6 +10,15 @@ export type Match = {
   round: string;
   title?: string;
   startsAt: string;
+  /**
+   * The source published this match's date but not yet its kickoff time.
+   * `startsAt` then holds midnight in the source's zone as a placeholder, so it
+   * must not be rendered as a time — nor converted into the viewer's zone,
+   * which would move the match onto the wrong day. Use `matchDate` instead.
+   */
+  kickoffTimeTBD?: boolean;
+  /** The published day (YYYY-MM-DD). Present only when `kickoffTimeTBD`. */
+  matchDate?: string;
   status: string;
   result?: string[];
   venue: string;

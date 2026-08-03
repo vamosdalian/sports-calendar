@@ -145,7 +145,13 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
                 {t("nextMatchLabel")}
               </span>
               <div className="mt-1 flex flex-col gap-1 text-sm sm:flex-row sm:items-center">
-                <LocalizedMatchTime className="font-medium text-ink" startsAt={nextMatch.startsAt} locale={locale} />
+                <LocalizedMatchTime
+                  className="font-medium text-ink"
+                  startsAt={nextMatch.startsAt}
+                  kickoffTimeTBD={nextMatch.kickoffTimeTBD}
+                  matchDate={nextMatch.matchDate}
+                  locale={locale}
+                />
                 <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
                 <span className="text-ink/75">
                   <MatchFixtureLabel match={nextMatch} teamSlug={canonicalTeamSlug} />

@@ -97,6 +97,13 @@ type TeamSyncRecord struct {
 	ShortName LocalizedText
 }
 
+// SourceTimeZone is the zone the upstream crawler renders kickoff times in
+// (Transfermarkt's German site default). Two places need it and must agree:
+// the syncer, which reinterprets the crawler's naive wall-clock time before
+// storing UTC, and the read path, which recovers the published match date for
+// fixtures whose kickoff time is still pending. Change it in one place only.
+const SourceTimeZone = "Europe/Berlin"
+
 type MatchSyncRecord struct {
 	ExternalID string
 	Teams      []int64

@@ -59,7 +59,13 @@ export function TeamMatchList({
               >
                 {match.round ? <span className="font-medium text-ink/72">{match.round}</span> : null}
                 {match.round ? <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span> : null}
-                <LocalizedMatchTime className="font-medium text-ink" startsAt={match.startsAt} locale={locale} />
+                <LocalizedMatchTime
+                  className="font-medium text-ink"
+                  startsAt={match.startsAt}
+                  kickoffTimeTBD={match.kickoffTimeTBD}
+                  matchDate={match.matchDate}
+                  locale={locale}
+                />
                 <span className="hidden text-ink/45 sm:inline sm:mx-2">/</span>
                 <span>
                   {/* The list is chronological rather than split by venue; the
