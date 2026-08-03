@@ -1,0 +1,7 @@
+"""Put the spider package root on sys.path so the tests import `app.*` the
+same way whether pytest is started from spider/ or from the repo root."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
