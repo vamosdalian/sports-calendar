@@ -51,20 +51,25 @@ type localizedMatchGroup struct {
 }
 
 type localizedMatch struct {
-	ID         string         `json:"id"`
-	Round      string         `json:"round"`
-	Title      string         `json:"title"`
-	StartsAt   string         `json:"startsAt"`
-	Status     string         `json:"status"`
-	Result     []string       `json:"result"`
-	VenueID    *int64         `json:"venueId,omitempty"`
-	Venue      string         `json:"venue"`
-	City       string         `json:"city"`
-	Country    string         `json:"country"`
-	HomeTeamID int64          `json:"homeTeamID,omitempty"`
-	AwayTeamID int64          `json:"awayTeamID,omitempty"`
-	HomeTeam   *localizedTeam `json:"homeTeam,omitempty"`
-	AwayTeam   *localizedTeam `json:"awayTeam,omitempty"`
+	ID       string `json:"id"`
+	Round    string `json:"round"`
+	Title    string `json:"title"`
+	StartsAt string `json:"startsAt"`
+	// Mirrors domain.Match: StartsAt is a placeholder midnight when the kickoff
+	// time is still pending, and MatchDate carries the published day so clients
+	// don't shift the match by converting that placeholder into their own zone.
+	KickoffTimeTBD bool           `json:"kickoffTimeTBD,omitempty"`
+	MatchDate      string         `json:"matchDate,omitempty"`
+	Status         string         `json:"status"`
+	Result         []string       `json:"result"`
+	VenueID        *int64         `json:"venueId,omitempty"`
+	Venue          string         `json:"venue"`
+	City           string         `json:"city"`
+	Country        string         `json:"country"`
+	HomeTeamID     int64          `json:"homeTeamID,omitempty"`
+	AwayTeamID     int64          `json:"awayTeamID,omitempty"`
+	HomeTeam       *localizedTeam `json:"homeTeam,omitempty"`
+	AwayTeam       *localizedTeam `json:"awayTeam,omitempty"`
 }
 
 type localizedTeam struct {
@@ -115,18 +120,20 @@ func localizeSeasonDetail(payload service.SeasonDetail, locale string) localized
 		matches := make([]localizedMatch, 0, len(group.Matches))
 		for _, match := range group.Matches {
 			localized := localizedMatch{
-				ID:         match.ID,
-				Round:      pickLocalizedText(match.Round, locale),
-				Title:      match.DisplayTitle(locale),
-				StartsAt:   match.StartsAt,
-				Status:     match.Status,
-				Result:     normalizeMatchResult(match.Result),
-				VenueID:    match.VenueID,
-				Venue:      pickLocalizedText(match.Venue, locale),
-				City:       pickLocalizedText(match.City, locale),
-				Country:    pickLocalizedText(match.Country, locale),
-				HomeTeamID: match.HomeTeamID,
-				AwayTeamID: match.AwayTeamID,
+				ID:             match.ID,
+				Round:          pickLocalizedText(match.Round, locale),
+				Title:          match.DisplayTitle(locale),
+				StartsAt:       match.StartsAt,
+				KickoffTimeTBD: match.KickoffTimeTBD,
+				MatchDate:      match.MatchDate,
+				Status:         match.Status,
+				Result:         normalizeMatchResult(match.Result),
+				VenueID:        match.VenueID,
+				Venue:          pickLocalizedText(match.Venue, locale),
+				City:           pickLocalizedText(match.City, locale),
+				Country:        pickLocalizedText(match.Country, locale),
+				HomeTeamID:     match.HomeTeamID,
+				AwayTeamID:     match.AwayTeamID,
 			}
 
 			if match.HomeTeam != nil {
