@@ -1030,13 +1030,18 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 	}
 
 	// Drop memberships that are no longer part of this league's roster before
-	// upserting the new one. On a routine sync this only clears genuinely
-	// departed teams; on a provider switch the whole roster changes id/slug, so
-	// this removes the old provider's teams that would otherwise collide with the
-	// new ones on the (league_id, slug) unique constraint (upsert only handles
-	// the id conflict). Teams still referenced by an admin-created manual match
-	// are kept. Skipped when the snapshot is empty to avoid wiping a league on a
-	// transient upstream hiccup.
+	// upserting the new one. On a provider switch the whole roster changes
+	// id/slug, so this removes the old provider's teams that would otherwise
+	// collide with the new ones on the (league_id, slug) unique constraint
+	// (upsert only handles the id conflict). Skipped when the snapshot is empty
+	// to avoid wiping a league on a transient upstream hiccup.
+	//
+	// A snapshot only ever covers one season, so "not in the roster" means "not
+	// in this season's roster". A team still referenced by any *other* season of
+	// the league is kept: a club relegated out of the Premier League still
+	// played last season's fixtures, and dropping it here would leave those
+	// matches without a team name. Same for an admin-created manual match in
+	// this season, which no upstream snapshot will ever mention.
 	//
 	// Only the membership is removed here. A club dropping out of the Champions
 	// League still plays in its domestic league, so the teams row itself is
@@ -1052,10 +1057,10 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			    FROM matches m
 			    JOIN seasons s ON s.id = m.season_id
 			    WHERE s.league_id = $1
-			      AND m.external_id LIKE 'manual:%'
+			      AND (m.season_id <> $3 OR m.external_id LIKE 'manual:%')
 			      AND tl.team_id = ANY(m.teams)
 			  )
-		`, snapshot.Target.LeagueID, keepTeamIDs); err != nil {
+		`, snapshot.Target.LeagueID, keepTeamIDs, snapshot.Target.SeasonID); err != nil {
 			return fmt.Errorf("prune stale team memberships: %w", err)
 		}
 		// A team no league claims any more is gone for good, unless a match
