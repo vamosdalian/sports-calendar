@@ -37,14 +37,6 @@ export async function generateMetadata({
     title,
     description: data.season.calendarDescription,
     alternates,
-    openGraph: {
-      title,
-      description: data.season.calendarDescription,
-      url: alternates.canonical,
-      siteName: "sports-calendar.com",
-      type: "website",
-      locale: lang,
-    },
     other: {
       "last-modified": data.updatedAt,
       "article:modified_time": data.updatedAt,

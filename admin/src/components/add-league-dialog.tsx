@@ -109,7 +109,7 @@ export function AddLeagueDialog({ sportSlug, open, onOpenChange, onCreated }: Ad
 							<SelectContent>
 								<SelectGroup>
 									<SelectItem value="spider">spider (Transfermarkt crawler)</SelectItem>
-									<SelectItem value="thesportsdb">thesportsdb (retired, not synced)</SelectItem>
+									<SelectItem value="manual">manual (not synced)</SelectItem>
 								</SelectGroup>
 							</SelectContent>
 						</Select>

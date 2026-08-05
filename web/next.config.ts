@@ -7,11 +7,9 @@ const nextConfig: NextConfig = {
   // Static export: every route is written out as a real HTML file and served
   // straight from Cloudflare's asset storage, without invoking a Worker.
   //
-  // This is the whole point of the setup. Under OpenNext the prerendered pages
-  // were stored in R2 and replayed *through* the Worker, so even a fully
-  // cached page paid the cost of booting the Next runtime — which exceeded the
-  // 10ms CPU limit and returned `exceededCpu` 503s on roughly 8% of requests.
-  // A static file read has no such limit.
+  // Serving pages through a dynamic Worker made even cached responses pay the
+  // cost of booting the Next runtime, exceeding the 10ms CPU limit on roughly
+  // 8% of requests. A static file read has no such limit.
   //
   // The tradeoffs this locks in, all of them deliberate:
   //   - No middleware. Redirects live in `public/_redirects` instead.

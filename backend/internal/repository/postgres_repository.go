@@ -931,8 +931,8 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 		return domain.SeasonDetail{}, fmt.Errorf("iterate matches: %w", err)
 	}
 
-	// Collapse manual placeholders that have been superseded by a TheSportsDB
-	// record for the same real-world fixture.  Both rows live in the database;
+	// Collapse manual placeholders that have been superseded by an upstream
+	// record for the same real-world fixture. Both rows live in the database;
 	// the admin view keeps all rows so operators can spot duplicates, while the
 	// public view surfaces only the winner (latest updated_at).
 	if publicOnly {
@@ -956,10 +956,8 @@ func (r *PostgresRepository) getLeagueSeason(ctx context.Context, sportSlug, lea
 }
 
 func (r *PostgresRepository) ListSyncTargets(ctx context.Context) ([]domain.LeagueSyncTarget, error) {
-	// Only spider-backed leagues are synced. TheSportsDB has been retired as a
-	// data source, so a league still marked provider='thesportsdb' (the World
-	// Cup, kept for its finished fixtures) must not be polled -- doing so only
-	// produces hourly upstream errors for data that will never change again.
+	// Only spider-backed leagues are synced. A manual league (for example a
+	// historical competition kept for its finished fixtures) must not be polled.
 	// This is deliberately a provider filter rather than a show filter: a next
 	// season staged with show=false is still spider-backed and must keep syncing
 	// so its fixtures are ready before it goes live.
@@ -1480,8 +1478,8 @@ func mapWriteError(action string, err error) error {
 }
 
 // deduplicateMatches collapses duplicate match records that represent the same
-// real-world fixture.  The database intentionally stores both manual
-// placeholders and TheSportsDB-sourced records side by side; this function
+// real-world fixture. The database intentionally stores both manual
+// placeholders and upstream records side by side; this function
 // ensures the caller only sees one entry per actual match.
 //
 // Two matches are considered the same fixture when they share a kickoff minute

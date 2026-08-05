@@ -120,7 +120,7 @@ export function EditLeagueDialog({ league, open, onOpenChange, onSaved }: EditLe
 							<SelectContent>
 								<SelectGroup>
 									<SelectItem value="spider">spider (Transfermarkt crawler)</SelectItem>
-									<SelectItem value="thesportsdb">thesportsdb (retired, not synced)</SelectItem>
+									<SelectItem value="manual">manual (not synced)</SelectItem>
 								</SelectGroup>
 							</SelectContent>
 						</Select>

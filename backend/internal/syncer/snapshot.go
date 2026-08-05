@@ -9,8 +9,7 @@ import (
 )
 
 // SnapshotFetcher fetches a league's fixtures/teams for a sync run. The spider
-// (Transfermarkt crawler) is the only implementation now that TheSportsDB has
-// been retired.
+// (Transfermarkt crawler) is the only implementation.
 type SnapshotFetcher interface {
 	FetchLeagueSnapshot(ctx context.Context, target domain.LeagueSyncTarget) (domain.LeagueSnapshot, error)
 }

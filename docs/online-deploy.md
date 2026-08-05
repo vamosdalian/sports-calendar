@@ -14,12 +14,12 @@
 
 建议采用以下架构：
 
-1. `sports-calendar.com` -> Web 前端（Cloudflare Workers + OpenNext）
+1. `sports-calendar.com` -> Web 前端（Next.js 静态导出 + Cloudflare assets-only Worker）
 2. `admin.sports-calendar.com` -> Admin 前端（静态站点，Cloudflare Pages 或 Nginx）
 3. `api.sports-calendar.com` -> Backend API（自有服务器）
 4. PostgreSQL 与 API 同网络，数据库不对公网开放
 
-说明：当前 `web` 为 Next.js App Router + middleware 形态，建议按 Workers 方案部署，而非纯静态导出。
+说明：当前 `web` 使用 `output: "export"`，生产请求直接读取静态资产，不启动服务端 Next.js 运行时。
 
 ---
 
@@ -57,7 +57,7 @@ cd ../admin && npm run build
 上线前准备好以下信息：
 
 1. 域名：`sports-calendar.com`、`api.sports-calendar.com`、`admin.sports-calendar.com`
-2. TheSportsDB API Key
+2. sports-spider 服务地址
 3. 后端管理员 JWT Secret（高强度随机字符串）
 4. 数据库账号密码
 5. Cloudflare 项目访问权限
@@ -111,8 +111,8 @@ server:
   port: 8080
 
 rateLimit:
-  requestsPerSecond: 8
-  burst: 16
+  requestsPerSecond: 128
+  burst: 256
 
 database:
   host: sports-calendar-postgres
@@ -122,10 +122,12 @@ database:
   password: CHANGE_ME_DB_PASSWORD
   sslmode: disable
 
-theSportsDB:
-  baseURL: https://www.thesportsdb.com
-  apiKey: CHANGE_ME_THESPORTSDB_KEY
-  timeoutSeconds: 15
+spider:
+  upstreamURL: http://tm_app:8000
+  timeoutSeconds: 30
+
+site:
+  webBaseURL: https://sports-calendar.com
 
 adminAuth:
   secret: CHANGE_ME_LONG_RANDOM_SECRET
@@ -309,7 +311,8 @@ curl -s https://api.sports-calendar.com/api/leagues?lang=en | jq .
 
 ## 4.1 平台建议
 
-`web` 建议部署到 Cloudflare Workers（OpenNext 方案）。
+`web` 以静态导出形式部署到 Cloudflare assets-only Worker。生产发布统一由
+`.github/workflows/web-rebuild.yml` 执行。
 
 ## 4.2 生产环境变量
 
@@ -324,12 +327,12 @@ SPORTS_CALENDAR_PUBLIC_API_BASE_URL=https://api.sports-calendar.com
 
 ## 4.3 构建与部署
 
-按你的部署平台流水线执行 `web` 目录的构建与发布（示例）：
+正常发布由 `master` 分支的 GitHub Actions 自动完成。手工应急发布命令：
 
 ```bash
 cd web
 npm ci
-npm run build
+npm run deploy
 ```
 
 完成后绑定自定义域名 `sports-calendar.com`。
