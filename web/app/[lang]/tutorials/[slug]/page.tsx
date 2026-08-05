@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { LanguageSwitcher } from "../../../../components/language-switcher";
 import { TimeZoneSelector } from "../../../../components/time-zone-selector";
+import { buildSocialMetadata } from "../../../../lib/social-metadata";
 import { getTutorial, getTutorialSlugs } from "../../../../lib/tutorials";
 import { isLocale, locales, toAlternates, type Locale, toPath, toTutorialPath } from "../../../../lib/site";
 
@@ -28,10 +29,20 @@ export async function generateMetadata({
     return {};
   }
 
+  const title = `${tutorial.title} | sports-calendar.com`;
+  const alternates = toAlternates(lang, (entry) => toTutorialPath(entry, tutorial.slug));
+
   return {
-    title: `${tutorial.title} | sports-calendar.com`,
+    title,
     description: tutorial.description,
-    alternates: toAlternates(lang, (entry) => toTutorialPath(entry, tutorial.slug)),
+    alternates,
+    ...buildSocialMetadata({
+      canonicalPath: alternates.canonical,
+      description: tutorial.description,
+      imageAlt: tutorial.title,
+      locale: lang,
+      title,
+    }),
   };
 }
 
