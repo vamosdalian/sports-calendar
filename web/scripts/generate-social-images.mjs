@@ -1,8 +1,7 @@
-import { mkdir, readdir, unlink } from "node:fs/promises";
+import { mkdir, readdir, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-
-import sharp from "sharp";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -11,6 +10,26 @@ const API_BASE_URL = (
 ).replace(/\/$/, "");
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const outputDirectory = path.resolve(scriptDirectory, "../public/social");
+const fontDirectory = path.resolve(scriptDirectory, "../assets/fonts");
+const fontConfigDirectory = path.join(tmpdir(), "sports-calendar-social-fontconfig");
+const fontConfigPath = path.join(fontConfigDirectory, "fonts.conf");
+
+await mkdir(fontConfigDirectory, { recursive: true });
+await writeFile(
+  fontConfigPath,
+  `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <dir>${fontDirectory}</dir>
+  <cachedir>${fontConfigDirectory}</cachedir>
+</fontconfig>`,
+);
+process.env.FONTCONFIG_FILE = fontConfigPath;
+
+// Load Sharp only after Fontconfig points at the bundled subset. GitHub's
+// Ubuntu runners do not include a CJK font, which otherwise turns every
+// Chinese social card into tofu boxes while local macOS builds look correct.
+const { default: sharp } = await import("sharp");
 
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all(
@@ -41,6 +60,9 @@ const locales = {
     weekdays: ["一", "二", "三", "四", "五", "六", "日"],
   },
 };
+const BUNDLED_HAN_GLYPHS = new Set(
+  "覆盖全球的体育赛事日历足球赛季添加到中文一二三四五六日七月八月九月中超联赛英超联赛世界杯法甲德甲意甲西甲联赛欧冠完整赛程自动更新订阅支持查看开赛时间",
+);
 
 let generatedCount = 0;
 
@@ -49,6 +71,11 @@ for (const [locale, copy] of Object.entries(locales)) {
   const leagues = (directory.items ?? []).flatMap((sport) =>
     (sport.leagues ?? []).map((league) => ({ ...league, sportSlug: sport.sportSlug })),
   );
+
+  if (locale === "zh") {
+    assertBundledFontCovers(Object.values(copy).flat().join(""));
+    assertBundledFontCovers(leagues.map((league) => league.leagueName).join(""));
+  }
 
   await renderHomeCard({
     filename: `home-${locale}.png`,
@@ -187,7 +214,7 @@ function monthCard(x, y, month, weekdays, variant) {
 async function writeSvg(filename, content) {
   const svg = `
     <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <style>.body { font-family: Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; }</style>
+      <style>.body { font-family: 'Noto Sans SC Thin', sans-serif; }</style>
       ${content}
     </svg>`;
 
@@ -228,6 +255,21 @@ function formatSeason(value) {
 function truncate(value, maxLength) {
   const text = String(value);
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+function assertBundledFontCovers(value) {
+  const missing = [
+    ...new Set(
+      [...String(value)].filter(
+        (character) => /\p{Script=Han}/u.test(character) && !BUNDLED_HAN_GLYPHS.has(character),
+      ),
+    ),
+  ];
+  if (missing.length > 0) {
+    throw new Error(
+      `The bundled social-card font is missing Chinese glyphs: ${missing.join("")}. Update web/assets/fonts/NotoSansSC-social.ttf before releasing.`,
+    );
+  }
 }
 
 function escapeXml(value) {
