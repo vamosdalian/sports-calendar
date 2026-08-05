@@ -2,7 +2,6 @@ import { mkdir, readdir, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import * as fontkit from "fontkit";
 import sharp from "sharp";
 
 const WIDTH = 1200;
@@ -12,7 +11,8 @@ const API_BASE_URL = (
 ).replace(/\/$/, "");
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const outputDirectory = path.resolve(scriptDirectory, "../public/social");
-const socialFont = fontkit.openSync(path.resolve(scriptDirectory, "../assets/fonts/NotoSansSC-social.ttf"));
+const SOCIAL_FONT_FAMILY =
+  "WenQuanYi Micro Hei, PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif";
 
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all(
@@ -43,10 +43,6 @@ const locales = {
     weekdays: ["一", "二", "三", "四", "五", "六", "日"],
   },
 };
-const BUNDLED_HAN_GLYPHS = new Set(
-  "覆盖全球的体育赛事日历足球赛季添加到中文一二三四五六日七月八月九月中超联赛英超联赛世界杯法甲德甲意甲西甲联赛欧冠完整赛程自动更新订阅支持查看开赛时间",
-);
-
 let generatedCount = 0;
 
 for (const [locale, copy] of Object.entries(locales)) {
@@ -54,11 +50,6 @@ for (const [locale, copy] of Object.entries(locales)) {
   const leagues = (directory.items ?? []).flatMap((sport) =>
     (sport.leagues ?? []).map((league) => ({ ...league, sportSlug: sport.sportSlug })),
   );
-
-  if (locale === "zh") {
-    assertBundledFontCovers(Object.values(copy).flat().join(""));
-    assertBundledFontCovers(leagues.map((league) => league.leagueName).join(""));
-  }
 
   await renderHomeCard({
     filename: `home-${locale}.png`,
@@ -121,7 +112,7 @@ async function renderHomeCard({ filename, copy, leagueNames, locale }) {
     ${siteHeader(copy, locale)}
     <rect x="32" y="148" width="1136" height="450" fill="#9CD5FF"/>
     <rect x="72" y="188" width="1056" height="58" fill="#7AAACE"/>
-    ${textElement(copy.directoryLabel, 98, 226, { fontSize: 23, fill: "#102132" })}
+    ${textElement(copy.directoryLabel, 98, 226, { fontSize: 23, fill: "#102132", fontWeight: 600 })}
     ${tiles}
     ${textElement("Apple Calendar · Google Calendar · Outlook", 76, 548, { fontSize: 18, fill: "#102132", fillOpacity: 0.7 })}
   `);
@@ -139,14 +130,14 @@ async function renderLeagueCard({ filename, copy, leagueName, leagueNames, local
     <rect x="32" y="148" width="220" height="450" fill="#7AAACE"/>
     <rect x="252" y="148" width="916" height="450" fill="#9CD5FF"/>
 
-    ${textElement(copy.competitionLabel, 54, 202, { fontSize: 17, fill: "#102132", fillOpacity: 0.72 })}
+    ${textElement(copy.competitionLabel, 54, 202, { fontSize: 17, fill: "#102132", fillOpacity: 0.72, fontWeight: 600 })}
     ${leagueNav}
-    ${textElement(copy.seasonLabel, 54, 478, { fontSize: 17, fill: "#102132", fillOpacity: 0.72 })}
+    ${textElement(copy.seasonLabel, 54, 478, { fontSize: 17, fill: "#102132", fillOpacity: 0.72, fontWeight: 600 })}
     ${navItem(season || "-", 54, 500, true)}
 
-    ${textElement(title, 288, 218, { fontSize: titleSize, fill: "#102132" })}
+    ${textElement(title, 288, 218, { fontSize: titleSize, fill: "#102132", fontWeight: 600 })}
     <rect x="958" y="177" width="170" height="52" fill="#355872"/>
-    ${textElement(copy.subscribeLabel, 1043, 210, { fontSize: 18, fill: "#ffffff", textAnchor: "middle" })}
+    ${textElement(copy.subscribeLabel, 1043, 210, { fontSize: 18, fill: "#ffffff", fontWeight: 500, textAnchor: "middle" })}
     ${calendarCards}
   `);
 }
@@ -159,34 +150,16 @@ function textElement(
   value,
   x,
   y,
-  { fontSize, fill, fillOpacity = 1, textAnchor = "start" },
+  { fontSize, fill, fillOpacity = 1, fontWeight = 400, textAnchor = "start" },
 ) {
-  const run = socialFont.layout(String(value));
-  const scale = fontSize / socialFont.unitsPerEm;
-  const width = run.positions.reduce((total, position) => total + position.xAdvance, 0) * scale;
-  const startX = textAnchor === "middle" ? x - width / 2 : x;
-  let cursor = 0;
-
-  return run.glyphs.map((glyph, index) => {
-    const position = run.positions[index];
-    const pathData = glyph.path.toSVG();
-    const glyphX = startX + (cursor + position.xOffset) * scale;
-    const glyphY = y - position.yOffset * scale;
-    cursor += position.xAdvance;
-
-    if (!pathData) {
-      return "";
-    }
-
-    return `<path d="${pathData}" transform="translate(${glyphX.toFixed(3)} ${glyphY.toFixed(3)}) scale(${scale.toFixed(5)} ${(-scale).toFixed(5)})" fill="${fill}" fill-opacity="${fillOpacity}"/>`;
-  }).join("");
+  return `<text x="${x}" y="${y}" font-family="${SOCIAL_FONT_FAMILY}" font-size="${fontSize}" font-weight="${fontWeight}" text-anchor="${textAnchor}" fill="${fill}" fill-opacity="${fillOpacity}">${escapeXml(value)}</text>`;
 }
 
 function siteHeader(copy, locale) {
   return `
     <rect x="32" y="24" width="1136" height="124" fill="#355872"/>
     ${textElement("sports-calendar.com", 72, 72, { fontSize: 18, fill: "#ffffff", fillOpacity: 0.9 })}
-    ${textElement(copy.siteTagline, 72, 112, { fontSize: 25, fill: "#ffffff" })}
+    ${textElement(copy.siteTagline, 72, 112, { fontSize: 25, fill: "#ffffff", fontWeight: 600 })}
     <rect x="1040" y="62" width="88" height="44" fill="#ffffff" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.28"/>
     ${textElement(locale === "zh" ? "中文" : "EN", 1084, 91, { fontSize: 17, fill: "#ffffff", textAnchor: "middle" })}`;
 }
@@ -271,17 +244,11 @@ function truncate(value, maxLength) {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
-function assertBundledFontCovers(value) {
-  const missing = [
-    ...new Set(
-      [...String(value)].filter(
-        (character) => /\p{Script=Han}/u.test(character) && !BUNDLED_HAN_GLYPHS.has(character),
-      ),
-    ),
-  ];
-  if (missing.length > 0) {
-    throw new Error(
-      `The bundled social-card font is missing Chinese glyphs: ${missing.join("")}. Update web/assets/fonts/NotoSansSC-social.ttf before releasing.`,
-    );
-  }
+function escapeXml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
