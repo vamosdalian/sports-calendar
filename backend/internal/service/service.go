@@ -115,15 +115,18 @@ func (s *Service) SetWebBaseURL(baseURL string) {
 	s.webBaseURL = baseURL
 }
 
-func (s *Service) seasonPageURL(sportSlug, leagueSlug, seasonSlug, locale string) string {
-	baseURL := s.webBaseURL
-	if baseURL == "" {
-		baseURL = defaultWebBaseURL
+func (s *Service) webHomeURL() string {
+	if s.webBaseURL == "" {
+		return defaultWebBaseURL
 	}
+	return s.webBaseURL
+}
+
+func (s *Service) seasonPageURL(sportSlug, leagueSlug, seasonSlug, locale string) string {
 	if locale != "zh" {
 		locale = "en"
 	}
-	return fmt.Sprintf("%s/%s/%s/%s/%s", baseURL, locale, sportSlug, leagueSlug, seasonSlug)
+	return fmt.Sprintf("%s/%s/%s/%s/%s", s.webHomeURL(), locale, sportSlug, leagueSlug, seasonSlug)
 }
 
 func (s *Service) SetSyncScheduleRefresher(refresher syncScheduleRefresher) {
@@ -435,7 +438,7 @@ func (s *Service) BuildLeagueICS(ctx context.Context, sportSlug, leagueSlug, loc
 		SeasonLabel:                 detail.SeasonLabel,
 		UpdatedAt:                   detail.UpdatedAt,
 		DefaultMatchDurationMinutes: detail.DefaultMatchDurationMinutes,
-		MoreMatchesURL:              s.seasonPageURL(detail.SportSlug, detail.LeagueSlug, seasonSlug, locale),
+		MoreMatchesURL:              s.webHomeURL(),
 		Matches:                     filteredMatches,
 		TeamSlug:                    teamSlug,
 		TeamNames:                   teamNames,
