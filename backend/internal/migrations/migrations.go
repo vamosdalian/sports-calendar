@@ -162,10 +162,10 @@ var allMigrations = []migration{
 		version: 7,
 		name:    "league_provider",
 		statements: []string{
-			// provider selects which upstream feeds a league. Existing leagues
-			// stay on TheSportsDB; per-league opt-in to the local spider crawler
-			// sets provider='spider' + external_ref to the Transfermarkt code.
-			`ALTER TABLE leagues ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'thesportsdb'`,
+			// provider selects whether a league is maintained manually or synced
+			// by the local spider crawler. Existing leagues start as manual;
+			// spider leagues carry a Transfermarkt code in external_ref.
+			`ALTER TABLE leagues ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'manual'`,
 			`ALTER TABLE leagues ADD COLUMN IF NOT EXISTS external_ref TEXT NOT NULL DEFAULT ''`,
 		},
 	},
@@ -215,12 +215,8 @@ var allMigrations = []migration{
 		version: 9,
 		name:    "league_provider_default_spider",
 		statements: []string{
-			// TheSportsDB has been retired as a data source: the local spider is
-			// the only provider that still syncs. Flip the column default so a
-			// fresh database (or any future insert that omits provider) lands on
-			// 'spider' rather than the retired source. Existing rows are left
-			// untouched -- leagues kept only for their finished fixtures (e.g. the
-			// World Cup) stay 'thesportsdb' and are simply never polled.
+			// New leagues default to the automatic spider source. Existing manual
+			// leagues are left untouched and are never polled.
 			`ALTER TABLE leagues ALTER COLUMN provider SET DEFAULT 'spider'`,
 		},
 	},
@@ -262,6 +258,16 @@ var allMigrations = []migration{
 			// announced a time the source never gave, and rang an alarm for it.
 			// This flag carries "time still pending" through from the crawler.
 			`ALTER TABLE matches ADD COLUMN IF NOT EXISTS kickoff_time_tbd BOOLEAN NOT NULL DEFAULT FALSE`,
+		},
+	},
+	{
+		version: 12,
+		name:    "league_provider_manual",
+		statements: []string{
+			// Older deployments used a retired provider name as the sentinel for
+			// leagues that must not be synchronized. Preserve that behavior under
+			// the explicit manual provider without changing any league data.
+			`UPDATE leagues SET provider = 'manual' WHERE provider <> 'spider'`,
 		},
 	},
 }

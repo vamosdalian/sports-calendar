@@ -166,11 +166,10 @@ func (s *Service) CreateSport(ctx context.Context, input domain.CreateSportInput
 	return s.repo.CreateSport(ctx, input)
 }
 
-// leagueProviders are the accepted leagues.provider values. "spider" (the local
-// Transfermarkt crawler) is the only source that still syncs; "thesportsdb" is
-// retained so retired leagues kept for their finished fixtures can still be
-// represented and edited without being polled.
-var leagueProviders = map[string]bool{"spider": true, "thesportsdb": true}
+// leagueProviders are the accepted leagues.provider values. "spider" leagues
+// sync from the local Transfermarkt crawler; "manual" leagues are maintained
+// by administrators and are never polled automatically.
+var leagueProviders = map[string]bool{"spider": true, "manual": true}
 
 // normalizeLeagueProvider lowercases and trims the provider, defaulting blank to
 // "spider" since that is the only live sync source.
@@ -187,7 +186,7 @@ func normalizeLeagueProvider(provider string) string {
 // "CSL" or "CSL@-1"); without it the sync fetcher has nothing to crawl.
 func validateLeagueProviderRef(provider, externalRef string) error {
 	if !leagueProviders[provider] {
-		return invalidArgument(fmt.Sprintf("provider must be one of spider, thesportsdb (got %q)", provider))
+		return invalidArgument(fmt.Sprintf("provider must be one of spider, manual (got %q)", provider))
 	}
 	if provider == "spider" && strings.TrimSpace(externalRef) == "" {
 		return invalidArgument("externalRef (Transfermarkt competition code) is required for a spider league")

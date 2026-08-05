@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { HomeDirectory } from "../components/home-directory";
 import { getLeagues } from "../lib/catalog";
-import { siteUrl, toAlternates, type Locale, toPath } from "../lib/site";
+import { toAlternates, type Locale, toPath } from "../lib/site";
 
 export async function generateHomeMetadata(locale: Locale, canonicalPath: string): Promise<Metadata> {
   const t = await getTranslations({ locale });
@@ -19,19 +19,6 @@ export async function generateHomeMetadata(locale: Locale, canonicalPath: string
       // redirect, so it keeps `/` as x-default instead of the `en` default.
       ...toAlternates(locale, (entry) => toPath(entry), "/"),
       canonical: canonicalPath,
-    },
-    openGraph: {
-      title,
-      description,
-      url: `${siteUrl}${canonicalPath}`,
-      siteName: "sports-calendar.com",
-      type: "website",
-      locale,
-    },
-    twitter: {
-      card: "summary",
-      title,
-      description,
     },
     other: {
       "baidu-site-verification": "codeva-aN3iytXMhj",

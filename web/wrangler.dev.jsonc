@@ -1,7 +1,6 @@
 {
-  // Throwaway target for validating the static-export migration. Deploys to
-  // sports-calendar-web-dev.workers.dev, bound to no custom domain, so
-  // production keeps running the old OpenNext worker untouched.
+  // Throwaway target for validating static exports. It deploys to
+  // sports-calendar-web-dev.workers.dev and is bound to no custom domain.
   //
   // Note the absence of `main`: with only an `assets` block this is an
   // assets-only Worker. There is no script to boot, which is the entire point —

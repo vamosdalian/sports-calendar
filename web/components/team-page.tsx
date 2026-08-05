@@ -127,15 +127,10 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
           <div className="mt-5">
             <TeamSubscribeBar
               copySubscriptionLinkLabel={t("copySubscriptionLinkLabel")}
-              leagueSlug={leagueSlug}
-              locale={locale}
-              seasonSlug={seasonSlug}
-              sportSlug={sportSlug}
               subscribeLabel={t("subscribeLabel")}
               subscriptionCopyUrl={subscriptionCopyUrl}
               subscriptionLinkCopiedLabel={t("subscriptionLinkCopiedLabel")}
               subscriptionUrl={subscriptionUrl}
-              teamSlug={canonicalTeamSlug}
             />
           </div>
 

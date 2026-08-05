@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 
 import { TimeZoneProvider } from "../components/time-zone-provider";
-import { ANALYTICS_SCRIPT_URL, ANALYTICS_WEBSITE_ID, isAnalyticsEnabled } from "../lib/analytics";
 import type { Locale } from "../lib/site";
 
 export const sharedMetadata: Metadata = {
@@ -34,18 +33,6 @@ export function SiteShell({ lang, children }: { lang: Locale; children: ReactNod
     <html lang={lang}>
       <body className="font-sans antialiased">
         <TimeZoneProvider>{children}</TimeZoneProvider>
-        {isAnalyticsEnabled() ? (
-          // Self-hosted, cookie-free analytics: no consent banner needed.
-          //
-          // Deliberately a plain <script defer> rather than next/script. Using
-          // next/script here made every page return 503
-          // "Worker exceeded resource limits" roughly half the time: it turns
-          // the tag into a client component that the Worker has to set up on
-          // startup, and that pushed isolate startup past Cloudflare's limit.
-          // A plain tag adds nothing to the bundle — it is just markup — and
-          // `defer` already keeps it off the critical rendering path.
-          <script defer src={ANALYTICS_SCRIPT_URL} data-website-id={ANALYTICS_WEBSITE_ID} />
-        ) : null}
       </body>
     </html>
   );

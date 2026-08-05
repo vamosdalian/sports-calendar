@@ -360,7 +360,9 @@ Lists leagues for one sport in the admin platform.
 
 Protected admin endpoint. Requires `Authorization: Bearer <token>`.
 
-Creates a league. `id` must be the TheSportsDB league id.
+Creates a league. `id` must be a stable positive integer unique within the catalog.
+Use provider `spider` with a Transfermarkt competition code for automatic sync,
+or provider `manual` for a league maintained only through the admin APIs.
 
 ### Request
 
@@ -376,6 +378,8 @@ Creates a league. `id` must be the TheSportsDB league id.
     "en": "AFC Champions League Elite",
     "zh": "亚冠精英联赛"
   },
+  "provider": "spider",
+  "externalRef": "ACL",
   "syncInterval": "@daily",
   "calendarDescription": {
     "en": "Competition calendar"

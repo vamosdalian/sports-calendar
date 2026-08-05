@@ -66,8 +66,8 @@ type AdminAuthConfig struct {
 }
 
 // SpiderConfig points at the sports-spider (Transfermarkt crawler) backend.
-// Since TheSportsDB was retired it plays two roles: the only sync data source,
-// and the target of the admin-only reverse proxy. UpstreamURL is required --
+// It plays two roles: the only automatic sync data source and the target of
+// the admin-only reverse proxy. UpstreamURL is required --
 // main() refuses to start without it, because there would be nothing to sync
 // from. The crawler is never exposed publicly; the admin console reaches it only
 // through the authenticated /api/spider/* proxy. TimeoutSeconds bounds each HTTP
@@ -92,10 +92,10 @@ func Load(path string) (Config, error) {
 		cfg.Server.Port = 8080
 	}
 	if cfg.RateLimit.RequestsPerSecond <= 0 {
-		cfg.RateLimit.RequestsPerSecond = 8
+		cfg.RateLimit.RequestsPerSecond = 128
 	}
 	if cfg.RateLimit.Burst <= 0 {
-		cfg.RateLimit.Burst = 16
+		cfg.RateLimit.Burst = 256
 	}
 
 	if cfg.Database.Port == 0 {

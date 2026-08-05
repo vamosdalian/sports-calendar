@@ -2,19 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { AnalyticsEvent, track } from "../lib/analytics";
-
 type TeamSubscribeBarProps = {
   copySubscriptionLinkLabel: string;
-  leagueSlug: string;
-  locale: string;
-  seasonSlug: string;
-  sportSlug: string;
   subscribeLabel: string;
   subscriptionCopyUrl: string;
   subscriptionLinkCopiedLabel: string;
   subscriptionUrl: string;
-  teamSlug: string;
 };
 
 /**
@@ -26,15 +19,10 @@ type TeamSubscribeBarProps = {
  */
 export function TeamSubscribeBar({
   copySubscriptionLinkLabel,
-  leagueSlug,
-  locale,
-  seasonSlug,
-  sportSlug,
   subscribeLabel,
   subscriptionCopyUrl,
   subscriptionLinkCopiedLabel,
   subscriptionUrl,
-  teamSlug,
 }: TeamSubscribeBarProps) {
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,19 +35,12 @@ export function TeamSubscribeBar({
     };
   }, []);
 
-  // Team identity travels with every conversion event so the dashboard can
-  // compare team-page subscribe rates against the league pages.
-  function eventData() {
-    return { sport: sportSlug, league: leagueSlug, season: seasonSlug, locale, team: teamSlug };
-  }
-
   async function handleCopy() {
     const didCopy = await copyText(subscriptionCopyUrl);
     if (!didCopy) {
       return;
     }
 
-    track(AnalyticsEvent.SubscribeCopy, eventData());
     setCopyState("copied");
     resetTimer.current = setTimeout(() => setCopyState("idle"), 2500);
   }
@@ -69,7 +50,6 @@ export function TeamSubscribeBar({
       <a
         href={subscriptionUrl}
         className="inline-flex h-10 items-center rounded-full bg-header px-5 text-sm font-medium text-white transition hover:bg-header/90"
-        onClick={() => track(AnalyticsEvent.SubscribeClick, eventData())}
       >
         {subscribeLabel}
       </a>

@@ -1,13 +1,11 @@
 {
   // Assets-only Worker: note the absence of `main`. There is no script to
   // boot, so a page request is a static file read and never counts against
-  // Cloudflare's per-request CPU limit — which is what returned `exceededCpu`
-  // 503s on ~8% of requests under the previous OpenNext setup.
+  // Cloudflare's per-request CPU limit.
   //
   // The R2 bucket, Durable Object queue and service binding that used to live
   // here existed only to cache Next's ISR output. Nothing renders at request
-  // time any more, so they are gone; `sports-calendar-web-opennext-cache` can
-  // be deleted once this has been running cleanly for a while.
+  // time any more, so their bindings are gone.
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "sports-calendar-web",
   "compatibility_date": "2026-04-11",

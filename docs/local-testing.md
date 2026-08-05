@@ -154,7 +154,7 @@ curl -s -X POST "http://localhost:8080/api/admin/sports" \
 	  "name": {"en": "Basketball", "zh": "篮球"}
 	}' | jq .
 
-# Create league (id must be TheSportsDB league id)
+# Create a spider-backed league with a stable positive ID
 curl -s -X POST "http://localhost:8080/api/admin/leagues" \
 	-H "Authorization: Bearer $TOKEN" \
 	-H 'Content-Type: application/json' \
@@ -163,6 +163,8 @@ curl -s -X POST "http://localhost:8080/api/admin/leagues" \
 	  "sportSlug": "football",
 	  "slug": "afc-champions-league-elite",
 	  "name": {"en": "AFC Champions League Elite", "zh": "亚冠精英联赛"},
+	  "provider": "spider",
+	  "externalRef": "ACL",
 	  "syncInterval": "@daily"
 	}' | jq .
 

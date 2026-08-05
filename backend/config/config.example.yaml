@@ -2,8 +2,8 @@ server:
   port: 8080
 
 rateLimit:
-  requestsPerSecond: 8
-  burst: 16
+  requestsPerSecond: 128
+  burst: 256
 
 database:
   host: CHANGE_ME_DB_HOST
@@ -17,8 +17,8 @@ adminAuth:
   secret: CHANGE_ME_LONG_RANDOM_SECRET
   tokenTTLMinutes: 30
 
-# The sports-spider (Transfermarkt crawler) backend. Since TheSportsDB was
-# retired this is the only sync data source, so upstreamURL is REQUIRED -- the
+# The sports-spider (Transfermarkt crawler) backend is the only automatic sync
+# data source, so upstreamURL is REQUIRED -- the
 # API refuses to start without it. It is also the target of the admin-only
 # reverse proxy: the crawler is not exposed publicly; the admin "Crawler" page
 # reaches it through /api/spider/* which reuses admin auth.

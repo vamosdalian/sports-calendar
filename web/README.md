@@ -9,10 +9,9 @@ route as a real HTML file into `out/`, and Cloudflare serves that directory
 directly — `wrangler.jsonc` declares no `main`, so it is an assets-only Worker
 with no script to boot.
 
-That is deliberate and worth not undoing. When pages were rendered by a Worker
-(OpenNext), roughly 8% of requests failed with `exceededCpu` 503s: the
-account's 10ms per-request CPU limit is not enough to start the Next runtime,
-and even the home page exceeded it. A static file read has no such limit.
+That is deliberate and worth not undoing. A dynamic Worker runtime exceeded
+the account's 10ms per-request CPU limit on roughly 8% of requests, while a
+static file read does not start a server runtime at all.
 
 Consequences that are easy to trip over:
 
@@ -29,35 +28,16 @@ Consequences that are easy to trip over:
 
 ## Deploying
 
-Cloudflare Workers Builds watches the repository. The commands live in the
-dashboard, not here:
-
-| | command |
-|---|---|
-| Build | `npm run build` |
-| Deploy (production branch) | `npx wrangler deploy` |
-| Deploy (other branches) | `npx wrangler versions upload` |
-
-**Renaming or removing a script these refer to breaks deployment, and the
-failure is quiet.** Both halves of that bit once: dropping `build:worker`
-failed the build with `Missing script`, and leaving the deploy command on
-`npx opennextjs-cloudflare deploy` after uninstalling the package failed with
-`could not determine executable to run`. Neither is visible from the
-deployments API — a failed build produces no deployment, which looks exactly
-like no build having been triggered. Check the build log in the dashboard.
-
-`versions upload` on non-production branches uploads a version without routing
-any traffic to it, so opening a PR is safe and the reported startup time is
-real.
+Production deploys run through `.github/workflows/web-rebuild.yml`. A push to
+`master`, the daily schedule, or a manual workflow dispatch builds the static
+export and deploys it with Wrangler. Cloudflare's Git integration is disabled
+so there is only one deployment path.
 
 To deploy by hand:
 
 ```bash
 npm run deploy   # next build && wrangler deploy
 ```
-
-Do not install `@opennextjs/cloudflare` again. While present it intercepts
-`wrangler deploy` and fails with `No R2 binding "NEXT_INC_CACHE_R2_BUCKET"`.
 
 ## Verifying a build
 

@@ -17,15 +17,12 @@ import (
 )
 
 // ProviderSpider is the leagues.provider value for a league synced from the
-// local Transfermarkt crawler. It is the only provider ListSyncTargets returns
-// now that TheSportsDB has been retired as a data source.
+// local Transfermarkt crawler. It is the only provider ListSyncTargets returns.
 const ProviderSpider = "spider"
 
-// spiderTeamIDOffset namespaces Transfermarkt entity ids away from the legacy
-// TheSportsDB ids still stored for retired leagues. Both keyed teams by small
-// integers in the shared `teams` table; adding this offset to every spider-origin
-// id guarantees the two id spaces never collide (and it is reversible with a
-// modulo).
+// spiderTeamIDOffset namespaces Transfermarkt entity ids away from manually
+// assigned ids in the shared `teams` table. Adding this offset to every
+// spider-origin id avoids collisions and is reversible with a modulo.
 const spiderTeamIDOffset int64 = 100_000_000_000
 
 // spiderSourceTimeZone is the timezone Transfermarkt.com renders kickoff times

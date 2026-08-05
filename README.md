@@ -149,9 +149,7 @@ VITE_API_BASE_URL=http://localhost:8081 npm run dev
 - Local development and smoke testing: [`docs/local-testing.md`](docs/local-testing.md)
 - API documentation: [`docs/api.md`](docs/api.md)
 - Public web deployment: [`docs/cloudflare-workers-web-deploy.md`](docs/cloudflare-workers-web-deploy.md)
-- Backend deployment: [`docs/cloudflare-pages-backend-deploy.md`](docs/cloudflare-pages-backend-deploy.md)
-- Online deployment notes: [`docs/online-deploy.md`](docs/online-deploy.md)
-- Zero-downtime release notes: [`docs/zero-downtime-release.md`](docs/zero-downtime-release.md)
+- Backend and full-stack deployment: [`docs/online-deploy.md`](docs/online-deploy.md)
 
 ## Current State
 

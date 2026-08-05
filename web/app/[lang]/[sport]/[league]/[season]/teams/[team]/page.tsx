@@ -68,14 +68,6 @@ export async function generateMetadata({
     title,
     description,
     alternates,
-    openGraph: {
-      title,
-      description,
-      url: alternates.canonical,
-      siteName: "sports-calendar.com",
-      type: "website",
-      locale: lang,
-    },
     other: {
       "last-modified": data.updatedAt,
       "article:modified_time": data.updatedAt,

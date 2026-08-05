@@ -9,9 +9,9 @@
 文件，由 Cloudflare 直接从资产存储返回，**请求不进 Worker**。
 `web/wrangler.jsonc` 里没有 `main` 字段，就是这个意思——没有脚本可启动。
 
-这不是风格选择，是修一个线上故障的结果。此前用 OpenNext 时，预渲染页面存在 R2 里
-再经 Worker 回放，于是连完全缓存的页面也要付启动 Next 运行时的代价，超过免费版
-每请求 10ms CPU 限制，约 8% 的请求返回 `exceededCpu` 503。改成静态托管后实测
+这不是风格选择，是修一个线上故障的结果。此前页面经动态 Worker 回放时，即使已经
+预渲染也要启动 Next 运行时，超过免费版每请求 10ms CPU 限制，约 8% 的请求返回
+`exceededCpu` 503。改成静态托管后实测
 Worker 调用从 4791/天降到 0，TTFB 从 0.75–1.44s 降到 0.33s。
 
 这套结构锁定了几个取舍，都是有意为之（细节见 `web/next.config.ts` 里的注释）：
@@ -70,23 +70,6 @@ SPORTS_CALENDAR_PUBLIC_API_BASE_URL=https://api.sports-calendar.com
 
 本地开发想指到别处，在 `web/.env.local` 里覆盖，格式参考 `web/.env.example`。
 
-### Umami 埋点
-
-```env
-NEXT_PUBLIC_UMAMI_SCRIPT_URL=https://analytics.sports-calendar.com/script.js
-NEXT_PUBLIC_UMAMI_WEBSITE_ID=<website-uuid>
-```
-
-两个都留空时不渲染埋点脚本，站点行为与接入前一致。
-
-生产值放在 **`web/.env.production`，这个文件是随仓库提交的**（`.gitignore` 里有例外
-放行）。原因是 `NEXT_PUBLIC_*` 由 Next 在构建时内联进产物，而构建由 CI 执行，值必须
-在仓库里 CI 才看得到。两个值本来就会出现在每个页面的 HTML 里，属公开信息——但也
-因此，**永远不要往这个文件里放密钥**。
-
-验证方式：部署后看线上页面源码，应能看到
-`<script src=".../script.js" data-website-id="...">`。
-
 ## 静态托管相关的三个文件
 
 1. **`web/wrangler.jsonc`**——assets-only 配置。`assets.directory` 指向 `out`，
@@ -101,7 +84,7 @@ NEXT_PUBLIC_UMAMI_WEBSITE_ID=<website-uuid>
 
 ## 构建时取数：一个必须保留的加固
 
-预渲染四百多个页面意味着几百个请求同时打向后端——而后端限流 8 req/s、还要经
+预渲染四百多个页面意味着几百个请求同时打向后端——后端限流 128 req/s、还要经
 Cloudflare Tunnel 回北京。更要命的是**单个 fetch 失败会中止整个 export**。
 
 所以 `web/lib/catalog.ts` 里有并发闸门 + 指数退避重试。CI 环境每次都是干净的、没有

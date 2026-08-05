@@ -71,10 +71,9 @@ func main() {
 	}
 	svc.SetTokenManager(tokenManager)
 
-	// The local Transfermarkt spider is the only sync data source; TheSportsDB
-	// has been retired. Its upstream is therefore required -- without it there
-	// is nothing to sync from -- and ListSyncTargets only returns spider-backed
-	// leagues, so every fetch routes here.
+	// The local Transfermarkt spider is the only automatic sync data source. Its
+	// upstream is therefore required, and ListSyncTargets only returns
+	// spider-backed leagues, so every fetch routes here.
 	if cfg.Spider.UpstreamURL == "" {
 		logger.Fatal("spider upstreamURL is required: it is the only sync data source")
 	}
