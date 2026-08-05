@@ -35,6 +35,8 @@
   "subscribeLabel": "添加到日历",
   "copySubscriptionLinkLabel": "复制订阅链接",
   "subscriptionLinkCopiedLabel": "已复制订阅链接",
+  "mobileSubscriptionLabel": "使用手机订阅日历",
+  "scanWithPhoneCameraLabel": "使用手机相机扫描订阅赛程",
   "timeZoneLabel": "时区",
   "browserDefaultLabel": "浏览器默认",
   "contactUsLabel": "联系我们",

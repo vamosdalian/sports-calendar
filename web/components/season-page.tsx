@@ -7,6 +7,7 @@ import { getTranslations } from "next-intl/server";
 import { buildTeamOptions, formatMatchLocation, getCurrentSeasonSlug, getLeagueFeedUrl, getLeagueSeasons, getLeagues, getLeagueSubscriptionUrl, getPublicApiBaseUrl, getSeasonPageData, matchLabel, type Match, type Team } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
 import { locales, siteUrl, type Locale, toPath, toTeamPath, toTutorialPath } from "../lib/site";
+import { DesktopSubscribeQr } from "./desktop-subscribe-qr";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
 import { LegacyTeamFilterRedirect } from "./legacy-team-filter-redirect";
@@ -99,6 +100,12 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+
+      <DesktopSubscribeQr
+        scanLabel={t("scanWithPhoneCameraLabel")}
+        subscriptionUrl={subscriptionUrl}
+        triggerLabel={t("mobileSubscriptionLabel")}
       />
 
       <header className="mx-auto w-full max-w-[1200px] bg-header text-white">

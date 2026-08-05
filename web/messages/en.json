@@ -35,6 +35,8 @@
   "subscribeLabel": "Add to Calendar",
   "copySubscriptionLinkLabel": "Copy subscription link",
   "subscriptionLinkCopiedLabel": "Subscription link copied",
+  "mobileSubscriptionLabel": "Subscribe on your phone",
+  "scanWithPhoneCameraLabel": "Scan with your phone camera to subscribe",
   "timeZoneLabel": "Time zone",
   "browserDefaultLabel": "Browser default",
   "contactUsLabel": "Contact us",
