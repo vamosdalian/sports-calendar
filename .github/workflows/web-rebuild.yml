@@ -42,7 +42,7 @@ concurrency:
 jobs:
   rebuild:
     name: Build and deploy the static site
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
@@ -55,6 +55,13 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Install Chinese font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-wqy-microhei
+          sudo fc-cache -f
+          fc-match "WenQuanYi Micro Hei"
 
       - name: Install dependencies
         working-directory: web
