@@ -110,7 +110,7 @@ func TestBuildCalendarLocalizedChinese(t *testing.T) {
 		Locale:                      "zh",
 		SeasonLabel:                 "2026",
 		DefaultMatchDurationMinutes: 120,
-		MoreMatchesURL:              "https://sports-calendar.com",
+		MoreMatchesURL:              "https://sports-calendar.com/zh/football/csl/2026/",
 		TeamSlug:                    "beijing-guoan",
 		TeamNames:                   domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"},
 		Matches: []domain.Match{
@@ -161,7 +161,7 @@ func TestBuildCalendarLocalizedChinese(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read localized description: %v", err)
 	}
-	if !strings.HasSuffix(description, "\n\n更多比赛: https://sports-calendar.com") {
+	if !strings.HasSuffix(description, "\n\n更多比赛: https://sports-calendar.com/zh/football/csl/2026/") {
 		t.Fatalf("expected backlink as final localized description line description=%q", description)
 	}
 	if url := decoded.Events()[0].Props.Get(ical.PropURL); url != nil {
