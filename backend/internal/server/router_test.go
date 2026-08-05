@@ -1213,6 +1213,9 @@ func TestICSFeed(t *testing.T) {
 	if body := recorder.Body.String(); !strings.Contains(body, "csl-2026-r1-guoan-shenhua@sports-calendar.com") || !strings.Contains(body, "csl-2026-r1-three-towns-haifa@sports-calendar.com") {
 		t.Fatalf("expected all season matches in feed body=%s", body)
 	}
+	if body := recorder.Body.String(); !strings.Contains(body, "More matches: https://sports-calendar.com") {
+		t.Fatalf("expected English home backlink body=%s", body)
+	}
 }
 
 func TestICSFeedByTeam(t *testing.T) {
@@ -1252,6 +1255,9 @@ func TestICSFeedByLocale(t *testing.T) {
 	}
 	if !strings.Contains(body, "轮次: 第1轮") || !strings.Contains(body, "状态: 已安排") {
 		t.Fatalf("expected localized description body=%s", body)
+	}
+	if !strings.Contains(body, "更多比赛: https://sports-calendar.com") {
+		t.Fatalf("expected localized home backlink body=%s", body)
 	}
 	if !strings.Contains(body, "csl-2026-r1-three-towns-haifa@sports-calendar.com") {
 		t.Fatalf("expected non-team locale feed to keep all matches body=%s", body)
