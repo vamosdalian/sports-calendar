@@ -52,6 +52,7 @@
   "metaTitleHome": "体育赛程日历订阅：支持 Apple Calendar、Google Calendar 与 Outlook | sports-calendar.com",
   "metaDescriptionHome": "浏览体育赛事赛程日历，并将实时更新的赛季订阅源添加到 Apple Calendar、Google Calendar 和 Outlook。",
   "metaTitleSeason": "{leagueName} {seasonLabel} 赛季日历 | sports-calendar.com",
+  "metaDescriptionSeason": "查看 {leagueName} {seasonLabel} 完整赛程和本地时区开赛时间。订阅到 Apple 日历、Google 日历或 Outlook，赛程调整自动更新。",
   "metaTitleTeam": "{teamName} {seasonLabel} 赛程表与日历订阅 | sports-calendar.com",
   "metaDescriptionTeam": "{teamName} {leagueName} {seasonLabel} 全部赛程,开赛时间自动按你的时区显示。订阅一次,之后每场比赛的时间改动和场地变更都会自动同步到 iPhone 日历、Google 日历或 Outlook。",
   "teamTitle": "{teamName} {seasonLabel} 赛程",

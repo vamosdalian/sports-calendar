@@ -215,6 +215,7 @@ web/.env*
 !web/.env.example
 web/.dev.vars
 web/next-env.d.ts
+web/public/social/*.png
 
 # Go
 backend/bin/

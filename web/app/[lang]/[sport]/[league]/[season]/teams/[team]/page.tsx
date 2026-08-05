@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { TeamPage } from "../../../../../../../components/team-page";
 import { getSitemapRoutes, getTeamPageData } from "../../../../../../../lib/catalog";
 import { formatSeasonDisplay } from "../../../../../../../lib/season";
+import { buildSocialMetadata, toLeagueSocialImagePath } from "../../../../../../../lib/social-metadata";
 import { decodeRouteParams, isLocale, locales, toAlternates, toTeamPath } from "../../../../../../../lib/site";
 
 // Every team page is prerendered at build time so that serving one is a static
@@ -68,6 +69,14 @@ export async function generateMetadata({
     title,
     description,
     alternates,
+    ...buildSocialMetadata({
+      canonicalPath: alternates.canonical,
+      description,
+      imageAlt: `${teamName} · ${leagueName} ${seasonLabel}`,
+      imagePath: toLeagueSocialImagePath(data.league.slug, data.season.slug, lang),
+      locale: lang,
+      title,
+    }),
     other: {
       "last-modified": data.updatedAt,
       "article:modified_time": data.updatedAt,

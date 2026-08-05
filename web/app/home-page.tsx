@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { HomeDirectory } from "../components/home-directory";
 import { getLeagues } from "../lib/catalog";
+import { buildSocialMetadata } from "../lib/social-metadata";
 import { toAlternates, type Locale, toPath } from "../lib/site";
 
 export async function generateHomeMetadata(locale: Locale, canonicalPath: string): Promise<Metadata> {
@@ -20,6 +21,13 @@ export async function generateHomeMetadata(locale: Locale, canonicalPath: string
       ...toAlternates(locale, (entry) => toPath(entry), "/"),
       canonical: canonicalPath,
     },
+    ...buildSocialMetadata({
+      canonicalPath,
+      description,
+      imageAlt: locale === "zh" ? "体育赛事日历订阅" : "Sports calendar subscriptions",
+      locale,
+      title,
+    }),
     other: {
       "baidu-site-verification": "codeva-aN3iytXMhj",
       "last-modified": directory.updatedAt,

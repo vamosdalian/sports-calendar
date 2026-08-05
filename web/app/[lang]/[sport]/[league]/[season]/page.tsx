@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { SeasonPage } from "../../../../../components/season-page";
 import { getAllSeasonRoutes, getSeasonPageData } from "../../../../../lib/catalog";
 import { formatSeasonDisplay } from "../../../../../lib/season";
+import { buildSocialMetadata, toLeagueSocialImagePath } from "../../../../../lib/social-metadata";
 import { decodeRouteParams, isLocale, locales, toAlternates, toPath } from "../../../../../lib/site";
 
 export async function generateStaticParams() {
@@ -32,11 +33,20 @@ export async function generateMetadata({
   const seasonLabel = formatSeasonDisplay(data.season.slug, data.season.label);
   const alternates = toAlternates(lang, (entry) => toPath(entry, sport, league, season));
   const title = t("metaTitleSeason", { leagueName, seasonLabel });
+  const description = t("metaDescriptionSeason", { leagueName, seasonLabel });
 
   return {
     title,
-    description: data.season.calendarDescription,
+    description,
     alternates,
+    ...buildSocialMetadata({
+      canonicalPath: alternates.canonical,
+      description,
+      imageAlt: `${leagueName} ${seasonLabel}`,
+      imagePath: toLeagueSocialImagePath(data.league.slug, data.season.slug, lang),
+      locale: lang,
+      title,
+    }),
     other: {
       "last-modified": data.updatedAt,
       "article:modified_time": data.updatedAt,
