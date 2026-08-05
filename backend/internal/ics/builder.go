@@ -39,7 +39,7 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 		event.Props.SetDateTime(ical.PropDateTimeEnd, startTime.Add(time.Duration(detail.DefaultMatchDurationMinutes)*time.Minute))
 		summary := buildSummary(match, locale)
 		event.Props.SetText(ical.PropSummary, summary)
-		event.Props.SetText(ical.PropDescription, buildDescription(match, locale))
+		event.Props.SetText(ical.PropDescription, buildDescription(match, locale, detail.MoreMatchesURL))
 		if venue != "" {
 			event.Props.SetText(ical.PropLocation, venue)
 		}
@@ -207,7 +207,7 @@ func buildSummary(match domain.Match, locale string) string {
 	return match.DisplayTitle(locale)
 }
 
-func buildDescription(match domain.Match, locale string) string {
+func buildDescription(match domain.Match, locale, moreMatchesURL string) string {
 	labels := localizedDescriptionLabels(locale)
 	lines := []string{
 		fmt.Sprintf("%s: %s", labels.Round, domain.PickLocalized(match.Round, locale)),
@@ -224,6 +224,9 @@ func buildDescription(match domain.Match, locale string) string {
 			domain.PickLocalized(match.Country, locale),
 		)),
 	)
+	if moreMatchesURL != "" {
+		lines = append(lines, "", fmt.Sprintf("%s: %s", labels.MoreMatches, moreMatchesURL))
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -279,30 +282,33 @@ func joinLocationSuffix(parts []string) string {
 }
 
 type descriptionLabels struct {
-	Round  string
-	Teams  string
-	Score  string
-	Status string
-	Venue  string
+	Round       string
+	Teams       string
+	Score       string
+	Status      string
+	Venue       string
+	MoreMatches string
 }
 
 func localizedDescriptionLabels(locale string) descriptionLabels {
 	switch normalizeLocale(locale) {
 	case "zh":
 		return descriptionLabels{
-			Round:  "轮次",
-			Teams:  "球队",
-			Score:  "比分",
-			Status: "状态",
-			Venue:  "场地",
+			Round:       "轮次",
+			Teams:       "球队",
+			Score:       "比分",
+			Status:      "状态",
+			Venue:       "场地",
+			MoreMatches: "更多比赛",
 		}
 	default:
 		return descriptionLabels{
-			Round:  "Round",
-			Teams:  "Teams",
-			Score:  "Score",
-			Status: "Status",
-			Venue:  "Venue",
+			Round:       "Round",
+			Teams:       "Teams",
+			Score:       "Score",
+			Status:      "Status",
+			Venue:       "Venue",
+			MoreMatches: "More matches",
 		}
 	}
 }

@@ -25,6 +25,7 @@ type CalendarPayload struct {
 	SeasonLabel                 string
 	UpdatedAt                   string
 	DefaultMatchDurationMinutes int
+	MoreMatchesURL              string
 	TeamSlug                    string
 	TeamNames                   domain.LocalizedText
 	Matches                     []domain.Match

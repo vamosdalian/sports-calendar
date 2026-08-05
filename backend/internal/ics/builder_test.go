@@ -53,6 +53,13 @@ func TestBuildCalendar(t *testing.T) {
 	if !strings.Contains(body, "CALSCALE:GREGORIAN") || !strings.Contains(body, "METHOD:PUBLISH") {
 		t.Fatalf("expected publish calendar metadata body=%s", body)
 	}
+	description, err := decoded.Events()[0].Props.Text(ical.PropDescription)
+	if err != nil {
+		t.Fatalf("read event description: %v", err)
+	}
+	if strings.Contains(description, "More matches:") {
+		t.Fatalf("did not expect backlink without a URL payload field description=%q", description)
+	}
 	if !strings.Contains(body, "LAST-MODIFIED:20260309T000000Z") || !strings.Contains(body, "SEQUENCE:1773014400") {
 		t.Fatalf("expected event update metadata body=%s", body)
 	}
@@ -103,6 +110,7 @@ func TestBuildCalendarLocalizedChinese(t *testing.T) {
 		Locale:                      "zh",
 		SeasonLabel:                 "2026",
 		DefaultMatchDurationMinutes: 120,
+		MoreMatchesURL:              "https://sports-calendar.com/zh/football/csl/2026",
 		TeamSlug:                    "beijing-guoan",
 		TeamNames:                   domain.LocalizedText{"en": "Beijing Guoan", "zh": "北京国安"},
 		Matches: []domain.Match{
@@ -144,6 +152,20 @@ func TestBuildCalendarLocalizedChinese(t *testing.T) {
 	}
 	if !strings.Contains(body, "LOCATION:工人体育场") || strings.Contains(body, "LOCATION:工人体育场\\,") {
 		t.Fatalf("expected localized location with venue only body=%s", body)
+	}
+	decoded, err := ical.NewDecoder(bytes.NewReader(content)).Decode()
+	if err != nil {
+		t.Fatalf("decode calendar: %v", err)
+	}
+	description, err := decoded.Events()[0].Props.Text(ical.PropDescription)
+	if err != nil {
+		t.Fatalf("read localized description: %v", err)
+	}
+	if !strings.HasSuffix(description, "\n\n更多比赛: https://sports-calendar.com/zh/football/csl/2026") {
+		t.Fatalf("expected backlink as final localized description line description=%q", description)
+	}
+	if url := decoded.Events()[0].Props.Get(ical.PropURL); url != nil {
+		t.Fatalf("did not expect a VEVENT URL property, got %q", url.Value)
 	}
 }
 
