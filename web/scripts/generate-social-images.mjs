@@ -1,7 +1,9 @@
-import { mkdir, readdir, unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readdir, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+
+import * as fontkit from "fontkit";
+import sharp from "sharp";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -10,26 +12,7 @@ const API_BASE_URL = (
 ).replace(/\/$/, "");
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const outputDirectory = path.resolve(scriptDirectory, "../public/social");
-const fontDirectory = path.resolve(scriptDirectory, "../assets/fonts");
-const fontConfigDirectory = path.join(tmpdir(), "sports-calendar-social-fontconfig");
-const fontConfigPath = path.join(fontConfigDirectory, "fonts.conf");
-
-await mkdir(fontConfigDirectory, { recursive: true });
-await writeFile(
-  fontConfigPath,
-  `<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
-<fontconfig>
-  <dir>${fontDirectory}</dir>
-  <cachedir>${fontConfigDirectory}</cachedir>
-</fontconfig>`,
-);
-process.env.FONTCONFIG_FILE = fontConfigPath;
-
-// Load Sharp only after Fontconfig points at the bundled subset. GitHub's
-// Ubuntu runners do not include a CJK font, which otherwise turns every
-// Chinese social card into tofu boxes while local macOS builds look correct.
-const { default: sharp } = await import("sharp");
+const socialFont = fontkit.openSync(path.resolve(scriptDirectory, "../assets/fonts/NotoSansSC-social.ttf"));
 
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all(
@@ -130,7 +113,7 @@ async function renderHomeCard({ filename, copy, leagueNames, locale }) {
     const y = 276 + Math.floor(index / 3) * 92;
     return `
       <rect x="${x}" y="${y}" width="${tileWidth}" height="64" fill="#ffffff" fill-opacity="0.27" stroke="#ffffff" stroke-opacity="0.42"/>
-      <text x="${x + 22}" y="${y + 41}" class="body" font-size="21" fill="#102132">${escapeXml(name)}</text>`;
+      ${textElement(name, x + 22, y + 41, { fontSize: 21, fill: "#102132" })}`;
   }).join("");
 
   await writeSvg(filename, `
@@ -138,9 +121,9 @@ async function renderHomeCard({ filename, copy, leagueNames, locale }) {
     ${siteHeader(copy, locale)}
     <rect x="32" y="148" width="1136" height="450" fill="#9CD5FF"/>
     <rect x="72" y="188" width="1056" height="58" fill="#7AAACE"/>
-    <text x="98" y="226" class="body" font-size="23" font-weight="600" fill="#102132">${escapeXml(copy.directoryLabel)}</text>
+    ${textElement(copy.directoryLabel, 98, 226, { fontSize: 23, fill: "#102132" })}
     ${tiles}
-    <text x="76" y="548" class="body" font-size="18" fill="#102132" fill-opacity="0.7">Apple Calendar · Google Calendar · Outlook</text>
+    ${textElement("Apple Calendar · Google Calendar · Outlook", 76, 548, { fontSize: 18, fill: "#102132", fillOpacity: 0.7 })}
   `);
 }
 
@@ -156,14 +139,14 @@ async function renderLeagueCard({ filename, copy, leagueName, leagueNames, local
     <rect x="32" y="148" width="220" height="450" fill="#7AAACE"/>
     <rect x="252" y="148" width="916" height="450" fill="#9CD5FF"/>
 
-    <text x="54" y="202" class="body" font-size="17" font-weight="600" fill="#102132" fill-opacity="0.72">${escapeXml(copy.competitionLabel)}</text>
+    ${textElement(copy.competitionLabel, 54, 202, { fontSize: 17, fill: "#102132", fillOpacity: 0.72 })}
     ${leagueNav}
-    <text x="54" y="478" class="body" font-size="17" font-weight="600" fill="#102132" fill-opacity="0.72">${escapeXml(copy.seasonLabel)}</text>
-    ${navItem(season || "—", 54, 500, true)}
+    ${textElement(copy.seasonLabel, 54, 478, { fontSize: 17, fill: "#102132", fillOpacity: 0.72 })}
+    ${navItem(season || "-", 54, 500, true)}
 
-    <text x="288" y="218" class="body" font-size="${titleSize}" font-weight="600" fill="#102132">${escapeXml(title)}</text>
+    ${textElement(title, 288, 218, { fontSize: titleSize, fill: "#102132" })}
     <rect x="958" y="177" width="170" height="52" fill="#355872"/>
-    <text x="1043" y="210" class="body" text-anchor="middle" font-size="18" font-weight="500" fill="#ffffff">${escapeXml(copy.subscribeLabel)}</text>
+    ${textElement(copy.subscribeLabel, 1043, 210, { fontSize: 18, fill: "#ffffff", textAnchor: "middle" })}
     ${calendarCards}
   `);
 }
@@ -172,26 +155,58 @@ function pageBackground() {
   return `<rect width="1200" height="630" fill="#F7F8F0"/>`;
 }
 
+function textElement(
+  value,
+  x,
+  y,
+  { fontSize, fill, fillOpacity = 1, textAnchor = "start" },
+) {
+  const run = socialFont.layout(String(value));
+  const scale = fontSize / socialFont.unitsPerEm;
+  const width = run.positions.reduce((total, position) => total + position.xAdvance, 0) * scale;
+  const startX = textAnchor === "middle" ? x - width / 2 : x;
+  let cursor = 0;
+
+  return run.glyphs.map((glyph, index) => {
+    const position = run.positions[index];
+    const pathData = glyph.path.toSVG();
+    const glyphX = startX + (cursor + position.xOffset) * scale;
+    const glyphY = y - position.yOffset * scale;
+    cursor += position.xAdvance;
+
+    if (!pathData) {
+      return "";
+    }
+
+    return `<path d="${pathData}" transform="translate(${glyphX.toFixed(3)} ${glyphY.toFixed(3)}) scale(${scale.toFixed(5)} ${(-scale).toFixed(5)})" fill="${fill}" fill-opacity="${fillOpacity}"/>`;
+  }).join("");
+}
+
 function siteHeader(copy, locale) {
   return `
     <rect x="32" y="24" width="1136" height="124" fill="#355872"/>
-    <text x="72" y="72" class="body" font-size="18" fill="#ffffff" fill-opacity="0.9">sports-calendar.com</text>
-    <text x="72" y="112" class="body" font-size="25" font-weight="600" fill="#ffffff">${escapeXml(copy.siteTagline)}</text>
+    ${textElement("sports-calendar.com", 72, 72, { fontSize: 18, fill: "#ffffff", fillOpacity: 0.9 })}
+    ${textElement(copy.siteTagline, 72, 112, { fontSize: 25, fill: "#ffffff" })}
     <rect x="1040" y="62" width="88" height="44" fill="#ffffff" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.28"/>
-    <text x="1084" y="91" class="body" text-anchor="middle" font-size="17" fill="#ffffff">${locale === "zh" ? "中文" : "EN"}</text>`;
+    ${textElement(locale === "zh" ? "中文" : "EN", 1084, 91, { fontSize: 17, fill: "#ffffff", textAnchor: "middle" })}`;
 }
 
 function navItem(label, x, y, active) {
   return `
     <rect x="${x}" y="${y}" width="166" height="40" fill="${active ? "#355872" : "#ffffff"}" fill-opacity="${active ? "1" : "0.25"}" stroke="${active ? "#355872" : "#ffffff"}" stroke-opacity="${active ? "1" : "0.42"}"/>
-    <text x="${x + 15}" y="${y + 27}" class="body" font-size="16" fill="${active ? "#ffffff" : "#102132"}">${escapeXml(truncate(label, 18))}</text>`;
+    ${textElement(truncate(label, 18), x + 15, y + 27, { fontSize: 16, fill: active ? "#ffffff" : "#102132" })}`;
 }
 
 function monthCard(x, y, month, weekdays, variant) {
   const cell = 26;
   const gap = 5;
   const startX = x + 22;
-  const weekdayRow = weekdays.map((day, index) => `<text x="${startX + index * (cell + gap) + cell / 2}" y="${y + 77}" class="body" text-anchor="middle" font-size="12" fill="#102132" fill-opacity="0.5">${day}</text>`).join("");
+  const weekdayRow = weekdays.map((day, index) => textElement(
+    day,
+    startX + index * (cell + gap) + cell / 2,
+    y + 77,
+    { fontSize: 12, fill: "#102132", fillOpacity: 0.5, textAnchor: "middle" },
+  )).join("");
   const matchDays = new Set([[1, 5, 9, 13, 18, 24, 29], [4, 8, 12, 17, 22, 25, 30], [2, 6, 11, 15, 20, 23, 28]][variant]);
   const days = Array.from({ length: 35 }, (_, index) => {
     const dayNumber = index - 1;
@@ -201,12 +216,12 @@ function monthCard(x, y, month, weekdays, variant) {
     const cy = y + 92 + Math.floor(index / 7) * (cell + gap);
     return `
       <rect x="${cx}" y="${cy}" width="${cell}" height="${cell}" fill="${active ? "#355872" : "#ffffff"}" fill-opacity="${active ? "1" : "0.48"}"/>
-      ${day ? `<text x="${cx + cell / 2}" y="${cy + 18}" class="body" text-anchor="middle" font-size="12" fill="${active ? "#ffffff" : "#102132"}">${day}</text>` : ""}`;
+      ${day ? textElement(day, cx + cell / 2, cy + 18, { fontSize: 12, fill: active ? "#ffffff" : "#102132", textAnchor: "middle" }) : ""}`;
   }).join("");
 
   return `
     <rect x="${x}" y="${y}" width="250" height="262" fill="#ffffff" fill-opacity="0.35" stroke="#102132" stroke-opacity="0.08"/>
-    <text x="${x + 125}" y="${y + 42}" class="body" text-anchor="middle" font-size="18" fill="#102132">${escapeXml(month)}</text>
+    ${textElement(month, x + 125, y + 42, { fontSize: 18, fill: "#102132", textAnchor: "middle" })}
     ${weekdayRow}
     ${days}`;
 }
@@ -214,7 +229,6 @@ function monthCard(x, y, month, weekdays, variant) {
 async function writeSvg(filename, content) {
   const svg = `
     <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <style>.body { font-family: 'Noto Sans SC Thin', sans-serif; }</style>
       ${content}
     </svg>`;
 
@@ -270,13 +284,4 @@ function assertBundledFontCovers(value) {
       `The bundled social-card font is missing Chinese glyphs: ${missing.join("")}. Update web/assets/fonts/NotoSansSC-social.ttf before releasing.`,
     );
   }
-}
-
-function escapeXml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
 }
