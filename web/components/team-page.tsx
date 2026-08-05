@@ -16,6 +16,7 @@ import {
 } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
 import { locales, siteUrl, toPath, toTeamPath, toTutorialPath, type Locale } from "../lib/site";
+import { DesktopSubscribeQr } from "./desktop-subscribe-qr";
 import { LanguageSwitcher } from "./language-switcher";
 import { LocalizedMatchTime } from "./localized-match-time";
 import { MatchFixtureLabel } from "./match-fixture-label";
@@ -97,6 +98,12 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+
+      <DesktopSubscribeQr
+        scanLabel={t("scanWithPhoneCameraLabel")}
+        subscriptionUrl={subscriptionUrl}
+        triggerLabel={t("mobileSubscriptionLabel")}
       />
 
       <header className="mx-auto w-full max-w-[1200px] bg-header text-white">
