@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { getLeagues, getSitemapRoutes } from "../lib/catalog";
 import { getTutorialSlugs } from "../lib/tutorials";
-import { locales, toPath, toSitemapUrl, toTeamPath, toTutorialPath } from "../lib/site";
+import { locales, toPath, toSitemapUrl, toTeamPath, toTutorialIndexPath, toTutorialPath } from "../lib/site";
 
 // Built once, at build time, alongside the pages it lists. It used to be held
 // for an hour and rebuilt on demand, but serving it from the Worker is what a
@@ -15,7 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const routes = await getSitemapRoutes();
   const tutorialSlugs = getTutorialSlugs();
   const homeLastModified = toLastModified(directory.updatedAt) ?? new Date("2026-03-10T00:00:00Z");
-  const tutorialLastModified = new Date("2026-03-10T00:00:00Z");
+  const tutorialLastModified = new Date("2026-08-10T00:00:00Z");
   const entries: MetadataRoute.Sitemap = [
     {
       url: toSitemapUrl("/"),
@@ -32,6 +32,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   for (const locale of locales) {
+    entries.push({
+      url: toSitemapUrl(toTutorialIndexPath(locale)),
+      lastModified: tutorialLastModified,
+    });
+
     for (const slug of tutorialSlugs) {
       entries.push({
         url: toSitemapUrl(toTutorialPath(locale, slug)),
