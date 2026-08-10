@@ -91,6 +91,10 @@ export function toTutorialPath(locale: Locale, slug: string) {
   return `/${locale}/tutorials/${slug}/`;
 }
 
+export function toTutorialIndexPath(locale: Locale) {
+  return `/${locale}/tutorials/`;
+}
+
 export function localizedDateLocale(locale: Locale) {
   return getLocaleOption(locale).dateLocale;
 }

@@ -6,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 
 import { buildTeamOptions, formatMatchLocation, getCurrentSeasonSlug, getLeagueFeedUrl, getLeagueSeasons, getLeagues, getLeagueSubscriptionUrl, getPublicApiBaseUrl, getSeasonPageData, matchLabel, type Match, type Team } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
-import { locales, siteUrl, type Locale, toPath, toTeamPath, toTutorialPath } from "../lib/site";
+import { locales, siteUrl, type Locale, toPath, toTeamPath, toTutorialIndexPath } from "../lib/site";
 import { DesktopSubscribeQr } from "./desktop-subscribe-qr";
 import { LanguageSwitcher } from "./language-switcher";
 import { LeagueSeasonNav } from "./league-season-nav";
@@ -188,9 +188,9 @@ export async function SeasonPage({ locale, sportSlug, leagueSlug, seasonSlug }: 
           <InfoSection title={t("otherLabel")}>
               <Link
                 className="text-sm text-blue-700 underline underline-offset-2 transition hover:text-blue-800"
-                href={toTutorialPath(locale, "how-to-subscribe-ios")}
+                href={toTutorialIndexPath(locale)}
               >
-                {t("iosTutorialLinkLabel")}
+                {t("tutorialsLinkLabel")}
               </Link>
           </InfoSection>
         </section>

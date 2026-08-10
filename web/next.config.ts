@@ -18,11 +18,6 @@ const nextConfig: NextConfig = {
   //     (status, result) are refreshed client-side.
   output: "export",
   trailingSlash: true,
-  images: {
-    // No image optimizer exists without a server; the tutorial screenshots are
-    // already sized for their slots.
-    unoptimized: true,
-  },
 };
 
 export default withNextIntl(nextConfig);

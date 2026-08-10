@@ -15,7 +15,7 @@ import {
   type Match,
 } from "../lib/catalog";
 import { formatSeasonDisplay } from "../lib/season";
-import { locales, siteUrl, toPath, toTeamPath, toTutorialPath, type Locale } from "../lib/site";
+import { locales, siteUrl, toPath, toTeamPath, toTutorialIndexPath, type Locale } from "../lib/site";
 import { DesktopSubscribeQr } from "./desktop-subscribe-qr";
 import { LanguageSwitcher } from "./language-switcher";
 import { LocalizedMatchTime } from "./localized-match-time";
@@ -201,9 +201,9 @@ export async function TeamPage({ locale, sportSlug, leagueSlug, seasonSlug, team
           <InfoSection title={t("otherLabel")}>
             <Link
               className="text-sm text-blue-700 underline underline-offset-2 transition hover:text-blue-800"
-              href={toTutorialPath(locale, "how-to-subscribe-ios")}
+              href={toTutorialIndexPath(locale)}
             >
-              {t("iosTutorialLinkLabel")}
+              {t("tutorialsLinkLabel")}
             </Link>
           </InfoSection>
         </section>
