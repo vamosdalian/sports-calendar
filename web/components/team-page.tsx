@@ -352,7 +352,22 @@ function buildSportsEventStructuredData(match: Match, sportName: string) {
           ? "https://schema.org/EventPostponed"
           : "https://schema.org/EventScheduled",
     sport: sportName,
-    ...(location ? { location: { "@type": "Place", name: location } } : {}),
+    // Same shape as the season page's markup: a bare Place name leaves the
+    // address incomplete, and the two pages describing the same fixture should
+    // not disagree about where it is played.
+    ...(location
+      ? {
+          location: {
+            "@type": "Place",
+            name: location,
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: match.city || undefined,
+              addressCountry: match.country || undefined,
+            },
+          },
+        }
+      : {}),
     ...(match.homeTeam && match.awayTeam
       ? {
           competitor: [

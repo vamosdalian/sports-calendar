@@ -60,6 +60,9 @@ class VenueOut(BaseModel):
     id: int
     name: str
     city: str | None = None
+    # Resolved from the venue's country_id. Consumers put it in a postal
+    # address, where a bare city is not enough to identify a place.
+    country: str | None = None
     capacity: int | None = None
 
 

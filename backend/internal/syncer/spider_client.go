@@ -97,9 +97,10 @@ type spiderFixture struct {
 }
 
 type spiderVenue struct {
-	ID   int64   `json:"id"`
-	Name string  `json:"name"`
-	City *string `json:"city"`
+	ID      int64   `json:"id"`
+	Name    string  `json:"name"`
+	City    *string `json:"city"`
+	Country *string `json:"country"`
 }
 
 func NewSpiderFetcher(baseURL string, timeout time.Duration, logger *logrus.Logger) (*SpiderFetcher, error) {
@@ -408,21 +409,32 @@ func registerSpiderVenue(venueMap map[int64]domain.VenueSyncRecord, venue *spide
 	}
 	id := venue.ID + spiderVenueIDOffset
 	if _, exists := venueMap[id]; !exists {
-		city := emptyLocalizedText()
-		if venue.City != nil && strings.TrimSpace(*venue.City) != "" {
-			city = englishText(strings.TrimSpace(*venue.City))
-		}
 		venueMap[id] = domain.VenueSyncRecord{
 			ID:   id,
 			Name: englishText(strings.TrimSpace(venue.Name)),
-			City: city,
-			// Transfermarkt's stadium pages carry no country column; the
-			// admin can localize it, and the JSONB merge on upsert keeps
-			// whatever a human filled in.
-			Country: emptyLocalizedText(),
+			City: optionalEnglishText(venue.City),
+			// Resolved by the crawler from the competition's country. Absent
+			// for a ground only ever seen on a neutral-venue match report,
+			// where there is no competition country to inherit.
+			Country: optionalEnglishText(venue.Country),
 		}
 	}
 	return &id
+}
+
+// optionalEnglishText renders a nullable upstream string as localized text,
+// yielding empty text (not a blank "en" entry) when the source had no value --
+// the JSONB merge on upsert would otherwise overwrite a human's translation
+// with an empty string.
+func optionalEnglishText(value *string) domain.LocalizedText {
+	if value == nil {
+		return emptyLocalizedText()
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return emptyLocalizedText()
+	}
+	return englishText(trimmed)
 }
 
 func spiderExternalID(fx spiderFixture, competition string, startsAt time.Time) string {
