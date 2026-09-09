@@ -135,6 +135,23 @@ type SeasonRecord struct {
 	UpdatedAt                   string `json:"updatedAt"`
 }
 
+// RetiredLeague identifies a league that exists but is no longer published.
+// Its feed still has subscribers -- a calendar subscription outlives the
+// competition by years -- so the ICS endpoint needs to tell them apart from a
+// league slug that never existed.
+type RetiredLeague struct {
+	SportSlug   string
+	LeagueSlug  string
+	LeagueNames LocalizedText
+	// Retired distinguishes a league deliberately taken down (show = false)
+	// from one that is still published but momentarily has no visible season
+	// -- the gap between an old season being hidden and the new one going up.
+	// Only the first may be served a retirement notice: telling subscribers a
+	// live competition is over would clear its fixtures from their calendars
+	// and prompt them to unsubscribe.
+	Retired bool
+}
+
 type VenueRecord struct {
 	ID        int64         `json:"id"`
 	Name      LocalizedText `json:"name"`

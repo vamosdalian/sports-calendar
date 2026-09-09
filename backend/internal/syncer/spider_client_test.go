@@ -338,7 +338,6 @@ func TestSpiderFetcherRequiresExternalRef(t *testing.T) {
 	}
 }
 
-
 // A venue reaches the calendar only through this mapping, and the failure is
 // silent: get it wrong and matches simply lose their LOCATION line.
 func TestSpiderFetcherMapsVenues(t *testing.T) {
@@ -361,7 +360,7 @@ func TestSpiderFetcherMapsVenues(t *testing.T) {
 					"match_id": 4625774, "competition_id": "GB1", "season_id": 2025,
 					"kickoff": "2025-08-15T21:00:00", "home_team_id": 31, "away_team_id": 989,
 					"home_name": "Liverpool FC", "away_name": "AFC Bournemouth",
-					"venue": map[string]any{"id": 31, "name": "Anfield", "city": "Liverpool"},
+					"venue":        map[string]any{"id": 31, "name": "Anfield", "city": "Liverpool"},
 					"venue_source": "match_page",
 				},
 				{
@@ -370,7 +369,7 @@ func TestSpiderFetcherMapsVenues(t *testing.T) {
 					"match_id": 4625999, "competition_id": "GB1", "season_id": 2025,
 					"kickoff": "2025-08-23T14:00:00", "home_team_id": 31, "away_team_id": 985,
 					"home_name": "Liverpool FC", "away_name": "Manchester United",
-					"venue": map[string]any{"id": 31, "name": "Anfield", "city": "Liverpool"},
+					"venue":        map[string]any{"id": 31, "name": "Anfield", "city": "Liverpool"},
 					"venue_source": "club_home",
 				},
 				{

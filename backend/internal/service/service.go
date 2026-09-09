@@ -32,6 +32,7 @@ var ErrFeedEmpty = errors.New("feed has no fixtures")
 type repository interface {
 	ListLeagues(ctx context.Context) ([]domain.SportDirectoryItem, string, error)
 	ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error)
+	FindRetiredLeague(ctx context.Context, sportSlug, leagueSlug string) (domain.RetiredLeague, error)
 	GetLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error)
 	GetAdminLeagueSeason(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error)
 	GetSeasonSyncTarget(ctx context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.LeagueSyncTarget, error)
@@ -120,6 +121,13 @@ func (s *Service) webHomeURL() string {
 		return defaultWebBaseURL
 	}
 	return s.webBaseURL
+}
+
+func (s *Service) homePageURL(locale string) string {
+	if locale != "zh" {
+		locale = "en"
+	}
+	return fmt.Sprintf("%s/%s/", s.webHomeURL(), locale)
 }
 
 func (s *Service) seasonPageURL(sportSlug, leagueSlug, seasonSlug, locale string) string {
@@ -385,6 +393,34 @@ func (s *Service) CurrentSeasonSlug(ctx context.Context, sportSlug, leagueSlug s
 	return payload.Seasons[0].Slug, nil
 }
 
+// buildRetiredLeagueICS serves the notice feed for a league that exists but no
+// longer publishes a season. Falls back to the caller's not-found when the
+// league is genuinely unknown, so a typo'd URL still 404s.
+func (s *Service) buildRetiredLeagueICS(ctx context.Context, sportSlug, leagueSlug, locale string) ([]byte, error) {
+	retired, err := s.repo.FindRetiredLeague(ctx, sportSlug, leagueSlug)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if !retired.Retired {
+		// Still published, just without a visible season at this instant --
+		// the gap during a season rollover. Treated as a transient gap (503)
+		// so clients hold on to the fixtures they have, exactly like an empty
+		// season. Announcing retirement here would wipe a live competition
+		// from every subscriber's calendar.
+		return nil, ErrFeedEmpty
+	}
+	return ics.BuildRetiredFeedCalendar(ics.RetiredFeedPayload{
+		SportSlug:   retired.SportSlug,
+		LeagueSlug:  retired.LeagueSlug,
+		LeagueNames: retired.LeagueNames,
+		Locale:      locale,
+		BrowseURL:   s.homePageURL(locale),
+	}, time.Now().UTC())
+}
+
 // BuildLeagueICS renders the feed for a league's *current* season.
 //
 // Deliberately takes no season argument. Subscriptions live in a calendar
@@ -396,6 +432,13 @@ func (s *Service) CurrentSeasonSlug(ctx context.Context, sportSlug, leagueSlug s
 func (s *Service) BuildLeagueICS(ctx context.Context, sportSlug, leagueSlug, locale, teamSlug string) ([]byte, error) {
 	seasonSlug, err := s.CurrentSeasonSlug(ctx, sportSlug, leagueSlug)
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// The league may have been retired rather than never existed. Its
+			// subscribers are still polling -- a calendar subscription outlives
+			// the competition by years -- and a 404 leaves them with a calendar
+			// that just stops updating, with nothing to tell them why.
+			return s.buildRetiredLeagueICS(ctx, sportSlug, leagueSlug, locale)
+		}
 		return nil, err
 	}
 	detail, err := s.GetLeagueSeason(ctx, sportSlug, leagueSlug, seasonSlug)

@@ -693,6 +693,36 @@ func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDir
 	return items, updatedAt, nil
 }
 
+// FindRetiredLeague looks a league up ignoring the visibility flag that
+// ListLeagueSeasons enforces, so a caller can tell "this league was taken
+// down" from "this slug never existed". ErrNotFound means genuinely unknown;
+// the returned Retired flag separates a deliberate takedown from a league that
+// is still published but has no visible season right now.
+func (r *PostgresRepository) FindRetiredLeague(ctx context.Context, sportSlug, leagueSlug string) (domain.RetiredLeague, error) {
+	var (
+		leagueNamesRaw []byte
+		show           bool
+	)
+	err := r.pool.QueryRow(ctx, `
+		SELECT l.name, l.show
+		FROM leagues l
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2
+	`, sportSlug, leagueSlug).Scan(&leagueNamesRaw, &show)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.RetiredLeague{}, domain.ErrNotFound
+		}
+		return domain.RetiredLeague{}, fmt.Errorf("find retired league: %w", err)
+	}
+	return domain.RetiredLeague{
+		SportSlug:   sportSlug,
+		LeagueSlug:  leagueSlug,
+		LeagueNames: decodeLocalizedText(leagueNamesRaw),
+		Retired:     !show,
+	}, nil
+}
+
 func (r *PostgresRepository) ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error) {
 	var (
 		leagueID        int64

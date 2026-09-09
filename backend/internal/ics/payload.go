@@ -17,6 +17,17 @@ type ExpiredFeedPayload struct {
 	ResubscribeURL string
 }
 
+// RetiredFeedPayload backs the notice served for a league that has been taken
+// down. Distinct from ExpiredFeedPayload: there is nothing to re-subscribe to,
+// so the notice tells the subscriber to remove the subscription instead.
+type RetiredFeedPayload struct {
+	SportSlug   string
+	LeagueSlug  string
+	LeagueNames domain.LocalizedText
+	Locale      string
+	BrowseURL   string
+}
+
 type CalendarPayload struct {
 	SportSlug                   string
 	LeagueSlug                  string

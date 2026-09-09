@@ -263,6 +263,21 @@ func (r *fakeRepository) ListLeagueSeasons(_ context.Context, sportSlug, leagueS
 	}, nil
 }
 
+func (r *fakeRepository) FindRetiredLeague(_ context.Context, sportSlug, leagueSlug string) (domain.RetiredLeague, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	league, exists := r.leaguesBySlug[leagueSlug]
+	if !exists || league.SportSlug != sportSlug {
+		return domain.RetiredLeague{}, domain.ErrNotFound
+	}
+	return domain.RetiredLeague{
+		SportSlug:   sportSlug,
+		LeagueSlug:  leagueSlug,
+		LeagueNames: league.Name,
+		Retired:     !league.Show,
+	}, nil
+}
+
 func (r *fakeRepository) GetLeagueSeason(_ context.Context, sportSlug, leagueSlug, seasonSlug string) (domain.SeasonDetail, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -2264,5 +2279,101 @@ func TestICSFeedUnknownTeamStillServesExpiryNoticeWhenSeasonHasFixtures(t *testi
 	}
 	if body := recorder.Body.String(); !strings.Contains(body, "BEGIN:VCALENDAR") {
 		t.Fatalf("expected the expiry notice calendar body=%s", body)
+	}
+}
+
+// A league that is taken down keeps its subscribers: a calendar subscription
+// outlives the competition by years and nobody ever revisits it. The World Cup
+// went to 404 the moment its show flag was cleared, and 353 subscribers polled
+// it for months without seeing anything change.
+func TestICSFeedForRetiredLeagueServesRetirementNotice(t *testing.T) {
+	router, repo, _ := testRouter(t)
+	repo.mu.Lock()
+	league := repo.leaguesBySlug["csl"]
+	league.Show = false
+	repo.leaguesBySlug["csl"] = league
+	repo.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics", nil)
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "SUMMARY:⚠️ Chinese Super League calendar is no longer updated") {
+		t.Fatalf("expected retirement notice summary body=%s", body)
+	}
+	// The notice replaces the fixtures rather than joining them, which is what
+	// clears the retired competition out of the subscriber's calendar.
+	if strings.Count(body, "BEGIN:VEVENT") != 1 {
+		t.Fatalf("expected exactly one notice event body=%s", body)
+	}
+	if strings.Contains(body, "csl-2026-r1-guoan-shenhua@sports-calendar.com") {
+		t.Fatalf("expected no fixtures in the retirement feed body=%s", body)
+	}
+	if !strings.Contains(body, "URL:https://sports-calendar.com/en/") {
+		t.Fatalf("expected a browse url body=%s", body)
+	}
+}
+
+func TestICSFeedForRetiredLeagueNoticeLocalized(t *testing.T) {
+	router, repo, _ := testRouter(t)
+	repo.mu.Lock()
+	league := repo.leaguesBySlug["csl"]
+	league.Show = false
+	repo.leaguesBySlug["csl"] = league
+	repo.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics?lang=zh", nil)
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "中超") {
+		t.Fatalf("expected the localized league name body=%s", body)
+	}
+	if !strings.Contains(body, "URL:https://sports-calendar.com/zh/") {
+		t.Fatalf("expected a localized browse url body=%s", body)
+	}
+}
+
+// A league slug that never existed must still 404 -- serving a notice for a
+// typo would tell the user to unsubscribe from something they never had.
+func TestICSFeedForUnknownLeagueStillNotFound(t *testing.T) {
+	router, _, _ := testRouter(t)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/no-such-league/2026/matches.ics", nil)
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for an unknown league, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// The gap during a season rollover -- league still published, no visible
+// season yet -- must hold the subscriber's fixtures rather than announcing the
+// competition is over.
+func TestICSFeedForPublishedLeagueWithoutSeasonIsUnavailable(t *testing.T) {
+	router, repo, _ := testRouter(t)
+	repo.mu.Lock()
+	season := repo.seasonsByKey["football/csl/2026"]
+	season.Show = false
+	repo.seasonsByKey["football/csl/2026"] = season
+	repo.mu.Unlock()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ics/football/csl/2026/matches.ics", nil)
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 during a season gap, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "no longer updated") {
+		t.Fatalf("a published league must not be announced as retired body=%s", recorder.Body.String())
 	}
 }

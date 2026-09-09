@@ -81,36 +81,92 @@ func BuildCalendar(detail CalendarPayload, now time.Time) ([]byte, error) {
 func BuildExpiredFeedCalendar(payload ExpiredFeedPayload, now time.Time) ([]byte, error) {
 	locale := normalizeLocale(payload.Locale)
 	labels := localizedExpiredLabels(locale)
+	leagueName := leagueDisplayName(payload.LeagueNames, payload.LeagueSlug, locale)
 
+	return buildNoticeCalendar(noticeSpec{
+		locale:       locale,
+		calendarName: fmt.Sprintf("%s %s - %s", leagueName, payload.SeasonLabel, labels.CalendarSuffix),
+		uid:          fmt.Sprintf("expired-%s-%s-%s@sports-calendar.com", payload.LeagueSlug, payload.SeasonLabel, payload.TeamSlug),
+		summary:      labels.Summary,
+		description:  buildExpiredDescription(payload, labels),
+		url:          payload.ResubscribeURL,
+		categories:   []string{payload.SportSlug, payload.LeagueSlug, payload.TeamSlug},
+	}, now)
+}
+
+// BuildRetiredFeedCalendar renders the notice served for a league that has been
+// taken down. A retired league's feed used to 404, which a calendar client
+// treats as a transient error: it keeps the fixtures it already has and retries
+// forever, so the subscriber sees a calendar that simply stopped updating and
+// never learns why. This replaces the fixtures with a single dated notice --
+// which also clears the retired league's matches out of their calendar, since
+// a feed is an authoritative snapshot and anything absent from it is deleted.
+func BuildRetiredFeedCalendar(payload RetiredFeedPayload, now time.Time) ([]byte, error) {
+	locale := normalizeLocale(payload.Locale)
+	labels := localizedRetiredLabels(locale)
+	leagueName := leagueDisplayName(payload.LeagueNames, payload.LeagueSlug, locale)
+
+	lines := []string{fmt.Sprintf(labels.Reason, leagueName), "", labels.HowToFix}
+	if payload.BrowseURL != "" {
+		lines = append(lines, "", payload.BrowseURL)
+	}
+
+	return buildNoticeCalendar(noticeSpec{
+		locale:       locale,
+		calendarName: fmt.Sprintf("%s - %s", leagueName, labels.CalendarSuffix),
+		uid:          fmt.Sprintf("retired-%s@sports-calendar.com", payload.LeagueSlug),
+		summary:      fmt.Sprintf(labels.Summary, leagueName),
+		description:  strings.Join(lines, "\n"),
+		url:          payload.BrowseURL,
+		categories:   []string{payload.SportSlug, payload.LeagueSlug},
+	}, now)
+}
+
+func leagueDisplayName(names domain.LocalizedText, slug, locale string) string {
+	if name := domain.PickLocalized(names, locale); name != "" {
+		return name
+	}
+	return slug
+}
+
+// noticeSpec is one all-day notice event standing in for a feed's fixtures.
+type noticeSpec struct {
+	locale       string
+	calendarName string
+	uid          string
+	summary      string
+	description  string
+	url          string
+	categories   []string
+}
+
+// buildNoticeCalendar renders a one-event calendar. The event is an all-day
+// entry on the day the feed is generated, so it keeps moving to "today" on
+// every refresh and stays visible until the subscriber acts on it.
+func buildNoticeCalendar(spec noticeSpec, now time.Time) ([]byte, error) {
 	calendar := ical.NewCalendar()
-	calendar.Props.SetText(ical.PropProductID, fmt.Sprintf("-//sports-calendar//season-feed//%s", strings.ToUpper(locale)))
+	calendar.Props.SetText(ical.PropProductID, fmt.Sprintf("-//sports-calendar//season-feed//%s", strings.ToUpper(spec.locale)))
 	calendar.Props.SetText(ical.PropVersion, "2.0")
 	calendar.Props.SetText(ical.PropCalendarScale, "GREGORIAN")
 	calendar.Props.SetText(ical.PropMethod, "PUBLISH")
-
-	leagueName := domain.PickLocalized(payload.LeagueNames, locale)
-	if leagueName == "" {
-		leagueName = payload.LeagueSlug
-	}
-	calendarName := fmt.Sprintf("%s %s - %s", leagueName, payload.SeasonLabel, labels.CalendarSuffix)
-	calendar.Props.SetText(ical.PropName, calendarName)
-	calendar.Props.SetText("X-WR-CALNAME", calendarName)
+	calendar.Props.SetText(ical.PropName, spec.calendarName)
+	calendar.Props.SetText("X-WR-CALNAME", spec.calendarName)
 
 	day := now.UTC().Truncate(24 * time.Hour)
 	event := ical.NewEvent()
-	event.Props.SetText(ical.PropUID, fmt.Sprintf("expired-%s-%s-%s@sports-calendar.com", payload.LeagueSlug, payload.SeasonLabel, payload.TeamSlug))
+	event.Props.SetText(ical.PropUID, spec.uid)
 	event.Props.SetDateTime(ical.PropDateTimeStamp, now)
 	event.Props.SetDateTime(ical.PropLastModified, now)
 	event.Props.Set(buildSequence(now))
 	event.Props.SetDate(ical.PropDateTimeStart, day)
 	event.Props.SetDate(ical.PropDateTimeEnd, day.AddDate(0, 0, 1))
-	event.Props.SetText(ical.PropSummary, labels.Summary)
-	event.Props.SetText(ical.PropDescription, buildExpiredDescription(payload, labels))
-	if payload.ResubscribeURL != "" {
+	event.Props.SetText(ical.PropSummary, spec.summary)
+	event.Props.SetText(ical.PropDescription, spec.description)
+	if spec.url != "" {
 		// SetText would stamp VALUE=TEXT on a property clients expect as a URI,
 		// which is what makes the link tappable in the event detail view.
 		urlProp := ical.NewProp(ical.PropURL)
-		urlProp.Value = payload.ResubscribeURL
+		urlProp.Value = spec.url
 		event.Props.Set(urlProp)
 	}
 	event.Props.SetText(ical.PropStatus, "CONFIRMED")
@@ -118,14 +174,14 @@ func BuildExpiredFeedCalendar(payload ExpiredFeedPayload, now time.Time) ([]byte
 	event.Props.SetText(ical.PropTransparency, "TRANSPARENT")
 
 	categories := ical.NewProp(ical.PropCategories)
-	categories.SetTextList([]string{payload.SportSlug, payload.LeagueSlug, payload.TeamSlug})
+	categories.SetTextList(spec.categories)
 	event.Props.Set(categories)
 
 	calendar.Children = append(calendar.Children, event.Component)
 
 	var buf bytes.Buffer
 	if err := ical.NewEncoder(&buf).Encode(calendar); err != nil {
-		return nil, fmt.Errorf("encode expired calendar: %w", err)
+		return nil, fmt.Errorf("encode notice calendar: %w", err)
 	}
 	return buf.Bytes(), nil
 }
@@ -151,6 +207,30 @@ func localizedExpiredLabels(locale string) expiredLabels {
 		Summary:        "⚠️ Subscription expired — please re-subscribe",
 		Reason:         "Why: after a data source update, the team id %q no longer matches any team in this season, so this subscription URL is dead and will never receive fixtures again.",
 		HowToFix:       "How to fix: remove this subscription, then open the page below to pick the team and subscribe again.",
+	}
+}
+
+type retiredLabels struct {
+	CalendarSuffix string
+	Summary        string
+	Reason         string
+	HowToFix       string
+}
+
+func localizedRetiredLabels(locale string) retiredLabels {
+	if locale == "zh" {
+		return retiredLabels{
+			CalendarSuffix: "赛事已下线",
+			Summary:        "⚠️ %s 日历已停止更新",
+			Reason:         "原因：%s 已经结束，并且不再由 sports-calendar 提供赛程，这个订阅不会再有新的比赛。原有的比赛也已从这个日历中移除。",
+			HowToFix:       "解决办法：在日历应用里删除这个订阅。仍在更新的赛事可以在下面的页面找到。",
+		}
+	}
+	return retiredLabels{
+		CalendarSuffix: "Calendar retired",
+		Summary:        "⚠️ %s calendar is no longer updated",
+		Reason:         "Why: %s has finished and is no longer covered by sports-calendar, so this subscription will never receive another fixture. Its previous matches have been removed from this calendar too.",
+		HowToFix:       "How to fix: remove this subscription from your calendar app. Competitions still being updated are listed on the page below.",
 	}
 }
 
