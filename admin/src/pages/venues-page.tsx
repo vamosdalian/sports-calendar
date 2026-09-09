@@ -5,7 +5,6 @@ import { ConfirmActionDialog } from '@/components/confirm-action-dialog'
 import { EditVenueDialog } from '@/components/edit-venue-dialog'
 import { useAuth } from '@/components/use-auth'
 import { useToast } from '@/components/use-toast'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useAdminLocales } from '@/components/admin-locales-provider'
@@ -20,7 +19,6 @@ export function VenuesPage() {
 	const [venues, setVenues] = useState<AdminVenueItem[]>([])
 	const [error, setError] = useState<string | null>(null)
 	const [editingVenue, setEditingVenue] = useState<AdminVenueItem | null>(null)
-	const [creatingVenue, setCreatingVenue] = useState(false)
 	const [deletingVenue, setDeletingVenue] = useState<AdminVenueItem | null>(null)
 	const [deletePending, setDeletePending] = useState(false)
 	const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -77,18 +75,16 @@ export function VenuesPage() {
 	return (
 		<div className="space-y-6">
 			<EditVenueDialog
-				venue={creatingVenue ? null : editingVenue}
-				open={creatingVenue || editingVenue !== null}
+				venue={editingVenue}
+				open={editingVenue !== null}
 				onOpenChange={(open) => {
 					if (!open) {
-						setCreatingVenue(false)
 						setEditingVenue(null)
 					}
 				}}
 				onSaved={async () => {
 					await loadVenues()
-					showToast({ title: creatingVenue ? 'Venue created' : 'Venue updated', description: 'Venue localization changes were saved.', tone: 'success' })
-					setCreatingVenue(false)
+					showToast({ title: 'Venue updated', description: 'Venue localization changes were saved.', tone: 'success' })
 					setEditingVenue(null)
 				}}
 			/>
@@ -96,9 +92,13 @@ export function VenuesPage() {
 				<CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
 					<div>
 						<CardTitle>Venues</CardTitle>
-						<CardDescription>Manage venue names and localized city/country labels used across matches.</CardDescription>
+						<CardDescription>
+							Venues are maintained by the crawler, which fills in the English name, city and
+							country from Transfermarkt. Editing here adds the localizations it cannot supply:
+							a sync merges its own locale into a venue and leaves every other locale alone, so a
+							Chinese name entered here survives.
+						</CardDescription>
 					</div>
-					<Button onClick={() => setCreatingVenue(true)} type="button">Add venue</Button>
 				</CardHeader>
 				<CardContent>
 					{error ? <p className="text-sm text-danger">{error}</p> : null}
@@ -107,7 +107,7 @@ export function VenuesPage() {
 			<Card className="demo-panel">
 				<CardHeader>
 					<CardTitle>Venue catalog</CardTitle>
-					<CardDescription>Review and edit manually maintained venue metadata.</CardDescription>
+					<CardDescription>Add localized labels, or delete a venue no match references any more.</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<CatalogDataTable

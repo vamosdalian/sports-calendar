@@ -693,6 +693,36 @@ func (r *PostgresRepository) ListLeagues(ctx context.Context) ([]domain.SportDir
 	return items, updatedAt, nil
 }
 
+// FindRetiredLeague looks a league up ignoring the visibility flag that
+// ListLeagueSeasons enforces, so a caller can tell "this league was taken
+// down" from "this slug never existed". ErrNotFound means genuinely unknown;
+// the returned Retired flag separates a deliberate takedown from a league that
+// is still published but has no visible season right now.
+func (r *PostgresRepository) FindRetiredLeague(ctx context.Context, sportSlug, leagueSlug string) (domain.RetiredLeague, error) {
+	var (
+		leagueNamesRaw []byte
+		show           bool
+	)
+	err := r.pool.QueryRow(ctx, `
+		SELECT l.name, l.show
+		FROM leagues l
+		JOIN sports s ON s.id = l.sport_id
+		WHERE s.slug = $1 AND l.slug = $2
+	`, sportSlug, leagueSlug).Scan(&leagueNamesRaw, &show)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.RetiredLeague{}, domain.ErrNotFound
+		}
+		return domain.RetiredLeague{}, fmt.Errorf("find retired league: %w", err)
+	}
+	return domain.RetiredLeague{
+		SportSlug:   sportSlug,
+		LeagueSlug:  leagueSlug,
+		LeagueNames: decodeLocalizedText(leagueNamesRaw),
+		Retired:     !show,
+	}, nil
+}
+
 func (r *PostgresRepository) ListLeagueSeasons(ctx context.Context, sportSlug, leagueSlug string) (domain.LeagueSeasons, error) {
 	var (
 		leagueID        int64
@@ -1125,6 +1155,11 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 		}
 
 		matchResult := normalizeStringSlice(match.Result)
+		// venue_id is COALESCEd rather than overwritten: the crawler fills
+		// venues on a separate, slower track than fixtures, so a sync will
+		// routinely carry matches whose venue is not established yet. Taking
+		// EXCLUDED.venue_id literally would drop the LOCATION line out of
+		// every subscriber's calendar entry until the venue crawl caught up.
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO matches (
 				season_id,
@@ -1141,7 +1176,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			SET season_id = EXCLUDED.season_id,
 			    teams = EXCLUDED.teams,
 			    round_name = matches.round_name || EXCLUDED.round_name,
-			    venue_id = EXCLUDED.venue_id,
+			    venue_id = COALESCE(EXCLUDED.venue_id, matches.venue_id),
 			    starts_at = EXCLUDED.starts_at,
 			    status = EXCLUDED.status,
 			    result = EXCLUDED.result,
@@ -1150,7 +1185,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			WHERE matches.season_id IS DISTINCT FROM EXCLUDED.season_id
 			   OR matches.teams IS DISTINCT FROM EXCLUDED.teams
 			   OR matches.round_name IS DISTINCT FROM matches.round_name || EXCLUDED.round_name
-			   OR matches.venue_id IS DISTINCT FROM EXCLUDED.venue_id
+			   OR matches.venue_id IS DISTINCT FROM COALESCE(EXCLUDED.venue_id, matches.venue_id)
 			   OR matches.starts_at IS DISTINCT FROM EXCLUDED.starts_at
 			   OR matches.status IS DISTINCT FROM EXCLUDED.status
 			   OR matches.result IS DISTINCT FROM EXCLUDED.result

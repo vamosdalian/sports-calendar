@@ -9,6 +9,7 @@ _VEREIN_RE = re.compile(r"/verein/(\d+)")
 _SPIELER_RE = re.compile(r"/spieler/(\d+)")
 _WETTBEWERB_RE = re.compile(r"/wettbewerb/([A-Za-z0-9]+)")
 _SPIELBERICHT_RE = re.compile(r"/(?:spielbericht|index/spielbericht)/(\d+)")
+_STADION_VEREIN_RE = re.compile(r"/stadion/verein/(\d+)")
 
 
 def text(node) -> str:
@@ -27,6 +28,32 @@ def club_id_from_href(href: str | None) -> int | None:
         return None
     m = _VEREIN_RE.search(href)
     return int(m.group(1)) if m else None
+
+
+def venue_id_from_href(href: str | None) -> int | None:
+    """Stadium id from a ``/stadion/verein/{id}`` link.
+
+    Transfermarkt does not give stadiums their own ids -- a ground is reached
+    through the club that owns it, in two shapes:
+        /manchester-united/stadion/verein/985           (stadium overview page)
+        /stadion/stadion/verein/31/saison_id/2025       (match report page)
+    Both mean "the ground of club N", so that club id is the stadium's key.
+    Note this is NOT interchangeable with club_id_from_href: on a match report
+    the link points at the *host* ground, which for a neutral final belongs to
+    neither of the two sides.
+    """
+    if not href:
+        return None
+    m = _STADION_VEREIN_RE.search(href)
+    return int(m.group(1)) if m else None
+
+
+def parse_capacity(raw: str | None) -> int | None:
+    """"74.879" / "61,276" -> 74879. Returns None for "-" and other blanks."""
+    if not raw:
+        return None
+    digits = re.sub(r"[^\d]", "", raw)
+    return int(digits) if digits else None
 
 
 def player_id_from_href(href: str | None) -> int | None:

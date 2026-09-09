@@ -90,7 +90,31 @@ async def fixtures(
     stmt = stmt.order_by(
         models.Fixture.kickoff.nulls_last(), models.Fixture.id
     ).limit(limit)
-    return (await session.execute(stmt)).scalars().all()
+    rows = (await session.execute(stmt)).scalars().all()
+
+    # Venues live in their own table keyed by match_id (a fixture row is
+    # deleted and recreated on every competition crawl), so they are attached
+    # here rather than being a relationship on the model.
+    match_ids = [row.match_id for row in rows if row.match_id is not None]
+    venue_by_match: dict[int, tuple[models.Venue | None, str]] = {}
+    if match_ids:
+        joined = await session.execute(
+            select(models.MatchVenue, models.Venue)
+            .outerjoin(models.Venue, models.Venue.id == models.MatchVenue.venue_id)
+            .where(models.MatchVenue.match_id.in_(match_ids))
+        )
+        for match_venue, venue in joined.all():
+            venue_by_match[match_venue.match_id] = (venue, match_venue.source)
+
+    out: list[schemas.FixtureOut] = []
+    for row in rows:
+        item = schemas.FixtureOut.model_validate(row)
+        venue, source = venue_by_match.get(row.match_id, (None, None))
+        if venue is not None:
+            item.venue = schemas.VenueOut.model_validate(venue)
+            item.venue_source = source
+        out.append(item)
+    return out
 
 
 @router.get("/competitions", response_model=list[schemas.CompetitionOut])

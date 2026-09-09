@@ -268,8 +268,68 @@ async def _do_competition_fixtures(comp_id: str, season: int) -> str:
             await repository.upsert_fixture(
                 s, competition_id=comp_id, season_id=season, fx=f
             )
+        # Venues are crawled on their own track, never inline: the calendar
+        # backend waits on *this* task and times out after 5 minutes, while
+        # confirming venues costs one request per match.
+        await enqueue(s, CrawlKind.competition_stadiums, comp_id, season, priority=120)
         await s.commit()
     return f"{len(fixtures)} 场比赛"
+
+
+async def _do_competition_stadiums(comp_id: str, season: int) -> str:
+    """One page -> every home ground in the competition, then map fixtures onto
+    them and queue per-match confirmation for whatever that cannot settle."""
+    async with SessionLocal() as s:
+        comp = await s.get(models.Competition, comp_id)
+        country_id = comp.country_id if comp else None
+        segment = _segment(comp)
+    data = await tm.scrape_competition_stadiums(comp_id, season, "x", segment)
+    venues = data["venues"]
+
+    async with SessionLocal() as s:
+        for venue in venues:
+            await repository.upsert_venue(s, {**venue, "country_id": country_id})
+        assigned = await repository.assign_home_venues(
+            s, competition_id=comp_id, season_id=season
+        )
+        # Anything the home-ground guess did not settle -- a cup tie at a
+        # neutral ground, a club whose stadium page we could not read -- still
+        # needs its own match report. Already-confirmed matches are excluded,
+        # so this converges instead of recrawling the season every sync.
+        pending = await repository.match_ids_missing_venue(
+            s,
+            competition_id=comp_id,
+            season_id=season,
+            source=models.VENUE_SOURCE_MATCH_PAGE,
+        )
+        for match_id in pending:
+            await enqueue(
+                s, CrawlKind.match_detail, match_id, season, priority=300
+            )
+        await s.commit()
+    return f"{len(venues)} 个球场, {assigned} 场比赛已定位, {len(pending)} 场待逐场确认"
+
+
+async def _do_match_detail(match_id: str, season: int) -> str:
+    """One match report -> the ground it is actually played at."""
+    mid = int(match_id)
+    data = await tm.scrape_match_detail(mid)
+    venue_id = data["venue_id"]
+    async with SessionLocal() as s:
+        if venue_id:
+            await repository.upsert_venue(
+                s, {"venue_id": venue_id, "name": data["venue_name"]}
+            )
+        # Recorded even when the page named no ground, so the match is not
+        # re-queued on every stadium crawl for the rest of the season.
+        await repository.upsert_match_venue(
+            s,
+            match_id=mid,
+            venue_id=venue_id,
+            source=models.VENUE_SOURCE_MATCH_PAGE,
+        )
+        await s.commit()
+    return data["venue_name"] or "该页面未给出球场"
 
 
 async def _do_competition_standings(comp_id: str, season: int) -> str:
@@ -402,6 +462,8 @@ async def _do_fallback_discovery(target: str, season: int) -> str:
 _HANDLERS = {
     CrawlKind.competition_clubs: _do_competition_clubs,
     CrawlKind.competition_fixtures: _do_competition_fixtures,
+    CrawlKind.competition_stadiums: _do_competition_stadiums,
+    CrawlKind.match_detail: _do_match_detail,
     CrawlKind.competition_standings: _do_competition_standings,
     CrawlKind.team_fixtures: _do_team_fixtures,
     CrawlKind.team_squad: _do_team_squad,
