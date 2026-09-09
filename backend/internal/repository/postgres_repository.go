@@ -1125,6 +1125,11 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 		}
 
 		matchResult := normalizeStringSlice(match.Result)
+		// venue_id is COALESCEd rather than overwritten: the crawler fills
+		// venues on a separate, slower track than fixtures, so a sync will
+		// routinely carry matches whose venue is not established yet. Taking
+		// EXCLUDED.venue_id literally would drop the LOCATION line out of
+		// every subscriber's calendar entry until the venue crawl caught up.
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO matches (
 				season_id,
@@ -1141,7 +1146,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			SET season_id = EXCLUDED.season_id,
 			    teams = EXCLUDED.teams,
 			    round_name = matches.round_name || EXCLUDED.round_name,
-			    venue_id = EXCLUDED.venue_id,
+			    venue_id = COALESCE(EXCLUDED.venue_id, matches.venue_id),
 			    starts_at = EXCLUDED.starts_at,
 			    status = EXCLUDED.status,
 			    result = EXCLUDED.result,
@@ -1150,7 +1155,7 @@ func (r *PostgresRepository) ReplaceLeagueSnapshot(ctx context.Context, snapshot
 			WHERE matches.season_id IS DISTINCT FROM EXCLUDED.season_id
 			   OR matches.teams IS DISTINCT FROM EXCLUDED.teams
 			   OR matches.round_name IS DISTINCT FROM matches.round_name || EXCLUDED.round_name
-			   OR matches.venue_id IS DISTINCT FROM EXCLUDED.venue_id
+			   OR matches.venue_id IS DISTINCT FROM COALESCE(EXCLUDED.venue_id, matches.venue_id)
 			   OR matches.starts_at IS DISTINCT FROM EXCLUDED.starts_at
 			   OR matches.status IS DISTINCT FROM EXCLUDED.status
 			   OR matches.result IS DISTINCT FROM EXCLUDED.result

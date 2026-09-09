@@ -338,3 +338,91 @@ func TestSpiderFetcherRequiresExternalRef(t *testing.T) {
 	}
 }
 
+
+// A venue reaches the calendar only through this mapping, and the failure is
+// silent: get it wrong and matches simply lose their LOCATION line.
+func TestSpiderFetcherMapsVenues(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/api/crawl":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"enqueued": 1, "task_ids": []string{"task-1"},
+			})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/crawl/tasks/task-1":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"id": "task-1", "status": "done",
+			})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/data/fixtures":
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode([]map[string]any{
+				{
+					"match_id": 4625774, "competition_id": "GB1", "season_id": 2025,
+					"kickoff": "2025-08-15T21:00:00", "home_team_id": 31, "away_team_id": 989,
+					"home_name": "Liverpool FC", "away_name": "AFC Bournemouth",
+					"venue": map[string]any{"id": 31, "name": "Anfield", "city": "Liverpool"},
+					"venue_source": "match_page",
+				},
+				{
+					// Same ground, second fixture: must not produce a duplicate
+					// venue record in the snapshot.
+					"match_id": 4625999, "competition_id": "GB1", "season_id": 2025,
+					"kickoff": "2025-08-23T14:00:00", "home_team_id": 31, "away_team_id": 985,
+					"home_name": "Liverpool FC", "away_name": "Manchester United",
+					"venue": map[string]any{"id": 31, "name": "Anfield", "city": "Liverpool"},
+					"venue_source": "club_home",
+				},
+				{
+					// The venue crawl has not reached this one yet.
+					"match_id": 4626000, "competition_id": "GB1", "season_id": 2025,
+					"kickoff": "2025-08-24T14:00:00", "home_team_id": 985, "away_team_id": 31,
+					"home_name": "Manchester United", "away_name": "Liverpool FC",
+					"venue": nil,
+				},
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	fetcher := newTestSpiderFetcher(t, server.URL)
+	snapshot, err := fetcher.FetchLeagueSnapshot(context.Background(), domain.LeagueSyncTarget{
+		LeagueSlug: "premier-league", SeasonSlug: "2025-2026",
+		SeasonStartYear: 2025, ExternalRef: "GB1",
+	})
+	if err != nil {
+		t.Fatalf("FetchLeagueSnapshot: %v", err)
+	}
+
+	if len(snapshot.Venues) != 1 {
+		t.Fatalf("expected 1 distinct venue, got %d", len(snapshot.Venues))
+	}
+	venue := snapshot.Venues[0]
+	// The crawler keys a venue by the club that owns the ground, which shares
+	// its numeric space with team ids -- hence the offset.
+	if venue.ID != 31+spiderVenueIDOffset {
+		t.Fatalf("venue id = %d, want %d", venue.ID, 31+spiderVenueIDOffset)
+	}
+	if got := domain.PickLocalized(venue.Name, "en"); got != "Anfield" {
+		t.Fatalf("venue name = %q", got)
+	}
+	if got := domain.PickLocalized(venue.City, "en"); got != "Liverpool" {
+		t.Fatalf("venue city = %q", got)
+	}
+
+	if len(snapshot.Matches) != 3 {
+		t.Fatalf("expected 3 matches, got %d", len(snapshot.Matches))
+	}
+	for _, match := range snapshot.Matches[:2] {
+		if match.VenueID == nil || *match.VenueID != 31+spiderVenueIDOffset {
+			t.Fatalf("match %s venue = %v, want the Anfield id", match.ExternalID, match.VenueID)
+		}
+	}
+	// A match with no venue yet must carry nil, not zero: the repository
+	// COALESCEs on it to keep whatever venue is already stored.
+	if snapshot.Matches[2].VenueID != nil {
+		t.Fatalf("unlocated match got venue %v, want nil", snapshot.Matches[2].VenueID)
+	}
+}

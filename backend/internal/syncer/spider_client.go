@@ -25,6 +25,12 @@ const ProviderSpider = "spider"
 // spider-origin id avoids collisions and is reversible with a modulo.
 const spiderTeamIDOffset int64 = 100_000_000_000
 
+// spiderVenueIDOffset does the same for venues, in its own band so a venue id
+// can never collide with a team id. Transfermarkt has no standalone stadium
+// id -- a ground is addressed through the club that owns it -- so the crawler
+// keys a venue by that club id, which shares the numeric space with teams.
+const spiderVenueIDOffset int64 = 200_000_000_000
+
 // spiderSourceTimeZone is the timezone Transfermarkt.com renders kickoff times
 // in for an anonymous visitor (its German site default). The crawler stores the
 // displayed wall-clock time as a naive datetime, so we reinterpret it in this
@@ -83,6 +89,17 @@ type spiderFixture struct {
 	AwayName       *string `json:"away_name"`
 	HomeScore      *int    `json:"home_score"`
 	AwayScore      *int    `json:"away_score"`
+	// Venue is nil until the crawler's venue track has reached this match.
+	// That means "not known yet", never "moved" -- see the COALESCE on the
+	// match upsert, which keeps a venue we already stored.
+	Venue       *spiderVenue `json:"venue"`
+	VenueSource *string      `json:"venue_source"`
+}
+
+type spiderVenue struct {
+	ID   int64   `json:"id"`
+	Name string  `json:"name"`
+	City *string `json:"city"`
 }
 
 func NewSpiderFetcher(baseURL string, timeout time.Duration, logger *logrus.Logger) (*SpiderFetcher, error) {
@@ -137,6 +154,7 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 	}
 
 	teamMap := map[int64]domain.TeamSyncRecord{}
+	venueMap := map[int64]domain.VenueSyncRecord{}
 	matches := make([]domain.MatchSyncRecord, 0, len(fixtures))
 	for _, fx := range fixtures {
 		if fx.HomeTeamID == nil || fx.AwayTeamID == nil || *fx.HomeTeamID <= 0 || *fx.AwayTeamID <= 0 {
@@ -156,6 +174,8 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 		registerSpiderTeam(teamMap, homeID, homeName)
 		registerSpiderTeam(teamMap, awayID, awayName)
 
+		venueID := registerSpiderVenue(venueMap, fx.Venue)
+
 		status := spiderMatchStatus(fx, startsAt)
 		matches = append(matches, domain.MatchSyncRecord{
 			ExternalID: spiderExternalID(fx, competition, startsAt),
@@ -165,7 +185,7 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 				englishText(awayName),
 			},
 			Round:          spiderRound(fx.Matchday),
-			VenueID:        nil,
+			VenueID:        venueID,
 			StartsAt:       startsAt,
 			KickoffTimeTBD: fx.KickoffTimeTBD,
 			Status:         status,
@@ -178,12 +198,17 @@ func (c *SpiderFetcher) FetchLeagueSnapshot(ctx context.Context, target domain.L
 		teams = append(teams, team)
 	}
 
+	venues := make([]domain.VenueSyncRecord, 0, len(venueMap))
+	for _, venue := range venueMap {
+		venues = append(venues, venue)
+	}
+
 	dataSourceNote := englishText(fmt.Sprintf("Synced from Transfermarkt competition %s (saison_id %d)", competition, saisonID))
 	return domain.LeagueSnapshot{
 		Target:         target,
 		DataSourceNote: dataSourceNote,
 		Teams:          teams,
-		Venues:         nil,
+		Venues:         venues,
 		Matches:        matches,
 	}, nil
 }
@@ -372,6 +397,32 @@ func registerSpiderTeam(teamMap map[int64]domain.TeamSyncRecord, id int64, name 
 		Names:     englishText(name),
 		ShortName: emptyLocalizedText(),
 	}
+}
+
+// registerSpiderVenue records a fixture's ground and returns the id to store
+// on the match. Returns nil when the crawler has not established a venue yet,
+// which leaves the match's existing venue untouched rather than clearing it.
+func registerSpiderVenue(venueMap map[int64]domain.VenueSyncRecord, venue *spiderVenue) *int64 {
+	if venue == nil || venue.ID <= 0 || strings.TrimSpace(venue.Name) == "" {
+		return nil
+	}
+	id := venue.ID + spiderVenueIDOffset
+	if _, exists := venueMap[id]; !exists {
+		city := emptyLocalizedText()
+		if venue.City != nil && strings.TrimSpace(*venue.City) != "" {
+			city = englishText(strings.TrimSpace(*venue.City))
+		}
+		venueMap[id] = domain.VenueSyncRecord{
+			ID:   id,
+			Name: englishText(strings.TrimSpace(venue.Name)),
+			City: city,
+			// Transfermarkt's stadium pages carry no country column; the
+			// admin can localize it, and the JSONB merge on upsert keeps
+			// whatever a human filled in.
+			Country: emptyLocalizedText(),
+		}
+	}
+	return &id
 }
 
 func spiderExternalID(fx spiderFixture, competition string, startsAt time.Time) string {
