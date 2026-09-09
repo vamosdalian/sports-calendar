@@ -360,7 +360,7 @@ func TestSpiderFetcherMapsVenues(t *testing.T) {
 					"match_id": 4625774, "competition_id": "GB1", "season_id": 2025,
 					"kickoff": "2025-08-15T21:00:00", "home_team_id": 31, "away_team_id": 989,
 					"home_name": "Liverpool FC", "away_name": "AFC Bournemouth",
-					"venue":        map[string]any{"id": 31, "name": "Anfield", "city": "Liverpool"},
+					"venue":        map[string]any{"id": 31, "name": "Anfield", "city": "Liverpool", "country": "England"},
 					"venue_source": "match_page",
 				},
 				{
@@ -409,6 +409,11 @@ func TestSpiderFetcherMapsVenues(t *testing.T) {
 	}
 	if got := domain.PickLocalized(venue.City, "en"); got != "Liverpool" {
 		t.Fatalf("venue city = %q", got)
+	}
+	// The country completes the postal address in the site's SportsEvent
+	// markup; without it Google reports the event location as incomplete.
+	if got := domain.PickLocalized(venue.Country, "en"); got != "England" {
+		t.Fatalf("venue country = %q", got)
 	}
 
 	if len(snapshot.Matches) != 3 {
