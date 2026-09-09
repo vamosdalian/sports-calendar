@@ -303,9 +303,9 @@ async def _do_competition_stadiums(comp_id: str, season: int) -> str:
             source=models.VENUE_SOURCE_MATCH_PAGE,
         )
         for match_id in pending:
-            await enqueue(
-                s, CrawlKind.match_detail, match_id, season, priority=300
-            )
+            # No season dimension: a match id is globally unique, and giving
+            # the task one would let the same match be queued once per season.
+            await enqueue(s, CrawlKind.match_detail, match_id, NO_SEASON, priority=300)
         await s.commit()
     return f"{len(venues)} 个球场, {assigned} 场比赛已定位, {len(pending)} 场待逐场确认"
 
@@ -458,6 +458,20 @@ async def _do_fallback_discovery(target: str, season: int) -> str:
         found += len(comps)
     return f"补齐 {found} 国际/洲际赛事"
 
+
+# Kinds that operate on one season, and so must be enqueued once per season.
+# Kept next to the handler table rather than in the router: a new season-scoped
+# kind that is missing here is enqueued with season_id = NO_SEASON, and its
+# handler then quietly finds nothing -- which is exactly how the first
+# competition_stadiums run reported "20 个球场, 0 场比赛已定位".
+SEASON_KINDS = {
+    CrawlKind.competition_clubs,
+    CrawlKind.competition_fixtures,
+    CrawlKind.competition_standings,
+    CrawlKind.competition_stadiums,
+    CrawlKind.team_fixtures,
+    CrawlKind.team_squad,
+}
 
 _HANDLERS = {
     CrawlKind.competition_clubs: _do_competition_clubs,

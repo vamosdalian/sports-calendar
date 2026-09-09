@@ -14,14 +14,9 @@ from app.models import NO_SEASON, CrawlKind, CrawlStatus
 
 router = APIRouter(prefix="/api/crawl", tags=["crawl"])
 
-# Tasks that operate on a single season.
-_SEASON_KINDS = {
-    CrawlKind.competition_clubs,
-    CrawlKind.competition_fixtures,
-    CrawlKind.competition_standings,
-    CrawlKind.team_fixtures,
-    CrawlKind.team_squad,
-}
+# Defined next to the handlers, in crawler.py, so a new season-scoped kind is
+# declared where it is implemented.
+_SEASON_KINDS = crawler.SEASON_KINDS
 
 
 @router.post("", response_model=schemas.CrawlEnqueueOut)
