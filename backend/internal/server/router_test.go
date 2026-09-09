@@ -2334,8 +2334,14 @@ func TestICSFeedForRetiredLeagueNoticeLocalized(t *testing.T) {
 		t.Fatalf("unexpected status: %d", recorder.Code)
 	}
 	body := recorder.Body.String()
-	if !strings.Contains(body, "中超") {
-		t.Fatalf("expected the localized league name body=%s", body)
+	// Asserted exactly, not just "contains 中超": the name is interpolated
+	// from an English-shaped template, and the stray space it left behind
+	// ("中超 日历已停止更新") shipped to production unnoticed.
+	if !strings.Contains(body, "SUMMARY:⚠️ 中超日历已停止更新") {
+		t.Fatalf("expected the localized summary without a stray space body=%s", body)
+	}
+	if !strings.Contains(body, "原因：中超已经结束") {
+		t.Fatalf("expected the localized reason without a stray space body=%s", body)
 	}
 	if !strings.Contains(body, "URL:https://sports-calendar.com/zh/") {
 		t.Fatalf("expected a localized browse url body=%s", body)

@@ -221,9 +221,11 @@ func localizedRetiredLabels(locale string) retiredLabels {
 	if locale == "zh" {
 		return retiredLabels{
 			CalendarSuffix: "赛事已下线",
-			Summary:        "⚠️ %s 日历已停止更新",
-			Reason:         "原因：%s 已经结束，并且不再由 sports-calendar 提供赛程，这个订阅不会再有新的比赛。原有的比赛也已从这个日历中移除。",
-			HowToFix:       "解决办法：在日历应用里删除这个订阅。仍在更新的赛事可以在下面的页面找到。",
+			// No space after %s: the league name runs straight into the
+			// Chinese text. The English template needs one, Chinese does not.
+			Summary:  "⚠️ %s日历已停止更新",
+			Reason:   "原因：%s已经结束，并且不再由 sports-calendar 提供赛程，这个订阅不会再有新的比赛。原有的比赛也已从这个日历中移除。",
+			HowToFix: "解决办法：在日历应用里删除这个订阅。仍在更新的赛事可以在下面的页面找到。",
 		}
 	}
 	return retiredLabels{
