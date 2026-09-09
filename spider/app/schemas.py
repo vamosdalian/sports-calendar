@@ -55,6 +55,14 @@ class PlayerOut(BaseModel):
     market_value: int | None = None
 
 
+class VenueOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    city: str | None = None
+    capacity: int | None = None
+
+
 class FixtureOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -70,6 +78,10 @@ class FixtureOut(BaseModel):
     away_name: str | None = None
     home_score: int | None = None
     away_score: int | None = None
+    # Where the match is played. Null until the venue crawl has reached it, so
+    # consumers must treat a missing venue as "not known yet", never as "moved".
+    venue: VenueOut | None = None
+    venue_source: str | None = None
 
 
 class StandingOut(BaseModel):

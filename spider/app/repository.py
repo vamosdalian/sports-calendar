@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, time
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, literal, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -232,6 +232,138 @@ async def upsert_fixture(
         await session.execute(stmt)
     else:
         await session.execute(insert(models.Fixture).values(**values))
+
+
+# ── Venues ───────────────────────────────────────────────────────────────────
+async def upsert_venue(session: AsyncSession, venue: dict) -> None:
+    values = {
+        "id": venue["venue_id"],
+        "name": venue.get("name") or str(venue["venue_id"]),
+        "city": venue.get("city"),
+        "country_id": venue.get("country_id"),
+        "capacity": venue.get("capacity"),
+        "url": venue.get("url"),
+    }
+    stmt = insert(models.Venue).values(**values)
+    # A match report only carries the name, so never let it null out the city
+    # and capacity a stadium overview page already established.
+    set_ = {
+        "name": stmt.excluded.name,
+        "city": func.coalesce(stmt.excluded.city, models.Venue.city),
+        "country_id": func.coalesce(stmt.excluded.country_id, models.Venue.country_id),
+        "capacity": func.coalesce(stmt.excluded.capacity, models.Venue.capacity),
+        "url": func.coalesce(stmt.excluded.url, models.Venue.url),
+        "updated_at": datetime.utcnow(),
+    }
+    await session.execute(stmt.on_conflict_do_update(index_elements=["id"], set_=set_))
+
+
+async def upsert_match_venue(
+    session: AsyncSession, *, match_id: int, venue_id: int | None, source: str
+) -> None:
+    """Record where a match is played, refusing to downgrade the source.
+
+    A club_home guess must never overwrite what the match report itself said:
+    a competition-wide recrawl would otherwise walk a Champions League final
+    back from its neutral ground to the home side's stadium every time.
+    """
+    values = {
+        "match_id": match_id,
+        "venue_id": venue_id,
+        "source": source,
+        "crawled_at": datetime.utcnow(),
+    }
+    stmt = insert(models.MatchVenue).values(**values)
+    set_ = {
+        "venue_id": stmt.excluded.venue_id,
+        "source": stmt.excluded.source,
+        "crawled_at": stmt.excluded.crawled_at,
+        "updated_at": datetime.utcnow(),
+    }
+    condition = None
+    if source == models.VENUE_SOURCE_CLUB_HOME:
+        condition = models.MatchVenue.source != models.VENUE_SOURCE_MATCH_PAGE
+    await session.execute(
+        stmt.on_conflict_do_update(
+            index_elements=["match_id"], set_=set_, where=condition
+        )
+    )
+
+
+async def assign_home_venues(
+    session: AsyncSession, *, competition_id: str, season_id: int
+) -> int:
+    """Point every fixture of a season at its home team's ground.
+
+    One statement rather than a round trip per fixture: this runs on every
+    stadium crawl for every competition. Fixtures whose home club has no known
+    ground are skipped by the join, and matches already confirmed by a match
+    report are protected by the WHERE on the conflict clause.
+    """
+    source = select(
+        models.Fixture.match_id,
+        models.Fixture.home_team_id,
+        literal(models.VENUE_SOURCE_CLUB_HOME),
+        func.now(),
+    ).join(
+        models.Venue, models.Venue.id == models.Fixture.home_team_id
+    ).where(
+        models.Fixture.competition_id == competition_id,
+        models.Fixture.season_id == season_id,
+        models.Fixture.match_id.is_not(None),
+    )
+    stmt = insert(models.MatchVenue).from_select(
+        ["match_id", "venue_id", "source", "crawled_at"], source
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["match_id"],
+        set_={
+            "venue_id": stmt.excluded.venue_id,
+            "source": stmt.excluded.source,
+            "crawled_at": stmt.excluded.crawled_at,
+            "updated_at": datetime.utcnow(),
+        },
+        where=models.MatchVenue.source != models.VENUE_SOURCE_MATCH_PAGE,
+    )
+    return (await session.execute(stmt)).rowcount or 0
+
+
+async def match_ids_missing_venue(
+    session: AsyncSession,
+    *,
+    competition_id: str,
+    season_id: int,
+    source: str | None = None,
+    limit: int = 500,
+) -> list[int]:
+    """Matches of a season whose venue is absent, or only a club_home guess.
+
+    Drives per-match crawling: pass source=None for "no venue at all", or
+    VENUE_SOURCE_MATCH_PAGE for "not yet confirmed by a match report".
+    """
+    joined = select(models.Fixture.match_id).outerjoin(
+        models.MatchVenue, models.MatchVenue.match_id == models.Fixture.match_id
+    ).where(
+        models.Fixture.competition_id == competition_id,
+        models.Fixture.season_id == season_id,
+        models.Fixture.match_id.is_not(None),
+    )
+    if source is None:
+        joined = joined.where(models.MatchVenue.match_id.is_(None))
+    else:
+        joined = joined.where(
+            (models.MatchVenue.match_id.is_(None))
+            | (models.MatchVenue.source != source)
+        )
+    joined = joined.order_by(models.Fixture.kickoff.nulls_last()).limit(limit)
+    return [row for row in (await session.execute(joined)).scalars().all() if row]
+
+
+async def home_venue_map(session: AsyncSession) -> dict[int, int]:
+    """club id -> venue id. Identity today (a venue *is* keyed by its club),
+    but kept as a lookup so only grounds we have actually seen are assigned."""
+    rows = (await session.execute(select(models.Venue.id))).scalars().all()
+    return {vid: vid for vid in rows}
 
 
 # ── Standings ────────────────────────────────────────────────────────────────

@@ -41,6 +41,17 @@ _ADD_COLUMNS = (
     "kickoff_time_tbd BOOLEAN NOT NULL DEFAULT FALSE",
 )
 
+# Values added to enum types that already exist in a deployed database. Same
+# trap as _ADD_COLUMNS but one level worse: `create_all` creates an enum type
+# only when it is missing, so a new CrawlKind member reaches production as an
+# `invalid input value for enum crawl_kind` the first time a task is enqueued.
+# ADD VALUE is safe inside a transaction as long as the value is not *used* in
+# that same transaction (PostgreSQL 12+).
+_ADD_ENUM_VALUES = (
+    "ALTER TYPE crawl_kind ADD VALUE IF NOT EXISTS 'competition_stadiums'",
+    "ALTER TYPE crawl_kind ADD VALUE IF NOT EXISTS 'match_detail'",
+)
+
 
 async def init_db() -> None:
     """Create all tables. For real migrations use Alembic; this is for dev bootstrap."""
@@ -49,4 +60,6 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         for statement in _ADD_COLUMNS:
+            await conn.execute(text(statement))
+        for statement in _ADD_ENUM_VALUES:
             await conn.execute(text(statement))

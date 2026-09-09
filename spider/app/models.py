@@ -42,6 +42,10 @@ class CrawlKind(str, enum.Enum):
     competition_clubs = "competition_clubs"          # participants -> team_competition_seasons
     competition_standings = "competition_standings"  # league/group table
     competition_fixtures = "competition_fixtures"     # whole-season match list
+    competition_stadiums = "competition_stadiums"     # one page -> every home ground
+    # Match-dimension: one match report page, for the venue it was actually
+    # played at (neutral finals and relocations differ from the home ground).
+    match_detail = "match_detail"
     # Team-dimension: enter via a team (national teams, ad-hoc, reverse-discovery).
     team_fixtures = "team_fixtures"
     team_squad = "team_squad"
@@ -62,6 +66,11 @@ class CrawlStatus(str, enum.Enum):
 # fallback_discovery). Keeping it non-null makes the (kind, target_id,
 # season_id) unique constraint dedupe correctly (NULLs would be distinct).
 NO_SEASON = 0
+
+# How a match's venue was established; see MatchVenue.source. A match_page
+# reading always outranks a club_home guess.
+VENUE_SOURCE_CLUB_HOME = "club_home"
+VENUE_SOURCE_MATCH_PAGE = "match_page"
 
 
 class TimestampMixin:
@@ -234,6 +243,63 @@ class Fixture(Base, TimestampMixin):
     home_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     away_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+# ── Venues ───────────────────────────────────────────────────────────────────
+class Venue(Base, TimestampMixin):
+    """A stadium.
+
+    Transfermarkt has no standalone stadium id: a ground is addressed through
+    the club that owns it (``/stadion/stadion/verein/985``), so that club id is
+    the stable key and is what we use as the primary key here. Grounds shared
+    by several clubs, and neutral venues hosting a final, therefore collapse
+    onto a single row no matter which competition reached them.
+
+    Caveat: a club that moves house reuses its id, so the row's name follows
+    the club's *current* ground. Fixtures from an older season may name the new
+    stadium. Acceptable while the calendar only serves current/future seasons.
+    """
+
+    __tablename__ = "venues"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    name: Mapped[str] = mapped_column(String(255))
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    country_id: Mapped[int | None] = mapped_column(
+        ForeignKey("countries.id", ondelete="SET NULL"), nullable=True
+    )
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class MatchVenue(Base, TimestampMixin):
+    """Where one match is played, keyed by Transfermarkt match id.
+
+    Deliberately NOT a column on ``fixtures``: ``_do_competition_fixtures``
+    deletes and reinserts a season's whole fixture list on every crawl, so a
+    venue stored there would be wiped on each sync. Keyed by ``match_id``
+    (stable across recrawls, unlike the fixtures surrogate id) this table
+    survives untouched.
+
+    ``source`` records how the venue was established, and is what lets a cheap
+    guess be upgraded later:
+      club_home  -- inferred from the home team's ground (competition_stadiums)
+      match_page -- read off the match report itself (authoritative)
+    """
+
+    __tablename__ = "match_venues"
+
+    match_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=False
+    )
+    venue_id: Mapped[int | None] = mapped_column(
+        ForeignKey("venues.id", ondelete="SET NULL"), nullable=True
+    )
+    source: Mapped[str] = mapped_column(String(16), default=VENUE_SOURCE_CLUB_HOME)
+    crawled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 # ── League / group standings ─────────────────────────────────────────────────

@@ -561,3 +561,85 @@ def parse_player_profile(tree: HTMLParser, player_id: int) -> dict:
         "market_value": mv,
         "extra": {k: v for k, v in info.items() if v},
     }
+
+
+# ── Every home ground in a competition, in one page ──────────────────────────
+# The cheap half of venue coverage: one request yields the ground of every club
+# in the competition, which is where all but a handful of its matches are
+# played. The expensive per-match page (below) is then only needed where that
+# assumption breaks -- neutral finals, relocations, cup ties.
+async def scrape_competition_stadiums(
+    code: str, season: int, slug: str = "x", segment: str = "wettbewerb"
+) -> dict:
+    path = f"/{slug}/stadien/{segment}/{code}"
+    tree = await fetcher.fetch(path, params={"saison_id": season})
+    return parse_competition_stadiums(tree, code, season)
+
+
+def parse_competition_stadiums(tree: HTMLParser, code: str, season: int) -> dict:
+    venues: list[dict] = []
+    seen: set[int] = set()
+    table = tree.css_first("table.items")
+    rows = table.css("tbody > tr") if table else []
+    for row in rows:
+        # The stadium link carries both the name and the owning club id (which
+        # is the venue's key). Reading it off the anchor rather than a column
+        # index keeps the parser working when the table gains a column.
+        link = row.css_first("a[href*='/stadion/verein/']")
+        if link is None:
+            continue
+        venue_id = pu.venue_id_from_href(link.attributes.get("href"))
+        name = pu.text(link)
+        if not venue_id or not name or venue_id in seen:
+            continue
+        seen.add(venue_id)
+
+        # City sits in the cell after the one holding the stadium link;
+        # capacity is the first right-aligned (numeric) cell. The club crest is
+        # wrapped in a nested inline-table, so `row.css("td")` also yields the
+        # outer cell that *contains* the link -- take the innermost (last)
+        # match or the city lands on the crest cell's empty neighbour.
+        tds = row.css("td")
+        city = None
+        holder = None
+        for index, td in enumerate(tds):
+            if td.css_first("a[href*='/stadion/verein/']") is not None:
+                holder = index
+        if holder is not None and holder + 1 < len(tds):
+            city = pu.text(tds[holder + 1]) or None
+        capacity = None
+        for td in tds:
+            if "rechts" in (td.attributes.get("class") or ""):
+                capacity = pu.parse_capacity(pu.text(td))
+                break
+
+        venues.append(
+            {
+                "venue_id": venue_id,
+                "name": name,
+                "city": city,
+                "capacity": capacity,
+                "url": link.attributes.get("href"),
+            }
+        )
+    return {"competition_id": code, "season_id": season, "venues": venues}
+
+
+# ── One match's actual venue, from its report page ───────────────────────────
+# Authoritative where the home-ground guess is wrong. Works before kick-off
+# too: an unplayed match still names the ground (only referee/attendance are
+# still "tbc"), so a subscriber's calendar has the location up front.
+async def scrape_match_detail(match_id: int) -> dict:
+    tree = await fetcher.fetch(f"/spielbericht/index/spielbericht/{match_id}")
+    return parse_match_detail(tree, match_id)
+
+
+def parse_match_detail(tree: HTMLParser, match_id: int) -> dict:
+    info = tree.css_first("p.sb-zusatzinfos")
+    venue_id = venue_name = None
+    if info is not None:
+        link = info.css_first("a[href*='/stadion/verein/']")
+        if link is not None:
+            venue_id = pu.venue_id_from_href(link.attributes.get("href"))
+            venue_name = pu.text(link) or None
+    return {"match_id": match_id, "venue_id": venue_id, "venue_name": venue_name}
