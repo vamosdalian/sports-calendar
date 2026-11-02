@@ -80,3 +80,45 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  keepalive:
+    name: Keep the schedule from being auto-disabled
+    runs-on: ubuntu-24.04
+    # GitHub disables scheduled workflows in a public repository after 60 days
+    # with no activity, and this one is the site's only path to fresh data: a
+    # static export bakes fixtures into the HTML, so a disabled schedule freezes
+    # the public site on whatever day it stopped — silently, because a workflow
+    # that never runs reports nothing. The push trigger covers active stretches;
+    # this covers the quiet ones, by giving the repo the activity it is being
+    # judged on. An empty commit is enough, and GITHUB_TOKEN pushes do not fire
+    # workflow triggers, so it cannot recurse into another deploy.
+    if: github.event_name == 'schedule'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Push an empty commit if the repo has gone quiet
+        env:
+          # 45, not 59: the schedule itself is what would be lost, so the margin
+          # has to absorb runs GitHub skips or delays (scheduled runs here queue
+          # 5-7 hours behind their cron time already).
+          QUIET_DAYS_BEFORE_PING: 45
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          days=$(( ( $(date +%s) - $(git log -1 --format=%ct) ) / 86400 ))
+          echo "Last commit: $days day(s) ago (threshold: $QUIET_DAYS_BEFORE_PING)."
+          if [ "$days" -lt "$QUIET_DAYS_BEFORE_PING" ]; then
+            echo "Recent enough — the 60-day clock is not a concern yet."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit --allow-empty \
+              -m "chore: keep the nightly web rebuild from being auto-disabled" \
+              -m "No code change. GitHub disables scheduled workflows after 60 days of repository inactivity, and the nightly rebuild is how database changes reach the static site. Pushed automatically by the keepalive job in .github/workflows/web-rebuild.yml."
+          git push origin "HEAD:$BRANCH"
+          echo "Pushed an empty commit; the inactivity clock is reset."
